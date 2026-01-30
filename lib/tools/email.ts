@@ -220,10 +220,14 @@ export function createCheckEmailTool(agentId: string) {
       }
 
       try {
-        // Call Zapier MCP using proper MCP protocol
-        const response = await callZapierMCPTool(credentials, "find_email", {
-          Search_String: onlyUnread ? "is:unread" : "",
-          Max_Results: String(emailCount),
+        // Zapier MCP expects natural language instructions
+        const instruction = onlyUnread 
+          ? `Find my ${emailCount} most recent unread emails`
+          : `Find my ${emailCount} most recent emails`;
+
+        // Call Zapier MCP using proper MCP protocol with instructions parameter
+        const response = await callZapierMCPTool(credentials, "gmail_find_email", {
+          instructions: instruction,
         });
 
         if (!response.success) {
@@ -352,24 +356,24 @@ export function createSendEmailTool(agentId: string) {
       }
 
       try {
-        // Build the email arguments for Zapier MCP Gmail tool
-        // Zapier Gmail tools typically use these field names
-        const emailArgs: Record<string, string> = {
-          To: to,
-          Subject: subject,
-          Body: body,
-          Signature: includeSignature ? "true" : "false",
-        };
-
+        // Zapier MCP expects natural language instructions, not structured fields
+        // Build an instruction string that describes what to do
+        let instruction = `Send an email to ${to} with subject "${subject}" and body: "${body}"`;
+        
         if (cc) {
-          emailArgs.Cc = cc;
+          instruction += ` CC: ${cc}`;
         }
         if (bcc) {
-          emailArgs.Bcc = bcc;
+          instruction += ` BCC: ${bcc}`;
+        }
+        if (includeSignature) {
+          instruction += `. Include my email signature.`;
         }
 
-        // Call Zapier MCP using proper MCP protocol
-        const response = await callZapierMCPTool(credentials, "send_email", emailArgs);
+        // Call Zapier MCP using proper MCP protocol with instructions parameter
+        const response = await callZapierMCPTool(credentials, "gmail_send_email", {
+          instructions: instruction,
+        });
 
         if (!response.success) {
           throw new Error(response.error || "Failed to send email");
