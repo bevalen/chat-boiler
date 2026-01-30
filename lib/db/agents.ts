@@ -151,8 +151,8 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   const currentTime = formatter.format(now);
   sections.push(`## Current Time`);
   sections.push(`Right now it is: ${currentTime} (${timezone})`);
-  sections.push(`ISO timestamp: ${now.toISOString()}`);
-  sections.push(`Use this as your reference for all time-based operations like reminders and scheduling.\n`);
+  sections.push(`UTC ISO timestamp: ${now.toISOString()}`);
+  sections.push(`\n**IMPORTANT for scheduling:** When creating reminders or scheduled jobs, you MUST use the UTC ISO timestamp above as your base. To schedule something "in 30 seconds", parse the UTC timestamp, add 30 seconds, and pass the result as a UTC ISO string (ending in Z). Never use local time strings without the Z suffix.\n`);
 
   // Identity section
   sections.push(`You are ${agent.name}, ${agent.title || "an AI assistant"}.`);

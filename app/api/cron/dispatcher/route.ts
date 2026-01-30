@@ -6,6 +6,7 @@ import {
   createJobExecution,
   updateJobExecution,
 } from "@/lib/db/scheduled-jobs";
+import { createNotification } from "@/lib/db/notifications";
 import { Database } from "@/lib/types/database";
 
 type ScheduledJob = Database["public"]["Tables"]["scheduled_jobs"]["Row"];
@@ -230,6 +231,17 @@ async function executeNotifyAction(
       return { success: false, error: msgError.message };
     }
 
+    // Create a notification for the user
+    await createNotification(
+      supabase,
+      job.agent_id,
+      "reminder",
+      job.title,
+      notificationContent.substring(0, 200), // Truncate content for notification
+      "conversation",
+      conversationId
+    );
+
     return { success: true, data: { conversationId, message: notificationContent } };
   } catch (error) {
     return {
@@ -441,6 +453,17 @@ async function generateDailyBrief(
       return { success: false, error: msgError.message };
     }
 
+    // Create a notification for the daily brief
+    await createNotification(
+      supabase,
+      job.agent_id,
+      "reminder",
+      `Daily Brief for ${dateStr}`,
+      `Your daily summary is ready with ${projects?.length || 0} active projects and ${tasks?.length || 0} pending tasks.`,
+      "conversation",
+      conversationId
+    );
+
     return { success: true, data: { conversationId, briefDate: dateStr } };
   } catch (error) {
     return {
@@ -496,6 +519,17 @@ async function triggerAgentWithInstruction(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  // Create a notification for the scheduled task
+  await createNotification(
+    supabase,
+    job.agent_id,
+    "reminder",
+    job.title,
+    instruction.substring(0, 200),
+    "conversation",
+    conversationId
+  );
 
   return { success: true, data: { conversationId, instruction } };
 }

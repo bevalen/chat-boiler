@@ -2,6 +2,7 @@ import { tool, UIToolInvocation } from "ai";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
+import { createNotification } from "@/lib/db/notifications";
 
 export const createTaskTool = tool({
   description: "Create a new task, optionally linked to a project",
@@ -143,6 +144,17 @@ export const completeTaskTool = tool({
       return { success: false, error: error.message };
     }
 
+    // Create notification for task completion
+    await createNotification(
+      supabase,
+      agentId as string,
+      "task_update",
+      `Task completed: ${data.title}`,
+      "Your task has been marked as complete.",
+      "task",
+      taskId
+    );
+
     return {
       success: true,
       task: data,
@@ -218,6 +230,24 @@ export const updateTaskTool = tool({
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // Create notification for status changes
+    if (status) {
+      const statusMessages: Record<string, string> = {
+        pending: "Task moved back to pending",
+        in_progress: "Task is now in progress",
+        completed: "Task has been completed",
+      };
+      await createNotification(
+        supabase,
+        agentId as string,
+        "task_update",
+        `${data.title}: ${statusMessages[status] || "Status updated"}`,
+        null,
+        "task",
+        taskId
+      );
     }
 
     return {

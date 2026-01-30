@@ -8,6 +8,7 @@ import {
   ListTodo,
   Clock,
   Bell,
+  BellRing,
   Settings,
   LogOut,
   ChevronUp,
@@ -54,6 +55,11 @@ const mainNavItems = [
 ];
 
 const systemNavItems = [
+  {
+    title: "Notifications",
+    url: "/notifications",
+    icon: BellRing,
+  },
   {
     title: "Schedules",
     url: "/schedules",

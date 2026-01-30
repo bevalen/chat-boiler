@@ -2,6 +2,7 @@ import { tool, UIToolInvocation } from "ai";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
+import { createNotification } from "@/lib/db/notifications";
 
 export const createProjectTool = tool({
   description: "Create a new project to track work",
@@ -155,6 +156,24 @@ export const updateProjectTool = tool({
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    // Create notification for status changes
+    if (status) {
+      const statusMessages: Record<string, string> = {
+        active: "Project is now active",
+        paused: "Project has been paused",
+        completed: "Project has been completed",
+      };
+      await createNotification(
+        supabase,
+        agentId as string,
+        "project_update",
+        `${data.title}: ${statusMessages[status] || "Status updated"}`,
+        null,
+        "project",
+        projectId
+      );
     }
 
     return {

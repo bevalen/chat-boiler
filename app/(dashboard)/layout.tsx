@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
-import { Separator } from "@/components/ui/separator";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { getAgentForUser } from "@/lib/db/agents";
 
 export default async function DashboardLayout({
   children,
@@ -18,27 +19,22 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Get user profile
-  const { data: profile } = await supabase
-    .from("users")
-    .select("name")
-    .eq("id", user.id)
-    .single();
+  // Get user profile and agent
+  const [profileResult, agent] = await Promise.all([
+    supabase.from("users").select("name").eq("id", user.id).single(),
+    getAgentForUser(supabase, user.id),
+  ]);
 
   return (
     <SidebarProvider>
       <AppSidebar
         user={{
           email: user.email || "",
-          name: profile?.name,
+          name: profileResult.data?.name,
         }}
       />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <div className="flex-1" />
-        </header>
+        <DashboardHeader agentId={agent?.id || null} />
         <main className="flex-1 overflow-hidden">{children}</main>
       </SidebarInset>
     </SidebarProvider>

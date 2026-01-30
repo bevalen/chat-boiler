@@ -396,6 +396,41 @@ export interface Database {
           created_at?: string | null;
         };
       };
+      notifications: {
+        Row: {
+          id: string;
+          agent_id: string;
+          type: "reminder" | "new_message" | "task_update" | "project_update";
+          title: string;
+          content: string | null;
+          link_type: "conversation" | "task" | "project" | "reminder" | null;
+          link_id: string | null;
+          read: boolean;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          type: "reminder" | "new_message" | "task_update" | "project_update";
+          title: string;
+          content?: string | null;
+          link_type?: "conversation" | "task" | "project" | "reminder" | null;
+          link_id?: string | null;
+          read?: boolean;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          type?: "reminder" | "new_message" | "task_update" | "project_update";
+          title?: string;
+          content?: string | null;
+          link_type?: "conversation" | "task" | "project" | "reminder" | null;
+          link_id?: string | null;
+          read?: boolean;
+          created_at?: string | null;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

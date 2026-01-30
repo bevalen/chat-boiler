@@ -517,14 +517,30 @@ export async function POST(request: Request) {
         description: "Create a reminder or scheduled notification. Use this when the user wants to be reminded about something at a specific time. Can optionally link to an existing task.",
         inputSchema: z.object({
           title: z.string().describe("What to remind the user about"),
-          runAt: z.string().describe("When to send the reminder (ISO datetime string, e.g., '2026-01-31T15:00:00')"),
+          runAt: z.string().describe("When to send the reminder. MUST be a UTC ISO datetime string ending in Z (e.g., '2026-01-31T20:00:00Z'). Use the ISO timestamp from your current time context and add the appropriate duration."),
           description: z.string().optional().describe("Additional details for the reminder"),
           message: z.string().optional().describe("The notification message to show"),
           taskId: z.string().optional().describe("Link to an existing task ID"),
           projectId: z.string().optional().describe("Link to an existing project ID"),
+          createNewConversation: z.boolean().optional().default(false).describe("If true, the reminder will create a new conversation thread instead of posting to the current one. Use this when the user wants the reminder to start a fresh conversation."),
         }),
-        execute: async ({ title, runAt, description, message, taskId, projectId }: { title: string; runAt: string; description?: string; message?: string; taskId?: string; projectId?: string }) => {
+        execute: async ({ title, runAt, description, message, taskId, projectId, createNewConversation }: { title: string; runAt: string; description?: string; message?: string; taskId?: string; projectId?: string; createNewConversation?: boolean }) => {
           try {
+            const userTimezone = profile?.timezone || "America/New_York";
+            
+            // Ensure runAt is a valid UTC ISO string
+            let utcRunAt = runAt;
+            if (!runAt.endsWith('Z') && !runAt.includes('+') && !runAt.includes('-', 10)) {
+              // If no timezone info, assume it's meant to be UTC and add Z
+              utcRunAt = runAt + 'Z';
+            }
+            
+            // Validate the date
+            const runAtDate = new Date(utcRunAt);
+            if (isNaN(runAtDate.getTime())) {
+              return { success: false, error: `Invalid datetime format: ${runAt}. Please use UTC ISO format like '2026-01-31T20:00:00Z'` };
+            }
+            
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
               .insert({
@@ -533,14 +549,14 @@ export async function POST(request: Request) {
                 title,
                 description: description || null,
                 schedule_type: "once",
-                run_at: runAt,
-                next_run_at: runAt,
-                timezone: profile?.timezone || "America/New_York",
+                run_at: runAtDate.toISOString(),
+                next_run_at: runAtDate.toISOString(),
+                timezone: userTimezone,
                 action_type: "notify",
                 action_payload: { message: message || title },
                 task_id: taskId || null,
                 project_id: projectId || null,
-                conversation_id: conversation.id,
+                conversation_id: createNewConversation ? null : conversation.id,
                 status: "active",
               })
               .select()
@@ -548,15 +564,29 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
-            const reminderTime = new Date(runAt).toLocaleString();
+            // Format the time in the user's timezone for display
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: userTimezone,
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            });
+            const reminderTimeFormatted = formatter.format(runAtDate);
+            
             return {
               success: true,
               reminder: {
                 id: data.id,
                 title: data.title,
-                scheduledFor: reminderTime,
+                scheduledFor: reminderTimeFormatted,
+                timezone: userTimezone,
+                willCreateNewConversation: createNewConversation || false,
               },
-              message: `Reminder set for ${reminderTime}: "${title}"`,
+              message: `Reminder set for ${reminderTimeFormatted} (${userTimezone}): "${title}"${createNewConversation ? " [will start new conversation]" : ""}`,
             };
           } catch (err) {
             return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -572,12 +602,18 @@ export async function POST(request: Request) {
           description: z.string().optional().describe("What this job does"),
           instruction: z.string().optional().describe("Instructions for the agent when this job runs"),
           actionType: z.enum(["notify", "agent_task"]).optional().default("notify").describe("Type of action: 'notify' for simple message, 'agent_task' for agent execution"),
+          createNewConversation: z.boolean().optional().default(true).describe("If true (default for recurring), each run creates a new conversation. If false, posts to the current conversation."),
         }),
-        execute: async ({ title, cronExpression, description, instruction, actionType }: { title: string; cronExpression: string; description?: string; instruction?: string; actionType?: "notify" | "agent_task" }) => {
+        execute: async ({ title, cronExpression, description, instruction, actionType, createNewConversation }: { title: string; cronExpression: string; description?: string; instruction?: string; actionType?: "notify" | "agent_task"; createNewConversation?: boolean }) => {
           try {
+            const userTimezone = profile?.timezone || "America/New_York";
+            
             // Calculate next run time from cron expression
             const { calculateNextRunFromCron } = await import("@/lib/db/scheduled-jobs");
-            const nextRun = calculateNextRunFromCron(cronExpression, profile?.timezone || "America/New_York");
+            const nextRun = calculateNextRunFromCron(cronExpression, userTimezone);
+
+            // For recurring jobs, default to creating new conversations (makes more sense for daily briefs, etc.)
+            const shouldCreateNewConversation = createNewConversation !== false;
 
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
@@ -589,10 +625,10 @@ export async function POST(request: Request) {
                 schedule_type: "cron",
                 cron_expression: cronExpression,
                 next_run_at: nextRun.toISOString(),
-                timezone: profile?.timezone || "America/New_York",
+                timezone: userTimezone,
                 action_type: actionType || "notify",
                 action_payload: instruction ? { instruction, message: title } : { message: title },
-                conversation_id: conversation.id,
+                conversation_id: shouldCreateNewConversation ? null : conversation.id,
                 status: "active",
               })
               .select()
@@ -600,15 +636,29 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
+            // Format the time in the user's timezone for display
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: userTimezone,
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+            const nextRunFormatted = formatter.format(nextRun);
+
             return {
               success: true,
               job: {
                 id: data.id,
                 title: data.title,
                 schedule: cronExpression,
-                nextRun: nextRun.toLocaleString(),
+                nextRun: nextRunFormatted,
+                timezone: userTimezone,
+                willCreateNewConversation: shouldCreateNewConversation,
               },
-              message: `Recurring job created: "${title}" - next run: ${nextRun.toLocaleString()}`,
+              message: `Recurring job created: "${title}" - next run: ${nextRunFormatted} (${userTimezone})${shouldCreateNewConversation ? " [will start new conversation each time]" : ""}`,
             };
           } catch (err) {
             return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -620,13 +670,27 @@ export async function POST(request: Request) {
         description: "Create a follow-up job that triggers the agent to check on something at a later time. Use this for 'remind me to follow up if X doesn't happen' scenarios.",
         inputSchema: z.object({
           title: z.string().describe("What to follow up on"),
-          runAt: z.string().describe("When to check (ISO datetime string)"),
+          runAt: z.string().describe("When to check. MUST be a UTC ISO datetime string ending in Z (e.g., '2026-01-31T20:00:00Z'). Use the ISO timestamp from your current time context and add the appropriate duration."),
           instruction: z.string().describe("What the agent should check or do when this triggers"),
           taskId: z.string().optional().describe("Link to an existing task ID"),
           projectId: z.string().optional().describe("Link to an existing project ID"),
+          createNewConversation: z.boolean().optional().default(false).describe("If true, the follow-up will create a new conversation thread instead of posting to the current one."),
         }),
-        execute: async ({ title, runAt, instruction, taskId, projectId }: { title: string; runAt: string; instruction: string; taskId?: string; projectId?: string }) => {
+        execute: async ({ title, runAt, instruction, taskId, projectId, createNewConversation }: { title: string; runAt: string; instruction: string; taskId?: string; projectId?: string; createNewConversation?: boolean }) => {
           try {
+            const userTimezone = profile?.timezone || "America/New_York";
+            
+            // Ensure runAt is a valid UTC ISO string
+            let utcRunAt = runAt;
+            if (!runAt.endsWith('Z') && !runAt.includes('+') && !runAt.includes('-', 10)) {
+              utcRunAt = runAt + 'Z';
+            }
+            
+            const runAtDate = new Date(utcRunAt);
+            if (isNaN(runAtDate.getTime())) {
+              return { success: false, error: `Invalid datetime format: ${runAt}. Please use UTC ISO format like '2026-01-31T20:00:00Z'` };
+            }
+            
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
               .insert({
@@ -635,14 +699,14 @@ export async function POST(request: Request) {
                 title,
                 description: instruction,
                 schedule_type: "once",
-                run_at: runAt,
-                next_run_at: runAt,
-                timezone: profile?.timezone || "America/New_York",
+                run_at: runAtDate.toISOString(),
+                next_run_at: runAtDate.toISOString(),
+                timezone: userTimezone,
                 action_type: "agent_task",
                 action_payload: { instruction },
                 task_id: taskId || null,
                 project_id: projectId || null,
-                conversation_id: conversation.id,
+                conversation_id: createNewConversation ? null : conversation.id,
                 status: "active",
               })
               .select()
@@ -650,15 +714,29 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
-            const followUpTime = new Date(runAt).toLocaleString();
+            // Format the time in the user's timezone for display
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: userTimezone,
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            });
+            const followUpTimeFormatted = formatter.format(runAtDate);
+            
             return {
               success: true,
               followUp: {
                 id: data.id,
                 title: data.title,
-                scheduledFor: followUpTime,
+                scheduledFor: followUpTimeFormatted,
+                timezone: userTimezone,
+                willCreateNewConversation: createNewConversation || false,
               },
-              message: `Follow-up scheduled for ${followUpTime}: "${title}"`,
+              message: `Follow-up scheduled for ${followUpTimeFormatted} (${userTimezone}): "${title}"${createNewConversation ? " [will start new conversation]" : ""}`,
             };
           } catch (err) {
             return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
