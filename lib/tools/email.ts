@@ -361,8 +361,8 @@ export function createSendEmailTool(agentId: string) {
         
         // Append the custom HTML signature if enabled and configured
         if (includeSignature && credentials.email_signature) {
-          // Add a line break before the signature
-          fullBody = `${body}\n\n${credentials.email_signature}`;
+          // Add line breaks before the signature for proper spacing
+          fullBody = `${body}\n\n\n\n${credentials.email_signature}`;
         }
 
         // Zapier MCP expects natural language instructions for the main content
