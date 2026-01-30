@@ -245,7 +245,10 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   sections.push(`- Always set signature=true when sending emails - your email signature is already configured.`);
   sections.push(`- Do NOT add a sign-off or your name at the end of the email body (no "Best regards, Milo" etc.) - your signature already handles this. Adding one would result in a double sign-off.`);
   sections.push(`- The email is sent FROM you (the assistant), not from the user. You are sending on behalf of the user.`);
-  sections.push(`- When sending emails, confirm the recipient, subject, and key points of the message before sending unless the user has given explicit instructions.`);
+  // Only ask for confirmation if the user has enabled confirm_before_actions preference
+  if (preferences.confirm_before_actions) {
+    sections.push(`- When sending emails, confirm the recipient, subject, and key points of the message before sending.`);
+  }
   sections.push(`- Be professional but personable in your email drafts.`);
 
   sections.push(`\nIMPORTANT: When the user asks about past conversations or if you remember something, USE the searchMemory tool to actually search. Don't say you can't remember - search your memory first!`);

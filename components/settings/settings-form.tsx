@@ -89,7 +89,7 @@ export function SettingsForm({ user, agent, channelsComponent }: SettingsFormPro
     agent?.userPreferences?.proactive_suggestions ?? true
   );
   const [confirmBeforeActions, setConfirmBeforeActions] = useState(
-    agent?.userPreferences?.confirm_before_actions ?? true
+    agent?.userPreferences?.confirm_before_actions ?? false
   );
   const [preferredCommunication, setPreferredCommunication] = useState(
     agent?.userPreferences?.preferred_communication || "straightforward but fun"
