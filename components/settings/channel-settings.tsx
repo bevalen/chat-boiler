@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Check, X, Loader2, Eye, EyeOff } from "lucide-react";
+import { MessageSquare, Check, X, Loader2, Eye, EyeOff, ExternalLink } from "lucide-react";
 
 interface SlackConfig {
   configured: boolean;
@@ -310,6 +310,32 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
           </div>
 
           <Separator />
+
+          {/* Setup instructions */}
+          {!slackConfig?.configured && (
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+              <p className="text-sm font-medium">To connect Slack, you need to create a Slack App:</p>
+              <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+                <li>
+                  Go to{" "}
+                  <a
+                    href="https://api.slack.com/apps"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:text-primary/80"
+                  >
+                    api.slack.com/apps
+                    <ExternalLink className="h-3 w-3" />
+                  </a>{" "}
+                  and create a new app
+                </li>
+                <li>Enable <strong>Socket Mode</strong> in your app settings</li>
+                <li>Add Bot Token Scopes: <code className="text-xs bg-muted px-1 py-0.5 rounded">chat:write</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">im:history</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">im:read</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">im:write</code></li>
+                <li>Subscribe to Events: <code className="text-xs bg-muted px-1 py-0.5 rounded">message.im</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">app_mention</code></li>
+                <li>Install the app to your workspace</li>
+              </ol>
+            </div>
+          )}
 
           {/* Connection form */}
           <div className="space-y-4">
