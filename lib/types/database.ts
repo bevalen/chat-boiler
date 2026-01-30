@@ -397,6 +397,9 @@ export interface Database {
         };
       };
     };
+    Views: {
+      [_ in never]: never;
+    };
     Functions: {
       match_messages: {
         Args: {
@@ -413,6 +416,12 @@ export interface Database {
           similarity: number;
         }[];
       };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 }
