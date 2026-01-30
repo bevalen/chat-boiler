@@ -104,7 +104,7 @@ export async function initializeSlackBot(
     const text = event.text.replace(/<@[A-Z0-9]+>/g, "").trim();
 
     const context: SlackMessageContext = {
-      userId: event.user,
+      userId: event.user || "",
       channelId: event.channel,
       teamId: event.team || "",
       text,

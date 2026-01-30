@@ -373,10 +373,14 @@ async function generateDailyBrief(
   job: ScheduledJob
 ): Promise<{ success: boolean; error?: string; data?: unknown }> {
   try {
+    const payload = job.action_payload as ActionPayload;
+    const preferredChannel: ChannelType = payload?.preferred_channel || "app";
+    const slackChannelId = payload?.slack_channel_id;
+
     // Get agent info
     const { data: agent } = await supabase
       .from("agents")
-      .select("id, name")
+      .select("id, name, user_id")
       .eq("id", job.agent_id)
       .single();
 
@@ -411,10 +415,6 @@ async function generateDailyBrief(
           .single();
         conversationId = newConv?.id || null;
       }
-    }
-
-    if (!conversationId) {
-      return { success: false, error: "Could not find or create conversation" };
     }
 
     // Get today's date info
@@ -524,34 +524,56 @@ async function generateDailyBrief(
 
     briefContent += `\n---\nAnything you'd like me to help you focus on today?`;
 
-    // Insert the brief as a message
-    const { error: msgError } = await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: briefContent,
-      metadata: {
-        type: "daily_brief",
-        date: today.toISOString().split("T")[0],
-        job_id: job.id,
-      },
-    });
-
-    if (msgError) {
-      return { success: false, error: msgError.message };
+    // Try to send via Slack if preferred
+    let sentViaSlack = false;
+    if (preferredChannel === "slack" && agent.user_id) {
+      const slackResult = await sendViaSlack(supabase, agent.user_id, briefContent, slackChannelId);
+      sentViaSlack = slackResult.success;
+      if (sentViaSlack) {
+        console.log(`[dispatcher] Daily brief sent via Slack for agent ${agent.id}`);
+      }
     }
 
-    // Create a notification for the daily brief
-    await createNotification(
-      supabase,
-      job.agent_id,
-      "reminder",
-      `Daily Brief for ${dateStr}`,
-      `Your daily summary is ready with ${projects?.length || 0} active projects and ${tasks?.length || 0} pending tasks.`,
-      "conversation",
-      conversationId
-    );
+    // Store in app conversation
+    if (conversationId) {
+      const { error: msgError } = await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: briefContent,
+        metadata: {
+          type: "daily_brief",
+          date: today.toISOString().split("T")[0],
+          job_id: job.id,
+          preferred_channel: preferredChannel,
+          sent_via_slack: sentViaSlack,
+        },
+      });
 
-    return { success: true, data: { conversationId, briefDate: dateStr } };
+      if (msgError) {
+        console.error("[dispatcher] Error storing daily brief:", msgError);
+      }
+
+      // Create a notification for the daily brief
+      await createNotification(
+        supabase,
+        job.agent_id,
+        "reminder",
+        `Daily Brief for ${dateStr}`,
+        `Your daily summary is ready with ${projects?.length || 0} active projects and ${tasks?.length || 0} pending tasks.`,
+        "conversation",
+        conversationId
+      );
+    }
+
+    return {
+      success: true,
+      data: {
+        conversationId,
+        briefDate: dateStr,
+        sentViaSlack,
+        preferredChannel,
+      },
+    };
   } catch (error) {
     return {
       success: false,
@@ -568,9 +590,30 @@ async function triggerAgentWithInstruction(
   job: ScheduledJob,
   instruction: string
 ): Promise<{ success: boolean; error?: string; data?: unknown }> {
-  // For now, post the instruction as a system message
-  // In the future, this could call the chat API to get an actual agent response
-  
+  const payload = job.action_payload as ActionPayload;
+  const preferredChannel: ChannelType = payload?.preferred_channel || "app";
+  const slackChannelId = payload?.slack_channel_id;
+
+  // Get user_id from agent for Slack delivery
+  const { data: agent } = await supabase
+    .from("agents")
+    .select("user_id")
+    .eq("id", job.agent_id)
+    .single();
+
+  const message = `**Scheduled Task:** ${job.title}\n\n${instruction}`;
+
+  // Try to send via Slack if preferred
+  let sentViaSlack = false;
+  if (preferredChannel === "slack" && agent?.user_id) {
+    const slackResult = await sendViaSlack(supabase, agent.user_id, message, slackChannelId);
+    sentViaSlack = slackResult.success;
+    if (sentViaSlack) {
+      console.log(`[dispatcher] Agent task sent via Slack for job ${job.id}`);
+    }
+  }
+
+  // Store in app conversation
   let conversationId = job.conversation_id;
 
   if (!conversationId) {
@@ -586,39 +629,47 @@ async function triggerAgentWithInstruction(
     conversationId = existingConv?.id || null;
   }
 
-  if (!conversationId) {
-    return { success: false, error: "No conversation found for agent task" };
+  if (conversationId) {
+    const { error } = await supabase.from("messages").insert({
+      conversation_id: conversationId,
+      role: "assistant",
+      content: message,
+      metadata: {
+        type: "scheduled_agent_task",
+        job_id: job.id,
+        instruction,
+        preferred_channel: preferredChannel,
+        sent_via_slack: sentViaSlack,
+      },
+    });
+
+    if (error) {
+      console.error("[dispatcher] Error storing agent task message:", error);
+    }
+
+    // Create a notification for the scheduled task
+    await createNotification(
+      supabase,
+      job.agent_id,
+      "reminder",
+      job.title,
+      instruction.substring(0, 200),
+      "conversation",
+      conversationId
+    );
+  } else if (!sentViaSlack) {
+    return { success: false, error: "No conversation found and Slack delivery failed" };
   }
 
-  const message = `**Scheduled Task:** ${job.title}\n\n${instruction}`;
-
-  const { error } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    role: "assistant",
-    content: message,
-    metadata: {
-      type: "scheduled_agent_task",
-      job_id: job.id,
+  return {
+    success: true,
+    data: {
+      conversationId,
       instruction,
+      sentViaSlack,
+      preferredChannel,
     },
-  });
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  // Create a notification for the scheduled task
-  await createNotification(
-    supabase,
-    job.agent_id,
-    "reminder",
-    job.title,
-    instruction.substring(0, 200),
-    "conversation",
-    conversationId
-  );
-
-  return { success: true, data: { conversationId, instruction } };
+  };
 }
 
 /**

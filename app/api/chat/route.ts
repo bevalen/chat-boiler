@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/conversations";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
+import { ChannelType, MessageMetadata } from "@/lib/types/database";
 
 export const maxDuration = 60;
 
@@ -19,8 +20,20 @@ export async function POST(request: Request) {
     const {
       messages,
       conversationId,
-    }: { messages: UIMessage[]; conversationId?: string } = await request.json();
+      channelSource,
+      channelMetadata,
+    }: {
+      messages: UIMessage[];
+      conversationId?: string;
+      channelSource?: ChannelType;
+      channelMetadata?: {
+        slack_channel_id?: string;
+        slack_thread_ts?: string;
+        slack_user_id?: string;
+      };
+    } = await request.json();
     console.log("[chat/route] Messages received:", messages.length);
+    console.log("[chat/route] Channel source:", channelSource || "app");
 
     // Get the authenticated user
     const supabase = await createClient();
@@ -84,6 +97,17 @@ export async function POST(request: Request) {
     console.log("[chat/route] Using agent:", agent.name);
     console.log("[chat/route] Conversation:", conversation.id);
 
+    // Build metadata for messages from this channel
+    const messageMetadata: MessageMetadata | undefined =
+      channelSource && channelSource !== "app"
+        ? {
+            channel_source: channelSource,
+            slack_channel_id: channelMetadata?.slack_channel_id,
+            slack_thread_ts: channelMetadata?.slack_thread_ts,
+            slack_user_id: channelMetadata?.slack_user_id,
+          }
+        : undefined;
+
     // Get the last user message to persist
     const lastUserMessage = messages.filter((m) => m.role === "user").pop();
     if (lastUserMessage) {
@@ -93,7 +117,7 @@ export async function POST(request: Request) {
         .join("\n");
 
       if (content) {
-        await addMessage(supabase, conversation.id, "user", content);
+        await addMessage(supabase, conversation.id, "user", content, messageMetadata as Record<string, unknown> | undefined);
       }
     }
 
@@ -912,9 +936,17 @@ export async function POST(request: Request) {
           console.log(`[chat/route] 📊 Response complete: ${toolCallCount} tool call(s) made`);
         }
         
-        // Persist the assistant's response
+        // Persist the assistant's response with channel metadata
         if (text) {
-          await addMessage(supabase, conversation.id, "assistant", text);
+          const assistantMetadata: MessageMetadata | undefined =
+            channelSource && channelSource !== "app"
+              ? {
+                  channel_source: channelSource,
+                  slack_channel_id: channelMetadata?.slack_channel_id,
+                  slack_thread_ts: channelMetadata?.slack_thread_ts,
+                }
+              : undefined;
+          await addMessage(supabase, conversation.id, "assistant", text, assistantMetadata as Record<string, unknown> | undefined);
         }
       },
     });
