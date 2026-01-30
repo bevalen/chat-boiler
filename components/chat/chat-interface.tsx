@@ -495,8 +495,38 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
                             </div>
                           );
                         }
-                        if (part.type === "tool-invocation") {
-                          return <ToolInvocationDisplay key={index} toolInvocation={part} />;
+                        if (part.type === "tool-invocation" || part.type.startsWith("tool-")) {
+                          const toolName = part.type === "tool-invocation" 
+                            ? (part as any).toolInvocation.toolName 
+                            : part.type.replace("tool-", "");
+                            
+                          const rawState = part.type === "tool-invocation"
+                            ? (part as any).toolInvocation.state
+                            : (part as any).state;
+                            
+                          // Map new SDK states to our component states
+                          let state: "partial-call" | "call" | "result" = "call";
+                          if (rawState === "partial-call" || rawState === "input-streaming") state = "partial-call";
+                          else if (rawState === "call" || rawState === "input-available") state = "call";
+                          else if (rawState === "result" || rawState === "output-available" || rawState === "output-error") state = "result";
+                          
+                          const args = part.type === "tool-invocation" 
+                            ? (part as any).toolInvocation.args 
+                            : (part as any).input;
+                            
+                          const result = part.type === "tool-invocation" 
+                            ? (part as any).toolInvocation.result 
+                            : (part as any).output;
+
+                          return (
+                            <ToolInvocationDisplay 
+                              key={index} 
+                              toolName={toolName}
+                              state={state}
+                              args={args}
+                              result={result}
+                            />
+                          );
                         }
                         return null;
                       })}
@@ -642,19 +672,14 @@ const TOOL_DISPLAY_INFO: Record<string, { label: string; icon: React.ReactNode; 
   },
 };
 
-interface ToolInvocationPart {
-  type: "tool-invocation";
-  toolInvocation: {
-    toolCallId: string;
-    toolName: string;
-    args: Record<string, unknown>;
-    state: "partial-call" | "call" | "result";
-    result?: unknown;
-  };
+interface ToolDisplayProps {
+  toolName: string;
+  state: "partial-call" | "call" | "result";
+  args: Record<string, unknown>;
+  result?: unknown;
 }
 
-function ToolInvocationDisplay({ toolInvocation }: { toolInvocation: ToolInvocationPart }) {
-  const { toolName, state, args, result } = toolInvocation.toolInvocation;
+function ToolInvocationDisplay({ toolName, state, args, result }: ToolDisplayProps) {
   const toolInfo = TOOL_DISPLAY_INFO[toolName] || {
     label: toolName,
     icon: <Brain className="w-3.5 h-3.5" />,
