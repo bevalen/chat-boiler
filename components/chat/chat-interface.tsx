@@ -3,6 +3,7 @@
 import { useChat, UIMessage } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -237,6 +238,31 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
     init();
   }, [loadConversations, loadConversation]);
 
+  // Realtime subscription for conversations list updates
+  useEffect(() => {
+    const supabase = createClient();
+    
+    const channel = supabase
+      .channel("conversations-list")
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Listen to INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "conversations",
+        },
+        () => {
+          // Refresh conversations list when any change occurs
+          loadConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadConversations]);
+
   // Persist conversationId to localStorage when it changes
   useEffect(() => {
     if (conversationId) {
@@ -250,6 +276,72 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Realtime subscription for new messages (e.g., from cron jobs, other sessions)
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const supabase = createClient();
+    
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const newMessage = payload.new as {
+            id: string;
+            role: "user" | "assistant" | "system";
+            content: string;
+            created_at: string;
+            metadata?: Record<string, unknown>;
+          };
+
+          // Only add if not already in messages (avoid duplicates from local sends)
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === newMessage.id);
+            if (exists) return prev;
+
+            // Check if this is a scheduled notification (from cron)
+            const isScheduledMessage = newMessage.metadata?.type === "scheduled_notification" ||
+              newMessage.metadata?.type === "daily_brief" ||
+              newMessage.metadata?.type === "scheduled_agent_task";
+
+            // Only add messages that came from external sources (scheduled jobs)
+            // Regular chat messages are already handled by useChat
+            if (!isScheduledMessage && newMessage.role === "assistant") {
+              // This might be a duplicate from the streaming response
+              // Check if we recently added a similar message
+              const recentMessages = prev.slice(-3);
+              const isDuplicate = recentMessages.some(
+                (m) => m.role === "assistant" && 
+                m.parts.some((p) => p.type === "text" && (p as { text: string }).text === newMessage.content)
+              );
+              if (isDuplicate) return prev;
+            }
+
+            const uiMessage: UIMessage = {
+              id: newMessage.id,
+              role: newMessage.role === "system" ? "assistant" : newMessage.role,
+              parts: [{ type: "text" as const, text: newMessage.content }],
+              createdAt: new Date(newMessage.created_at || Date.now()),
+            };
+
+            return [...prev, uiMessage];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, setMessages]);
 
   // Trigger title generation after first exchange
   useEffect(() => {
