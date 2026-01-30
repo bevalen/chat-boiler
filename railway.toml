@@ -1,0 +1,9 @@
+# Railway configuration for the Slack bot service
+# Deploy with: railway up
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm run slack-bot"
+restartPolicyType = "always"
