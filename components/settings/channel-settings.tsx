@@ -218,7 +218,8 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
   };
 
   const handleSave = async () => {
-    if (!botToken || !appToken || !userSlackId) {
+    // Only require tokens for initial setup, not for updates
+    if (!slackConfig?.configured && (!botToken || !appToken || !userSlackId)) {
       setMessage({ type: "error", text: "Please fill in all required fields" });
       return;
     }
@@ -755,7 +756,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={saving || !botToken || !appToken || !userSlackId}
+                disabled={saving || (!slackConfig?.configured && (!botToken || !appToken || !userSlackId))}
               >
                 {saving ? (
                   <>
@@ -987,7 +988,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
               </Button>
               <Button
                 onClick={handleZapierSave}
-                disabled={savingZapier || !zapierEndpointUrl}
+                disabled={savingZapier || (!zapierConfig?.configured && !zapierEndpointUrl)}
               >
                 {savingZapier ? (
                   <>

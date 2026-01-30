@@ -82,7 +82,19 @@ export async function POST(request: NextRequest) {
       is_active = true,
     } = body;
 
-    if (!bot_token || !app_token || !user_slack_id) {
+    // Get existing credentials to preserve tokens if not provided
+    const { credentials: existingCredentials } = await getSlackCredentials(
+      supabase,
+      user.id
+    );
+
+    // For initial setup, require all fields
+    // For updates, preserve existing tokens if not provided
+    const finalBotToken = bot_token || existingCredentials?.bot_token;
+    const finalAppToken = app_token || existingCredentials?.app_token;
+    const finalUserSlackId = user_slack_id || existingCredentials?.user_slack_id;
+
+    if (!finalBotToken || !finalAppToken || !finalUserSlackId) {
       return NextResponse.json(
         { error: "Missing required fields: bot_token, app_token, user_slack_id" },
         { status: 400 }
@@ -90,12 +102,12 @@ export async function POST(request: NextRequest) {
     }
 
     const credentials: SlackCredentials = {
-      bot_token,
-      app_token,
-      user_slack_id,
-      team_id,
-      team_name,
-      default_channel_id,
+      bot_token: finalBotToken,
+      app_token: finalAppToken,
+      user_slack_id: finalUserSlackId,
+      team_id: team_id || existingCredentials?.team_id,
+      team_name: team_name || existingCredentials?.team_name,
+      default_channel_id: default_channel_id || existingCredentials?.default_channel_id,
     };
 
     const { credentials: saved, error } = await updateSlackCredentials(

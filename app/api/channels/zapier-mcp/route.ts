@@ -98,9 +98,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get existing credentials to preserve API key if not provided
+    const { credentials: existingCredentials } = await getZapierMCPCredentials(
+      supabase,
+      user.id
+    );
+
     const credentials: ZapierMCPCredentials = {
       endpoint_url,
-      api_key,
+      // Preserve existing API key if a new one isn't provided
+      api_key: api_key || existingCredentials?.api_key,
       capabilities,
       description,
       email_signature,
