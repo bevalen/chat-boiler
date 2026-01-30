@@ -217,10 +217,6 @@ async function sendToMaia(
       if (done) break;
       
       const chunk = decoder.decode(value);
-      // Debug: log raw chunk to understand stream format
-      if (fullResponse.length === 0) {
-        console.log("[slack-bot] First chunk sample:", chunk.substring(0, 200));
-      }
       // AI SDK v6 uses SSE format with data: prefix and JSON objects
       // Format: data: {"type":"text-delta","delta":"Hello"}\n\n
       const lines = chunk.split("\n");
@@ -251,7 +247,6 @@ async function sendToMaia(
       }
     }
 
-    console.log("[slack-bot] Parsed response length:", fullResponse.length);
     return fullResponse || "I processed your message but have nothing to say right now.";
   } catch (error) {
     console.error("[slack-bot] Error calling chat API:", error);
