@@ -6,6 +6,7 @@ import { getAgentForUser, buildSystemPrompt } from "@/lib/db/agents";
 import {
   getOrCreateDefaultConversation,
   addMessage,
+  getMessagesForSlackThread,
 } from "@/lib/db/conversations";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
@@ -107,6 +108,62 @@ export async function POST(request: Request) {
         JSON.stringify({ error: "Failed to create conversation" }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    // For Slack messages with a thread, fetch previous messages from the same thread
+    // This ensures the AI has context of the full conversation
+    let messagesWithHistory = messages;
+    if (channelSource === "slack" && channelMetadata?.slack_thread_ts) {
+      const threadTs = channelMetadata.slack_thread_ts;
+      console.log("[chat/route] Fetching Slack thread history for:", threadTs);
+      
+      const threadMessages = await getMessagesForSlackThread(
+        supabase,
+        conversation.id,
+        threadTs,
+        30 // Limit to last 30 messages in thread
+      );
+
+      if (threadMessages.length > 0) {
+        console.log(`[chat/route] Found ${threadMessages.length} previous messages in thread`);
+        
+        // Convert database messages to UIMessage format
+        const historyMessages: UIMessage[] = threadMessages.map((msg) => ({
+          id: msg.id,
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+          parts: [{ type: "text" as const, text: msg.content }],
+        }));
+
+        // Get the current message content to check for duplicates
+        const currentMessageContent = messages
+          .filter((m) => m.role === "user")
+          .map((m) => 
+            m.parts
+              .filter((p): p is { type: "text"; text: string } => p.type === "text")
+              .map((p) => p.text)
+              .join("\n")
+          )
+          .join("\n");
+
+        // Filter out the current message from history if it was already saved
+        const filteredHistory = historyMessages.filter((msg) => {
+          // Skip if this exact content matches the current message
+          // Extract content from parts for comparison
+          const msgContent = msg.parts
+            .filter((p): p is { type: "text"; text: string } => p.type === "text")
+            .map((p) => p.text)
+            .join("\n");
+          if (msg.role === "user" && msgContent === currentMessageContent) {
+            return false;
+          }
+          return true;
+        });
+
+        // Prepend history to current messages
+        messagesWithHistory = [...filteredHistory, ...messages];
+        console.log(`[chat/route] Total messages with history: ${messagesWithHistory.length}`);
+      }
     }
 
     // Build the system prompt from agent configuration
@@ -1057,7 +1114,7 @@ export async function POST(request: Request) {
     const result = streamText({
       model: openai("gpt-5.2"),
       system: systemPrompt,
-      messages: await convertToModelMessages(messages),
+      messages: await convertToModelMessages(messagesWithHistory),
       tools,
       toolChoice: "auto",
       stopWhen: stepCountIs(5), // Allow multiple tool calls in sequence
