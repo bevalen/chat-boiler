@@ -47,19 +47,39 @@ function mapMessageRow(row: MessageRow): Message {
   };
 }
 
+export interface GetConversationsOptions {
+  limit?: number;
+  channelType?: string | string[];
+}
+
 /**
  * Get all conversations for an agent, ordered by most recent
+ * @param channelType - Filter by channel type(s). Defaults to "app" to show only app conversations.
+ *                      Pass an array for multiple types, or undefined/"all" to show all channels.
  */
 export async function getConversationsForAgent(
   supabase: SupabaseClient,
   agentId: string,
-  limit = 50
+  options: GetConversationsOptions = {}
 ): Promise<Conversation[]> {
-  const { data, error } = await supabase
+  const { limit = 50, channelType = "app" } = options;
+
+  let query = supabase
     .from("conversations")
     .select("*")
     .eq("agent_id", agentId)
-    .eq("status", "active")
+    .eq("status", "active");
+
+  // Apply channel type filter (unless "all" is specified)
+  if (channelType && channelType !== "all") {
+    if (Array.isArray(channelType)) {
+      query = query.in("channel_type", channelType);
+    } else {
+      query = query.eq("channel_type", channelType);
+    }
+  }
+
+  const { data, error } = await query
     .order("updated_at", { ascending: false })
     .limit(limit);
 

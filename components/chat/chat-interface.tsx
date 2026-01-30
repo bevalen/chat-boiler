@@ -18,13 +18,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Hash, Slack } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Image from "next/image";
 
 interface Conversation {
   id: string;
   title: string | null;
+  channelType: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -58,6 +66,7 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [channelFilter, setChannelFilter] = useState<string>("app");
 
   // Auto-open sidebar on desktop
   useEffect(() => {
@@ -93,10 +102,11 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Load conversations list
+  // Load conversations list with channel filter
   const loadConversations = useCallback(async () => {
     try {
-      const res = await fetch("/api/conversations");
+      setLoadingConversations(true);
+      const res = await fetch(`/api/conversations?channel=${channelFilter}`);
       const data = await res.json();
       setConversations(data.conversations || []);
     } catch (error) {
@@ -104,7 +114,7 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
     } finally {
       setLoadingConversations(false);
     }
-  }, []);
+  }, [channelFilter]);
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (id: string) => {
@@ -248,6 +258,11 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
     };
     init();
   }, [loadConversations, loadConversation]);
+
+  // Reload conversations when channel filter changes
+  useEffect(() => {
+    loadConversations();
+  }, [channelFilter, loadConversations]);
 
   // Realtime subscription for conversations list updates
   useEffect(() => {
@@ -454,11 +469,38 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
-          <div className="p-2">
-            <Button onClick={startNewConversation} className="w-full justify-start gap-2" variant="outline">
-              <Plus className="h-4 w-4" />
-              New conversation
-            </Button>
+          <div className="p-2 space-y-2">
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger className="w-full h-9 text-sm">
+                <SelectValue placeholder="Filter by channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="app">
+                  <div className="flex items-center gap-2">
+                    <Hash className="h-3.5 w-3.5" />
+                    <span>App</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="slack">
+                  <div className="flex items-center gap-2">
+                    <Slack className="h-3.5 w-3.5" />
+                    <span>Slack</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="all">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    <span>All Channels</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {channelFilter === "app" && (
+              <Button onClick={startNewConversation} className="w-full justify-start gap-2" variant="outline">
+                <Plus className="h-4 w-4" />
+                New conversation
+              </Button>
+            )}
           </div>
           <ScrollArea className="flex-1 px-2">
             {loadingConversations ? (
@@ -497,13 +539,17 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => loadConversation(conv.id)}
-                          className="flex-1 flex items-center gap-2 min-w-0"
-                        >
-                          <MessageSquare className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{conv.title || "New conversation"}</span>
-                        </button>
+<button
+                                          onClick={() => loadConversation(conv.id)}
+                                          className="flex-1 flex items-center gap-2 min-w-0"
+                                        >
+                                          {channelFilter === "all" && conv.channelType === "slack" ? (
+                                            <Slack className="h-4 w-4 shrink-0 text-[#4A154B]" />
+                                          ) : (
+                                            <MessageSquare className="h-4 w-4 shrink-0" />
+                                          )}
+                                          <span className="truncate">{conv.title || "New conversation"}</span>
+                                        </button>
                         <Button
                           variant="ghost"
                           size="icon"

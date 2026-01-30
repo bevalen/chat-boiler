@@ -5,8 +5,12 @@ import {
   createConversation,
 } from "@/lib/db/conversations";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Parse channel filter from query params (defaults to "app")
+    const { searchParams } = new URL(request.url);
+    const channelType = searchParams.get("channel") || "app";
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -27,7 +31,9 @@ export async function GET() {
       });
     }
 
-    const conversations = await getConversationsForAgent(supabase, agent.id);
+    const conversations = await getConversationsForAgent(supabase, agent.id, {
+      channelType,
+    });
 
     return new Response(JSON.stringify({ conversations }), {
       status: 200,
