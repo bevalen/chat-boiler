@@ -101,7 +101,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
     : user.email.substring(0, 2).toUpperCase();
 
   return (
-    <Sidebar className="border-r border-sidebar-border bg-sidebar/50 backdrop-blur-xl">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar/50 backdrop-blur-xl">
       <SidebarHeader className="h-14 flex items-center justify-center border-b border-sidebar-border p-0">
         <div className="flex w-full items-center gap-3 px-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shrink-0">

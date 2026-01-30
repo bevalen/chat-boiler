@@ -7,7 +7,9 @@ import {
   updateJobExecution,
 } from "@/lib/db/scheduled-jobs";
 import { createNotification } from "@/lib/db/notifications";
-import { Database } from "@/lib/types/database";
+import { getSlackCredentials } from "@/lib/db/channel-credentials";
+import { createSlackClient, sendSlackDirectMessage, sendSlackMessage } from "@/lib/slack";
+import { Database, ActionPayload, ChannelType } from "@/lib/types/database";
 
 type ScheduledJob = Database["public"]["Tables"]["scheduled_jobs"]["Row"];
 
@@ -147,17 +149,106 @@ export async function POST(request: Request) {
 }
 
 /**
- * Execute a notification action - posts a message to the conversation
+ * Send notification via Slack channel
+ */
+async function sendViaSlack(
+  supabase: ReturnType<typeof getAdminClient>,
+  userId: string,
+  message: string,
+  slackChannelId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { credentials, isActive, error } = await getSlackCredentials(supabase, userId);
+
+    if (error || !credentials || !isActive) {
+      return { success: false, error: error || "Slack not configured or inactive" };
+    }
+
+    const client = createSlackClient(credentials);
+
+    let result;
+    if (slackChannelId) {
+      result = await sendSlackMessage(client, { channelId: slackChannelId, text: message });
+    } else if (credentials.user_slack_id) {
+      result = await sendSlackDirectMessage(client, credentials.user_slack_id, message);
+    } else if (credentials.default_channel_id) {
+      result = await sendSlackMessage(client, { channelId: credentials.default_channel_id, text: message });
+    } else {
+      return { success: false, error: "No Slack channel or user ID configured" };
+    }
+
+    return result;
+  } catch (error) {
+    console.error("[dispatcher] Error sending via Slack:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send via Slack",
+    };
+  }
+}
+
+/**
+ * Execute a notification action - posts a message to the conversation and/or external channels
  */
 async function executeNotifyAction(
   supabase: ReturnType<typeof getAdminClient>,
   job: ScheduledJob
 ): Promise<{ success: boolean; error?: string; data?: unknown }> {
   try {
-    const payload = job.action_payload as { message?: string };
+    const payload = job.action_payload as ActionPayload;
     const message = payload?.message || job.title;
+    const preferredChannel: ChannelType = payload?.preferred_channel || "app";
+    const slackChannelId = payload?.slack_channel_id;
 
-    // Get or create conversation for the agent
+    // Get the user ID from the agent
+    const { data: agent } = await supabase
+      .from("agents")
+      .select("user_id")
+      .eq("id", job.agent_id)
+      .single();
+
+    const userId = agent?.user_id;
+
+    // Build notification message
+    let notificationContent = `**Reminder:** ${message}`;
+
+    // Add task context if linked
+    if (job.task_id) {
+      const { data: task } = await supabase
+        .from("tasks")
+        .select("title, description, priority, due_date")
+        .eq("id", job.task_id)
+        .single();
+
+      if (task) {
+        notificationContent = `**Reminder:** ${job.title}\n\n`;
+        notificationContent += `**Task:** ${task.title}\n`;
+        if (task.description) {
+          notificationContent += `${task.description}\n`;
+        }
+        if (task.due_date) {
+          notificationContent += `**Due:** ${new Date(task.due_date).toLocaleDateString()}\n`;
+        }
+      }
+    }
+
+    let sentViaSlack = false;
+    let slackError: string | undefined;
+
+    // Try to send via preferred channel
+    if (preferredChannel === "slack" && userId) {
+      const slackResult = await sendViaSlack(supabase, userId, notificationContent, slackChannelId);
+      sentViaSlack = slackResult.success;
+      slackError = slackResult.error;
+
+      if (sentViaSlack) {
+        console.log(`[dispatcher] Notification sent via Slack for job ${job.id}`);
+      } else {
+        console.log(`[dispatcher] Slack delivery failed: ${slackError}, falling back to app`);
+      }
+    }
+
+    // Always store in app conversation (as fallback or in addition)
     let conversationId = job.conversation_id;
 
     if (!conversationId) {
@@ -189,33 +280,14 @@ async function executeNotifyAction(
     }
 
     if (!conversationId) {
+      // If Slack succeeded but we couldn't save to app, still consider it a success
+      if (sentViaSlack) {
+        return { success: true, data: { sentViaSlack: true, message: notificationContent } };
+      }
       return { success: false, error: "Could not find or create conversation" };
     }
 
-    // Build notification message
-    let notificationContent = `**Reminder:** ${message}`;
-
-    // Add task context if linked
-    if (job.task_id) {
-      const { data: task } = await supabase
-        .from("tasks")
-        .select("title, description, priority, due_date")
-        .eq("id", job.task_id)
-        .single();
-
-      if (task) {
-        notificationContent = `**Reminder:** ${job.title}\n\n`;
-        notificationContent += `**Task:** ${task.title}\n`;
-        if (task.description) {
-          notificationContent += `${task.description}\n`;
-        }
-        if (task.due_date) {
-          notificationContent += `**Due:** ${new Date(task.due_date).toLocaleDateString()}\n`;
-        }
-      }
-    }
-
-    // Insert message
+    // Insert message to app conversation
     const { error: msgError } = await supabase.from("messages").insert({
       conversation_id: conversationId,
       role: "assistant",
@@ -224,25 +296,40 @@ async function executeNotifyAction(
         type: "scheduled_notification",
         job_id: job.id,
         job_type: job.job_type,
+        preferred_channel: preferredChannel,
+        sent_via_slack: sentViaSlack,
       },
     });
 
     if (msgError) {
+      // If Slack succeeded but app storage failed, still consider it a partial success
+      if (sentViaSlack) {
+        return { success: true, data: { sentViaSlack: true, appStoreFailed: true, message: notificationContent } };
+      }
       return { success: false, error: msgError.message };
     }
 
-    // Create a notification for the user
+    // Create a notification for the user (in-app notification)
     await createNotification(
       supabase,
       job.agent_id,
       "reminder",
       job.title,
-      notificationContent.substring(0, 200), // Truncate content for notification
+      notificationContent.substring(0, 200),
       "conversation",
       conversationId
     );
 
-    return { success: true, data: { conversationId, message: notificationContent } };
+    return {
+      success: true,
+      data: {
+        conversationId,
+        message: notificationContent,
+        preferredChannel,
+        sentViaSlack,
+        slackError: sentViaSlack ? undefined : slackError,
+      },
+    };
   } catch (error) {
     return {
       success: false,
@@ -259,7 +346,7 @@ async function executeAgentTaskAction(
   job: ScheduledJob
 ): Promise<{ success: boolean; error?: string; data?: unknown }> {
   try {
-    const payload = job.action_payload as { instruction?: string };
+    const payload = job.action_payload as ActionPayload;
     const instruction = payload?.instruction || "execute_scheduled_task";
 
     // Handle specific built-in instructions

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { ChannelSettings } from "@/components/settings/channel-settings";
 import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 
 export default async function SettingsPage() {
@@ -27,27 +28,32 @@ export default async function SettingsPage() {
     .single();
 
   return (
-    <SettingsForm
-      user={{
-        id: user.id,
-        email: user.email || "",
-        name: profile?.name || "",
-        timezone: profile?.timezone || "America/New_York",
-        avatarUrl: profile?.avatar_url || null,
-      }}
-      agent={
-        agent
-          ? {
-              id: agent.id,
-              name: agent.name,
-              email: agent.email,
-              title: agent.title,
-              avatarUrl: agent.avatar_url,
-              personality: agent.personality as AgentPersonality | null,
-              userPreferences: agent.user_preferences as UserPreferences | null,
-            }
-          : null
-      }
-    />
+    <div className="flex flex-col gap-6">
+      <SettingsForm
+        user={{
+          id: user.id,
+          email: user.email || "",
+          name: profile?.name || "",
+          timezone: profile?.timezone || "America/New_York",
+          avatarUrl: profile?.avatar_url || null,
+        }}
+        agent={
+          agent
+            ? {
+                id: agent.id,
+                name: agent.name,
+                email: agent.email,
+                title: agent.title,
+                avatarUrl: agent.avatar_url,
+                personality: agent.personality as AgentPersonality | null,
+                userPreferences: agent.user_preferences as UserPreferences | null,
+              }
+            : null
+        }
+      />
+      <div className="p-6 pt-0 max-w-2xl">
+        <ChannelSettings userId={user.id} />
+      </div>
+    </div>
   );
 }

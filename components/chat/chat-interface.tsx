@@ -448,7 +448,7 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
         } overflow-hidden`}
       >
         <div className="w-72 h-full flex flex-col">
-          <div className="p-4 border-b border-white/5 flex items-center justify-between">
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-4 shrink-0">
             <h3 className="font-semibold">Conversations</h3>
             <Button variant="ghost" size="icon" onClick={() => setShowSidebar(false)} className="md:hidden">
               <ChevronLeft className="h-4 w-4" />
@@ -539,7 +539,7 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <div className="border-b border-white/5 bg-background/80 backdrop-blur-md px-4 py-3 flex items-center gap-3 z-20 shrink-0">
+        <div className="h-14 border-b border-white/5 bg-background/80 backdrop-blur-md px-4 flex items-center gap-3 z-20 shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setShowSidebar(!showSidebar)} className="shrink-0">
             <MessageSquare className="h-4 w-4" />
           </Button>

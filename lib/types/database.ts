@@ -34,6 +34,55 @@ export interface AgentIdentityContext {
   };
 }
 
+// Channel types
+export type ChannelType = "app" | "slack" | "email" | "sms" | "discord";
+
+// Slack-specific credentials
+export interface SlackCredentials {
+  bot_token: string;
+  app_token: string;
+  user_slack_id: string;
+  team_id?: string;
+  team_name?: string;
+  default_channel_id?: string;
+}
+
+// Email-specific credentials (for future use)
+export interface EmailCredentials {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  from_address?: string;
+}
+
+// Union type for all channel credentials
+export type ChannelCredentials = SlackCredentials | EmailCredentials | Record<string, unknown>;
+
+// Action payload with preferred channel support
+export interface ActionPayload {
+  message?: string;
+  instruction?: string;
+  preferred_channel?: ChannelType;
+  slack_channel_id?: string;
+  url?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+// Message metadata with channel source tracking
+export interface MessageMetadata {
+  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "slack_message";
+  job_id?: string;
+  job_type?: string;
+  instruction?: string;
+  date?: string;
+  channel_source?: ChannelType;
+  slack_channel_id?: string;
+  slack_thread_ts?: string;
+  slack_user_id?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -429,6 +478,35 @@ export interface Database {
           link_id?: string | null;
           read?: boolean;
           created_at?: string | null;
+        };
+      };
+      user_channel_credentials: {
+        Row: {
+          id: string;
+          user_id: string;
+          channel_type: "slack" | "email" | "sms" | "discord";
+          credentials: Json;
+          is_active: boolean;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          channel_type: "slack" | "email" | "sms" | "discord";
+          credentials: Json;
+          is_active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          channel_type?: "slack" | "email" | "sms" | "discord";
+          credentials?: Json;
+          is_active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
         };
       };
     };
