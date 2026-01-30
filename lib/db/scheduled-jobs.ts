@@ -1,5 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database } from "@/lib/types/database";
+import { Database, Json } from "@/lib/types/database";
 
 type ScheduledJob = Database["public"]["Tables"]["scheduled_jobs"]["Row"];
 type ScheduledJobInsert = Database["public"]["Tables"]["scheduled_jobs"]["Insert"];
@@ -142,11 +142,11 @@ export async function createScheduledJob(
     cron_expression: params.cronExpression || null,
     timezone: params.timezone || "America/New_York",
     action_type: params.actionType,
-    action_payload: params.actionPayload || {},
+    action_payload: (params.actionPayload || {}) as Json,
     task_id: params.taskId || null,
     project_id: params.projectId || null,
     conversation_id: params.conversationId || null,
-    cancel_conditions: params.cancelConditions || {},
+    cancel_conditions: (params.cancelConditions || {}) as Json,
     max_runs: params.maxRuns || null,
     next_run_at: nextRunAt,
     status: "active",
