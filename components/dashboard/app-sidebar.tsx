@@ -89,7 +89,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
     } else {
       setOpen(true);
     }
-  }, [pathname, setOpen]);
+  }, [pathname]); // Only run on path change, not on state change
 
   const initials = user.name
     ? user.name

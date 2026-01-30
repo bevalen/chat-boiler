@@ -340,7 +340,6 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
               id: newMessage.id,
               role: newMessage.role === "system" ? "assistant" : newMessage.role,
               parts: [{ type: "text" as const, text: newMessage.content }],
-              createdAt: new Date(newMessage.created_at || Date.now()),
             };
 
             return [...prev, uiMessage];
