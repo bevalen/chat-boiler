@@ -1,26 +1,143 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  
+  --animate-fade-in-up: fade-in-up 0.5s ease-out forwards;
+  
+  @keyframes fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+:root {
+  --radius: 0.625rem; /* 10px */
+  
+  /* Brand Colors - HSL */
+  --primary: hsl(225 100% 71%);      /* #6B9AFF */
+  --primary-foreground: hsl(0 0% 98%);
+  
+  --background: hsl(225 15% 6%);     /* #0D1117 */
+  --foreground: hsl(0 0% 98%);       /* #FAFAFA */
+  
+  --card: hsl(225 12% 10%);          /* #161B22 */
+  --card-foreground: hsl(0 0% 98%);
+  
+  --popover: hsl(225 12% 10%);
+  --popover-foreground: hsl(0 0% 98%);
+  
+  --secondary: hsl(225 10% 15%);     /* #21262D */
+  --secondary-foreground: hsl(0 0% 98%);
+  
+  --muted: hsl(225 10% 18%);         /* #282E36 */
+  --muted-foreground: hsl(225 10% 60%); /* #8B949E */
+  
+  --accent: hsl(225 10% 15%);
+  --accent-foreground: hsl(0 0% 98%);
+  
+  --destructive: hsl(0 84% 60%);     /* #F04848 */
+  --destructive-foreground: hsl(0 0% 98%);
+  
+  --border: hsl(225 10% 18%);        /* #282E36 */
+  --input: hsl(225 10% 18%);
+  --ring: hsl(225 100% 71%);         /* Primary Blue */
+  
+  /* Chart Colors (kept for compatibility, matched to theme) */
+  --chart-1: hsl(225 100% 71%);
+  --chart-2: hsl(210 100% 60%);
+  --chart-3: hsl(240 100% 70%);
+  --chart-4: hsl(260 100% 70%);
+  --chart-5: hsl(280 100% 70%);
+  
+  /* Sidebar Colors (matched to theme) */
+  --sidebar: hsl(225 15% 6%);
+  --sidebar-foreground: hsl(225 10% 60%);
+  --sidebar-primary: hsl(225 100% 71%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(225 10% 15%);
+  --sidebar-accent-foreground: hsl(0 0% 98%);
+  --sidebar-border: hsl(225 10% 18%);
+  --sidebar-ring: hsl(225 100% 71%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Page Background Gradient */
+    background-image: linear-gradient(180deg, 
+      hsl(225 15% 6%) 0%, 
+      hsl(225 12% 8%) 50%, 
+      hsl(225 10% 4%) 100%
+    );
+    background-attachment: fixed;
+  }
+}
+
+/* Custom Utilities from Brand Guide */
+@layer utilities {
+  .glow-primary {
+    box-shadow: 0 0 40px -10px hsl(225 100% 71% / 0.4);
+  }
+  
+  .glow-primary-subtle {
+    box-shadow: 0 0 30px -15px hsl(225 100% 71% / 0.3);
+  }
+  
+  .card-glow-hover:hover {
+    border-color: hsl(225 100% 71% / 0.4);
+    box-shadow: 0 0 30px -10px hsl(225 100% 71% / 0.2);
+    transform: translateY(-2px);
+  }
 }
