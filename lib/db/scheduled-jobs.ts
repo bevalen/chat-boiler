@@ -122,7 +122,7 @@ export function calculateNextRun(
  * Create a new scheduled job
  */
 export async function createScheduledJob(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   params: CreateScheduledJobParams
 ): Promise<{ success: boolean; job?: ScheduledJob; error?: string }> {
   const nextRunAt = calculateNextRun(
@@ -169,7 +169,7 @@ export async function createScheduledJob(
  * List scheduled jobs for an agent
  */
 export async function listScheduledJobs(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   agentId: string,
   options?: {
     status?: "active" | "paused" | "completed" | "cancelled" | "all";
@@ -208,7 +208,7 @@ export async function listScheduledJobs(
  * Get a single scheduled job by ID
  */
 export async function getScheduledJob(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   jobId: string,
   agentId: string
 ): Promise<{ success: boolean; job?: ScheduledJob; error?: string }> {
@@ -230,7 +230,7 @@ export async function getScheduledJob(
  * Update a scheduled job
  */
 export async function updateScheduledJob(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   jobId: string,
   agentId: string,
   updates: {
@@ -312,7 +312,7 @@ export async function updateScheduledJob(
  * Cancel a scheduled job
  */
 export async function cancelScheduledJob(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   jobId: string,
   agentId: string
 ): Promise<{ success: boolean; error?: string }> {
@@ -333,7 +333,7 @@ export async function cancelScheduledJob(
  * Get due jobs (for the dispatcher)
  */
 export async function getDueJobs(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   limit: number = 100
 ): Promise<{ success: boolean; jobs?: ScheduledJob[]; error?: string }> {
   const now = new Date().toISOString();
@@ -357,7 +357,7 @@ export async function getDueJobs(
  * Mark a job as executed and update next_run_at
  */
 export async function markJobExecuted(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   jobId: string,
   job: ScheduledJob
 ): Promise<{ success: boolean; error?: string }> {
@@ -401,7 +401,7 @@ export async function markJobExecuted(
  * Create a job execution record
  */
 export async function createJobExecution(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   jobId: string,
   agentId: string,
   status: "running" | "success" | "failed" | "skipped",
@@ -432,7 +432,7 @@ export async function createJobExecution(
  * Update a job execution record
  */
 export async function updateJobExecution(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   executionId: string,
   status: "success" | "failed" | "skipped",
   result?: Record<string, unknown>,
