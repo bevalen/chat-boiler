@@ -6,6 +6,34 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// Typed structures for agent configuration
+export interface AgentPersonality {
+  traits?: string[];
+  style?: string;
+  tone?: string;
+  background?: string;
+}
+
+export interface UserPreferences {
+  response_style?: "concise" | "detailed" | "balanced";
+  verbosity?: "brief" | "moderate" | "verbose";
+  use_bullet_points?: boolean;
+  proactive_suggestions?: boolean;
+  confirm_before_actions?: boolean;
+  preferred_communication?: string;
+}
+
+export interface AgentIdentityContext {
+  role?: string;
+  capabilities?: string[];
+  owner?: {
+    name?: string;
+    company?: string;
+    role?: string;
+    timezone?: string;
+  };
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -38,6 +66,10 @@ export interface Database {
           user_id: string;
           name: string;
           email: string | null;
+          title: string | null;
+          avatar_url: string | null;
+          personality: Json | null;
+          user_preferences: Json | null;
           identity_context: Json | null;
           created_at: string | null;
         };
@@ -46,6 +78,10 @@ export interface Database {
           user_id: string;
           name: string;
           email?: string | null;
+          title?: string | null;
+          avatar_url?: string | null;
+          personality?: Json | null;
+          user_preferences?: Json | null;
           identity_context?: Json | null;
           created_at?: string | null;
         };
@@ -54,6 +90,10 @@ export interface Database {
           user_id?: string;
           name?: string;
           email?: string | null;
+          title?: string | null;
+          avatar_url?: string | null;
+          personality?: Json | null;
+          user_preferences?: Json | null;
           identity_context?: Json | null;
           created_at?: string | null;
         };
@@ -62,23 +102,29 @@ export interface Database {
         Row: {
           id: string;
           agent_id: string;
+          title: string | null;
           channel_type: string | null;
           status: string | null;
           created_at: string | null;
+          updated_at: string | null;
         };
         Insert: {
           id?: string;
           agent_id: string;
+          title?: string | null;
           channel_type?: string | null;
           status?: string | null;
           created_at?: string | null;
+          updated_at?: string | null;
         };
         Update: {
           id?: string;
           agent_id?: string;
+          title?: string | null;
           channel_type?: string | null;
           status?: string | null;
           created_at?: string | null;
+          updated_at?: string | null;
         };
       };
       messages: {

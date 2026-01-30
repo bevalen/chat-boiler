@@ -155,7 +155,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-white/5 transition-colors"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   <Avatar className="h-8 w-8 rounded-lg border border-white/10">
                     <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold rounded-lg">

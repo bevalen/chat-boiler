@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -33,7 +34,19 @@ export default async function SettingsPage() {
         name: profile?.name || "",
         timezone: profile?.timezone || "America/New_York",
       }}
-      agent={agent}
+      agent={
+        agent
+          ? {
+              id: agent.id,
+              name: agent.name,
+              email: agent.email,
+              title: agent.title,
+              avatarUrl: agent.avatar_url,
+              personality: agent.personality as AgentPersonality | null,
+              userPreferences: agent.user_preferences as UserPreferences | null,
+            }
+          : null
+      }
     />
   );
 }
