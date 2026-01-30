@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Notification } from "@/lib/db/notifications";
 
@@ -26,7 +26,8 @@ export function useNotifications({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createClient();
+  // Memoize supabase client to avoid recreating on every render
+  const supabase = useMemo(() => createClient(), []);
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async () => {
