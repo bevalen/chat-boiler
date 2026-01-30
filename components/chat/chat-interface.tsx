@@ -58,6 +58,13 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
+
+  // Auto-open sidebar on desktop
+  useEffect(() => {
+    if (window.innerWidth >= 768) {
+      setShowSidebar(true);
+    }
+  }, []);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [pendingTitleGeneration, setPendingTitleGeneration] = useState(false);
@@ -119,7 +126,9 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
       }
 
       setConversationId(id);
-      setShowSidebar(false);
+      if (window.innerWidth < 768) {
+        setShowSidebar(false);
+      }
     } catch (error) {
       console.error("Failed to load conversation:", error);
     }
@@ -129,7 +138,9 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
   const startNewConversation = useCallback(() => {
     setConversationId(null);
     setMessages([]);
-    setShowSidebar(false);
+    if (window.innerWidth < 768) {
+      setShowSidebar(false);
+    }
     // Clear localStorage when explicitly starting a new conversation
     localStorage.removeItem(STORAGE_KEY);
   }, [setMessages]);

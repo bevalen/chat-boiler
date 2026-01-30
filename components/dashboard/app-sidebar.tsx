@@ -20,13 +20,13 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import { useEffect } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +80,17 @@ interface AppSidebarProps {
 
 export function AppSidebar({ user }: AppSidebarProps) {
   const pathname = usePathname();
+  const { setOpen } = useSidebar();
+
+  // Auto-collapse sidebar on chat page, expand on others
+  useEffect(() => {
+    if (pathname === "/") {
+      setOpen(false);
+    } else {
+      setOpen(true);
+    }
+  }, [pathname, setOpen]);
+
   const initials = user.name
     ? user.name
         .split(" ")
