@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2 } from "lucide-react";
+import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Image from "next/image";
 
@@ -34,11 +34,17 @@ interface AgentInfo {
   avatarUrl: string | null;
 }
 
-interface ChatInterfaceProps {
-  agent?: AgentInfo;
+interface UserInfo {
+  name: string | null;
+  avatarUrl: string | null;
 }
 
-export function ChatInterface({ agent }: ChatInterfaceProps) {
+interface ChatInterfaceProps {
+  agent?: AgentInfo;
+  user?: UserInfo;
+}
+
+export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -292,7 +298,7 @@ export function ChatInterface({ agent }: ChatInterfaceProps) {
   const agentTitle = agent?.title || "AI Assistant";
 
   return (
-    <div className="flex h-full bg-background/50 relative">
+    <div className="flex h-full bg-background/50 relative overflow-hidden">
       {/* Conversation Sidebar */}
       <div
         className={`absolute md:relative z-30 h-full bg-background/95 backdrop-blur-md border-r border-white/5 transition-all duration-300 ${
@@ -389,13 +395,13 @@ export function ChatInterface({ agent }: ChatInterfaceProps) {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <div className="border-b border-white/5 bg-background/80 backdrop-blur-md px-4 py-3 flex items-center gap-3 z-20">
+        <div className="border-b border-white/5 bg-background/80 backdrop-blur-md px-4 py-3 flex items-center gap-3 z-20 shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setShowSidebar(!showSidebar)} className="shrink-0">
             <MessageSquare className="h-4 w-4" />
           </Button>
-          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
             {agent?.avatarUrl ? (
               <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
             ) : (
@@ -412,11 +418,11 @@ export function ChatInterface({ agent }: ChatInterfaceProps) {
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-primary/5 blur-[120px] opacity-20" />
 
         {/* Messages area */}
-        <ScrollArea className="flex-1 px-4 z-10" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto px-4 z-10 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent" ref={scrollRef}>
           <div className="max-w-3xl mx-auto py-8 space-y-8">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-6 opacity-0 animate-fade-in-up [animation-delay:200ms] fill-mode-forwards">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10 overflow-hidden">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10 overflow-hidden">
                   {agent?.avatarUrl ? (
                     <Image src={agent.avatarUrl} alt={agentName} width={80} height={80} className="w-full h-full object-cover" />
                   ) : (
@@ -458,7 +464,7 @@ export function ChatInterface({ agent }: ChatInterfaceProps) {
                 {messages.map((message) => (
                   <div key={message.id} className={`flex gap-4 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                     {message.role === "assistant" && (
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
                         {agent?.avatarUrl ? (
                           <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
                         ) : (
@@ -489,20 +495,27 @@ export function ChatInterface({ agent }: ChatInterfaceProps) {
                             </div>
                           );
                         }
+                        if (part.type === "tool-invocation") {
+                          return <ToolInvocationDisplay key={index} toolInvocation={part} />;
+                        }
                         return null;
                       })}
                     </div>
 
                     {message.role === "user" && (
-                      <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0 mt-1">
-                        <User className="w-4 h-4 text-muted-foreground" />
+                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 mt-1 overflow-hidden">
+                        {userInfo?.avatarUrl ? (
+                          <Image src={userInfo.avatarUrl} alt={userInfo.name || "You"} width={32} height={32} className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-4 h-4 text-muted-foreground" />
+                        )}
                       </div>
                     )}
                   </div>
                 ))}
                 {status === "submitted" && (
                   <div className="flex gap-4">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
                       {agent?.avatarUrl ? (
                         <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
                       ) : (
@@ -517,10 +530,10 @@ export function ChatInterface({ agent }: ChatInterfaceProps) {
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Input area */}
-        <div className="border-t border-white/5 bg-background/80 backdrop-blur-md p-4 z-20">
+        <div className="border-t border-white/5 bg-background/80 backdrop-blur-md p-4 z-20 shrink-0">
           <div className="max-w-3xl mx-auto relative">
             <form
               onSubmit={handleSubmit}
@@ -586,6 +599,101 @@ function TypingDots() {
       <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.3s]" />
       <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.15s]" />
       <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
+    </div>
+  );
+}
+
+// Tool names mapped to display info
+const TOOL_DISPLAY_INFO: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
+  searchMemory: {
+    label: "Searching Memory",
+    icon: <Search className="w-3.5 h-3.5" />,
+    description: "Looking through past conversations and context...",
+  },
+  saveToMemory: {
+    label: "Saving to Memory",
+    icon: <Save className="w-3.5 h-3.5" />,
+    description: "Storing this information for later...",
+  },
+  createProject: {
+    label: "Creating Project",
+    icon: <FolderPlus className="w-3.5 h-3.5" />,
+    description: "Setting up a new project...",
+  },
+  listProjects: {
+    label: "Listing Projects",
+    icon: <FolderPlus className="w-3.5 h-3.5" />,
+    description: "Fetching your projects...",
+  },
+  createTask: {
+    label: "Creating Task",
+    icon: <ListTodo className="w-3.5 h-3.5" />,
+    description: "Adding a new task...",
+  },
+  listTasks: {
+    label: "Listing Tasks",
+    icon: <ListTodo className="w-3.5 h-3.5" />,
+    description: "Fetching your tasks...",
+  },
+  completeTask: {
+    label: "Completing Task",
+    icon: <Check className="w-3.5 h-3.5" />,
+    description: "Marking task as done...",
+  },
+};
+
+interface ToolInvocationPart {
+  type: "tool-invocation";
+  toolInvocation: {
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    state: "partial-call" | "call" | "result";
+    result?: unknown;
+  };
+}
+
+function ToolInvocationDisplay({ toolInvocation }: { toolInvocation: ToolInvocationPart }) {
+  const { toolName, state, args, result } = toolInvocation.toolInvocation;
+  const toolInfo = TOOL_DISPLAY_INFO[toolName] || {
+    label: toolName,
+    icon: <Brain className="w-3.5 h-3.5" />,
+    description: "Processing...",
+  };
+
+  const isLoading = state === "call" || state === "partial-call";
+  const isComplete = state === "result";
+
+  // For search results, show count
+  const resultSummary = isComplete && result && typeof result === "object" && "resultCount" in (result as Record<string, unknown>)
+    ? `Found ${(result as { resultCount: number }).resultCount} result(s)`
+    : isComplete
+    ? "Done"
+    : null;
+
+  return (
+    <div className="my-2 flex items-start gap-2">
+      <div
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+          isLoading
+            ? "bg-primary/10 text-primary border border-primary/20"
+            : "bg-green-500/10 text-green-400 border border-green-500/20"
+        }`}
+      >
+        <span className={isLoading ? "animate-pulse" : ""}>{toolInfo.icon}</span>
+        <span>{toolInfo.label}</span>
+        {isLoading && (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        )}
+        {resultSummary && (
+          <span className="text-[10px] opacity-70">• {resultSummary}</span>
+        )}
+      </div>
+      {isLoading && args && "query" in args && (
+        <span className="text-xs text-muted-foreground italic">
+          &quot;{String(args.query).substring(0, 50)}{String(args.query).length > 50 ? "..." : ""}&quot;
+        </span>
+      )}
     </div>
   );
 }

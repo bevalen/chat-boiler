@@ -1,6 +1,7 @@
 import { tool, UIToolInvocation } from "ai";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { generateEmbedding } from "@/lib/embeddings";
 
 export const createTaskTool = tool({
   description: "Create a new task, optionally linked to a project",
@@ -28,6 +29,15 @@ export const createTaskTool = tool({
     if (!agentId) throw new Error("Agent ID is required");
     const supabase = getAdminClient();
 
+    // Generate embedding for task (title + description)
+    const textToEmbed = description ? `${title}\n\n${description}` : title;
+    let embedding: number[] | null = null;
+    try {
+      embedding = await generateEmbedding(textToEmbed);
+    } catch (embeddingError) {
+      console.error("Error generating task embedding:", embeddingError);
+    }
+
     const { data, error } = await supabase
       .from("tasks")
       .insert({
@@ -38,6 +48,7 @@ export const createTaskTool = tool({
         priority: priority || "medium",
         status: "pending",
         due_date: dueDate || null,
+        embedding,
       })
       .select()
       .single();
@@ -165,7 +176,7 @@ export const updateTaskTool = tool({
 
     const updates: Record<string, unknown> = {};
     if (title) updates.title = title;
-    if (description) updates.description = description;
+    if (description !== undefined) updates.description = description;
     if (status) {
       updates.status = status;
       if (status === "completed") {
@@ -174,6 +185,28 @@ export const updateTaskTool = tool({
     }
     if (priority) updates.priority = priority;
     if (dueDate) updates.due_date = dueDate;
+
+    // If title or description changed, regenerate embedding
+    if (title || description !== undefined) {
+      // Fetch current task to get full text for embedding
+      const { data: current } = await supabase
+        .from("tasks")
+        .select("title, description")
+        .eq("id", taskId)
+        .single();
+
+      if (current) {
+        const newTitle = title || current.title;
+        const newDescription = description !== undefined ? description : current.description;
+        const textToEmbed = newDescription ? `${newTitle}\n\n${newDescription}` : newTitle;
+        
+        try {
+          updates.embedding = await generateEmbedding(textToEmbed);
+        } catch (embeddingError) {
+          console.error("Error generating task embedding:", embeddingError);
+        }
+      }
+    }
 
     const { data, error } = await supabase
       .from("tasks")

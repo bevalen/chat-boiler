@@ -25,6 +25,7 @@ interface SettingsFormProps {
     email: string;
     name: string;
     timezone: string;
+    avatarUrl: string | null;
   };
   agent: {
     id: string;
@@ -40,6 +41,8 @@ interface SettingsFormProps {
 export function SettingsForm({ user, agent }: SettingsFormProps) {
   const [name, setName] = useState(user.name);
   const [timezone, setTimezone] = useState(user.timezone);
+  const [userAvatarUrl, setUserAvatarUrl] = useState(user.avatarUrl || "");
+  const [uploadingUserAvatar, setUploadingUserAvatar] = useState(false);
   
   // Agent state
   const [agentName, setAgentName] = useState(agent?.name || "Milo");
@@ -82,6 +85,53 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUserAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingUserAvatar(true);
+    setMessage(null);
+
+    const supabase = createClient();
+    const fileExt = file.name.split(".").pop();
+    const filePath = `users/${user.id}/avatar.${fileExt}`;
+
+    // Upload to Supabase storage
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      setMessage("Failed to upload profile image");
+      setUploadingUserAvatar(false);
+      return;
+    }
+
+    // Get the public URL
+    const { data: urlData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+
+    const newAvatarUrl = urlData.publicUrl;
+
+    // Update user record
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ avatar_url: newAvatarUrl })
+      .eq("id", user.id);
+
+    if (updateError) {
+      setMessage("Failed to save profile image URL");
+    } else {
+      setUserAvatarUrl(newAvatarUrl);
+      setMessage("Profile image uploaded successfully");
+      router.refresh();
+    }
+
+    setUploadingUserAvatar(false);
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -237,7 +287,60 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
             </div>
             <CardDescription>Your personal information</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* User Avatar Upload */}
+            <div className="flex items-start gap-6">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full bg-secondary border border-border overflow-hidden">
+                  {userAvatarUrl ? (
+                    <Image
+                      src={userAvatarUrl}
+                      alt={name || "Profile"}
+                      width={80}
+                      height={80}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <User className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                {userAvatarUrl && (
+                  <button
+                    onClick={() => setUserAvatarUrl("")}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>Profile Photo</Label>
+                <p className="text-sm text-muted-foreground">
+                  Upload a photo for your profile
+                </p>
+                <input
+                  ref={userFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUserAvatarUpload}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => userFileInputRef.current?.click()}
+                  disabled={uploadingUserAvatar}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploadingUserAvatar ? "Uploading..." : "Upload Image"}
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" value={user.email} disabled className="bg-muted" />
@@ -289,7 +392,7 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
                 {/* Avatar Upload */}
                 <div className="flex items-start gap-6">
                   <div className="relative">
-                    <div className="w-24 h-24 rounded-xl bg-secondary border border-border overflow-hidden">
+                    <div className="w-24 h-24 rounded-full bg-secondary border border-border overflow-hidden">
                       {avatarUrl ? (
                         <Image
                           src={avatarUrl}

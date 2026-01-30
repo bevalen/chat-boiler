@@ -33,6 +33,7 @@ export default async function SettingsPage() {
         email: user.email || "",
         name: profile?.name || "",
         timezone: profile?.timezone || "America/New_York",
+        avatarUrl: profile?.avatar_url || null,
       }}
       agent={
         agent

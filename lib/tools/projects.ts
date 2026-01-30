@@ -1,6 +1,7 @@
 import { tool, UIToolInvocation } from "ai";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { generateEmbedding } from "@/lib/embeddings";
 
 export const createProjectTool = tool({
   description: "Create a new project to track work",
@@ -17,6 +18,15 @@ export const createProjectTool = tool({
     if (!agentId) throw new Error("Agent ID is required");
     const supabase = getAdminClient();
 
+    // Generate embedding for project (title + description)
+    const textToEmbed = description ? `${title}\n\n${description}` : title;
+    let embedding: number[] | null = null;
+    try {
+      embedding = await generateEmbedding(textToEmbed);
+    } catch (embeddingError) {
+      console.error("Error generating project embedding:", embeddingError);
+    }
+
     const { data, error } = await supabase
       .from("projects")
       .insert({
@@ -25,6 +35,7 @@ export const createProjectTool = tool({
         description,
         priority: priority || "medium",
         status: "active",
+        embedding,
       })
       .select()
       .single();
@@ -108,9 +119,31 @@ export const updateProjectTool = tool({
 
     const updates: Record<string, unknown> = {};
     if (title) updates.title = title;
-    if (description) updates.description = description;
+    if (description !== undefined) updates.description = description;
     if (status) updates.status = status;
     if (priority) updates.priority = priority;
+
+    // If title or description changed, regenerate embedding
+    if (title || description !== undefined) {
+      // Fetch current project to get full text for embedding
+      const { data: current } = await supabase
+        .from("projects")
+        .select("title, description")
+        .eq("id", projectId)
+        .single();
+
+      if (current) {
+        const newTitle = title || current.title;
+        const newDescription = description !== undefined ? description : current.description;
+        const textToEmbed = newDescription ? `${newTitle}\n\n${newDescription}` : newTitle;
+        
+        try {
+          updates.embedding = await generateEmbedding(textToEmbed);
+        } catch (embeddingError) {
+          console.error("Error generating project embedding:", embeddingError);
+        }
+      }
+    }
 
     const { data, error } = await supabase
       .from("projects")

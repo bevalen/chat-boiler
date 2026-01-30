@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "@/lib/types/database";
+import { generateEmbedding, generateEmbeddings } from "@/lib/embeddings";
 
 type ConversationRow = Database["public"]["Tables"]["conversations"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -183,7 +184,7 @@ export async function getMessagesForConversation(
 }
 
 /**
- * Add a message to a conversation
+ * Add a message to a conversation with embedding generation
  */
 export async function addMessage(
   supabase: SupabaseClient,
@@ -192,6 +193,14 @@ export async function addMessage(
   content: string,
   metadata?: Record<string, unknown>
 ): Promise<Message | null> {
+  // Generate embedding for the message content
+  let embedding: number[] | null = null;
+  try {
+    embedding = await generateEmbedding(content);
+  } catch (embeddingError) {
+    console.error("Error generating embedding (continuing without):", embeddingError);
+  }
+
   const { data, error } = await supabase
     .from("messages")
     .insert({
@@ -199,6 +208,7 @@ export async function addMessage(
       role,
       content,
       metadata: metadata || {},
+      embedding,
     })
     .select()
     .single();
@@ -218,18 +228,28 @@ export async function addMessage(
 }
 
 /**
- * Add multiple messages to a conversation (for batching)
+ * Add multiple messages to a conversation with embeddings (for batching)
  */
 export async function addMessages(
   supabase: SupabaseClient,
   conversationId: string,
   messages: { role: "user" | "assistant" | "system"; content: string; metadata?: Record<string, unknown> }[]
 ): Promise<Message[]> {
-  const inserts = messages.map((msg) => ({
+  // Generate embeddings for all messages in batch
+  let embeddings: number[][] = [];
+  try {
+    embeddings = await generateEmbeddings(messages.map((m) => m.content));
+  } catch (embeddingError) {
+    console.error("Error generating embeddings (continuing without):", embeddingError);
+    embeddings = messages.map(() => []);
+  }
+
+  const inserts = messages.map((msg, i) => ({
     conversation_id: conversationId,
     role: msg.role,
     content: msg.content,
     metadata: msg.metadata || {},
+    embedding: embeddings[i]?.length > 0 ? embeddings[i] : null,
   }));
 
   const { data, error } = await supabase

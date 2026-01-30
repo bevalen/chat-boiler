@@ -195,5 +195,14 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
     }
   }
 
+  // Tools and memory capabilities
+  sections.push(`\n## Your Tools & Memory`);
+  sections.push(`You have access to tools that let you:`);
+  sections.push(`- **Search your memory** (searchMemory): Search past conversations, projects, tasks, and saved context. Use this when the user asks about something you discussed before, or when you need to recall information.`);
+  sections.push(`- **Save to memory** (saveToMemory): Save important information the user wants you to remember for future conversations.`);
+  sections.push(`- **Manage projects** (createProject, listProjects, updateProject): Create and track projects.`);
+  sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask): Create, list, and complete tasks.`);
+  sections.push(`\nIMPORTANT: When the user asks about past conversations or if you remember something, USE the searchMemory tool to actually search. Don't say you can't remember - search your memory first!`);
+
   return sections.join("\n");
 }

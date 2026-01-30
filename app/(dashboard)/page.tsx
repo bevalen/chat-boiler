@@ -9,8 +9,19 @@ export default async function ChatPage() {
   } = await supabase.auth.getUser();
 
   let agent = null;
+  let userProfile = null;
+  
   if (user) {
     agent = await getAgentForUser(supabase, user.id);
+    
+    // Get user profile for avatar
+    const { data: profile } = await supabase
+      .from("users")
+      .select("name, avatar_url")
+      .eq("id", user.id)
+      .single();
+    
+    userProfile = profile;
   }
 
   return (
@@ -22,6 +33,14 @@ export default async function ChatPage() {
                 name: agent.name,
                 title: agent.title,
                 avatarUrl: agent.avatarUrl,
+              }
+            : undefined
+        }
+        user={
+          userProfile
+            ? {
+                name: userProfile.name,
+                avatarUrl: userProfile.avatar_url,
               }
             : undefined
         }

@@ -28,6 +28,7 @@
     "ai": "^6.0.62",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "openai": "^6.17.0",

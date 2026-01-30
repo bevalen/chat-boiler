@@ -16,6 +16,8 @@ export { checkEmailTool, sendEmailTool } from "./email";
 
 export { checkCalendarTool } from "./calendar";
 
+export { searchMemoryTool, saveToMemoryTool } from "./memory";
+
 // Export tool types
 export type {
   CreateProjectToolInvocation,
