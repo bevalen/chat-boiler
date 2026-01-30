@@ -131,8 +131,28 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   const personality = agent.personality || {};
   const preferences = agent.userPreferences || {};
   const identity = agent.identityContext || {};
+  const timezone = user?.timezone || identity.owner?.timezone || "America/New_York";
 
   const sections: string[] = [];
+
+  // Current time context - CRITICAL for scheduling
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: true,
+  });
+  const currentTime = formatter.format(now);
+  sections.push(`## Current Time`);
+  sections.push(`Right now it is: ${currentTime} (${timezone})`);
+  sections.push(`ISO timestamp: ${now.toISOString()}`);
+  sections.push(`Use this as your reference for all time-based operations like reminders and scheduling.\n`);
 
   // Identity section
   sections.push(`You are ${agent.name}, ${agent.title || "an AI assistant"}.`);
