@@ -165,17 +165,29 @@ async function sendToMaia(
     channelId: string;
     threadTs?: string;
     slackUserId: string;
-  }
+  },
+  threadHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<string> {
   try {
-    // Build the message in UIMessage format
-    const messages = [
-      {
-        role: "user",
-        content: text,
-        parts: [{ type: "text", text }],
-      },
-    ];
+    // Build messages array - include thread history if available
+    let messages: Array<{ role: string; content: string; parts: Array<{ type: string; text: string }> }> = [];
+    
+    if (threadHistory && threadHistory.length > 0) {
+      // Add thread history messages
+      messages = threadHistory.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        parts: [{ type: "text", text: msg.content }],
+      }));
+      console.log(`[slack-bot] Including ${threadHistory.length} messages from thread history`);
+    }
+    
+    // Add the current message
+    messages.push({
+      role: "user",
+      content: text,
+      parts: [{ type: "text", text }],
+    });
 
     const response = await fetch(`${appBaseUrl}/api/chat`, {
       method: "POST",
@@ -266,7 +278,11 @@ async function sendToMaia(
 /**
  * Handle incoming Slack messages
  */
-async function handleMessage(context: SlackMessageContext, respond: (text: string) => Promise<void>) {
+async function handleMessage(
+  context: SlackMessageContext, 
+  respond: (text: string) => Promise<void>,
+  threadHistory?: Array<{ role: "user" | "assistant"; content: string }>
+) {
   console.log(`[slack-bot] Received message from ${context.userId}: ${context.text.substring(0, 50)}...`);
 
   // Look up the MAIA user
@@ -279,7 +295,7 @@ async function handleMessage(context: SlackMessageContext, respond: (text: strin
     return;
   }
 
-  // Send to MAIA and get response
+  // Send to MAIA and get response (with thread history if available)
   const response = await sendToMaia(
     user.userId,
     user.agentId,
@@ -289,11 +305,72 @@ async function handleMessage(context: SlackMessageContext, respond: (text: strin
       channelId: context.channelId,
       threadTs: context.threadTs,
       slackUserId: context.userId,
-    }
+    },
+    threadHistory
   );
 
   // Send response back to Slack
   await respond(response);
+}
+
+/**
+ * Fetch thread history from Slack
+ * Returns messages in chronological order, excluding the current message
+ */
+async function fetchThreadHistory(
+  client: InstanceType<typeof App>["client"],
+  channelId: string,
+  threadTs: string,
+  currentMessageTs: string,
+  botUserId: string
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  try {
+    const result = await client.conversations.replies({
+      channel: channelId,
+      ts: threadTs,
+      limit: 30, // Get last 30 messages in thread
+    });
+
+    if (!result.messages || result.messages.length === 0) {
+      return [];
+    }
+
+    // Convert Slack messages to our format, excluding the current message
+    const history: Array<{ role: "user" | "assistant"; content: string }> = [];
+    
+    for (const msg of result.messages) {
+      // Skip the current message (we'll add it separately)
+      if (msg.ts === currentMessageTs) {
+        continue;
+      }
+
+      // Skip messages without text
+      if (!msg.text) {
+        continue;
+      }
+
+      // Determine role based on whether it's from the bot
+      const isBot = msg.bot_id || msg.user === botUserId;
+      const role: "user" | "assistant" = isBot ? "assistant" : "user";
+
+      // Clean up the message text (remove bot mentions for user messages)
+      let content = msg.text;
+      if (!isBot) {
+        // Remove bot mentions from user messages
+        content = content.replace(/<@[A-Z0-9]+>/g, "").trim();
+      }
+
+      if (content) {
+        history.push({ role, content });
+      }
+    }
+
+    console.log(`[slack-bot] Fetched ${history.length} messages from thread history`);
+    return history;
+  } catch (error) {
+    console.error("[slack-bot] Error fetching thread history:", error);
+    return [];
+  }
 }
 
 /**
@@ -314,26 +391,40 @@ function setupSlackAppHandlers(app: App, userId: string) {
 
     // Only handle DMs
     const channelType = message.channel_type;
+    const authResult = await client.auth.test();
+    const botUserId = authResult.user_id || "";
+    
     if (channelType !== "im") {
       // For channel messages, check if the bot was mentioned
-      const authResult = await client.auth.test();
-      const botUserId = authResult.user_id;
-
       if (!botUserId || !message.text.includes(`<@${botUserId}>`)) {
         return; // Ignore channel messages where bot isn't mentioned
       }
     }
 
+    const threadTs = "thread_ts" in message ? message.thread_ts : undefined;
+    
     const context: SlackMessageContext = {
       userId: "user" in message ? message.user || "" : "",
       channelId: message.channel,
       teamId: "team" in message ? (message.team as string) || "" : "",
       text: message.text,
-      threadTs: "thread_ts" in message ? message.thread_ts : undefined,
+      threadTs,
       messageTs: message.ts,
       isDirectMessage: channelType === "im",
       isMention: message.text.includes("<@"),
     };
+
+    // Fetch thread history if this is a reply in a thread
+    let threadHistory: Array<{ role: "user" | "assistant"; content: string }> | undefined;
+    if (threadTs) {
+      threadHistory = await fetchThreadHistory(
+        client,
+        message.channel,
+        threadTs,
+        message.ts,
+        botUserId
+      );
+    }
 
     const respond = async (text: string) => {
       const slackText = markdownToSlackMrkdwn(text);
@@ -343,7 +434,7 @@ function setupSlackAppHandlers(app: App, userId: string) {
       });
     };
 
-    await handleMessage(context, respond);
+    await handleMessage(context, respond, threadHistory);
   });
 
   // Handle app mentions
