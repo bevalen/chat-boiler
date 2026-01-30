@@ -262,8 +262,8 @@ export async function updateScheduledJob(
   if (updates.title) updateData.title = updates.title;
   if (updates.description !== undefined) updateData.description = updates.description;
   if (updates.status) updateData.status = updates.status;
-  if (updates.actionPayload) updateData.action_payload = updates.actionPayload;
-  if (updates.cancelConditions) updateData.cancel_conditions = updates.cancelConditions;
+  if (updates.actionPayload) updateData.action_payload = updates.actionPayload as Json;
+  if (updates.cancelConditions) updateData.cancel_conditions = updates.cancelConditions as Json;
   if (updates.maxRuns !== undefined) updateData.max_runs = updates.maxRuns;
 
   // Handle schedule changes
