@@ -287,6 +287,115 @@ export interface Database {
           created_at?: string | null;
         };
       };
+      scheduled_jobs: {
+        Row: {
+          id: string;
+          agent_id: string;
+          job_type: "reminder" | "follow_up" | "recurring" | "one_time";
+          title: string;
+          description: string | null;
+          schedule_type: "once" | "cron";
+          run_at: string | null;
+          cron_expression: string | null;
+          timezone: string | null;
+          action_type: "notify" | "agent_task" | "webhook";
+          action_payload: Json;
+          task_id: string | null;
+          project_id: string | null;
+          conversation_id: string | null;
+          cancel_conditions: Json;
+          status: "active" | "paused" | "completed" | "cancelled";
+          last_run_at: string | null;
+          next_run_at: string | null;
+          run_count: number;
+          max_runs: number | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          job_type: "reminder" | "follow_up" | "recurring" | "one_time";
+          title: string;
+          description?: string | null;
+          schedule_type: "once" | "cron";
+          run_at?: string | null;
+          cron_expression?: string | null;
+          timezone?: string | null;
+          action_type: "notify" | "agent_task" | "webhook";
+          action_payload?: Json;
+          task_id?: string | null;
+          project_id?: string | null;
+          conversation_id?: string | null;
+          cancel_conditions?: Json;
+          status?: "active" | "paused" | "completed" | "cancelled";
+          last_run_at?: string | null;
+          next_run_at?: string | null;
+          run_count?: number;
+          max_runs?: number | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          job_type?: "reminder" | "follow_up" | "recurring" | "one_time";
+          title?: string;
+          description?: string | null;
+          schedule_type?: "once" | "cron";
+          run_at?: string | null;
+          cron_expression?: string | null;
+          timezone?: string | null;
+          action_type?: "notify" | "agent_task" | "webhook";
+          action_payload?: Json;
+          task_id?: string | null;
+          project_id?: string | null;
+          conversation_id?: string | null;
+          cancel_conditions?: Json;
+          status?: "active" | "paused" | "completed" | "cancelled";
+          last_run_at?: string | null;
+          next_run_at?: string | null;
+          run_count?: number;
+          max_runs?: number | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
+      job_executions: {
+        Row: {
+          id: string;
+          job_id: string;
+          agent_id: string;
+          started_at: string | null;
+          completed_at: string | null;
+          status: "running" | "success" | "failed" | "skipped" | null;
+          result: Json | null;
+          error: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          agent_id: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+          status?: "running" | "success" | "failed" | "skipped" | null;
+          result?: Json | null;
+          error?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          agent_id?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+          status?: "running" | "success" | "failed" | "skipped" | null;
+          result?: Json | null;
+          error?: string | null;
+          created_at?: string | null;
+        };
+      };
     };
     Functions: {
       match_messages: {

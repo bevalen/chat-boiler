@@ -200,8 +200,19 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   sections.push(`You have access to tools that let you:`);
   sections.push(`- **Search your memory** (searchMemory): Search past conversations, projects, tasks, and saved context. Use this when the user asks about something you discussed before, or when you need to recall information.`);
   sections.push(`- **Save to memory** (saveToMemory): Save important information the user wants you to remember for future conversations.`);
-  sections.push(`- **Manage projects** (createProject, listProjects, updateProject): Create and track projects.`);
-  sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask): Create, list, and complete tasks.`);
+  sections.push(`- **Manage projects** (createProject, listProjects, updateProject, deleteProject): Create and track projects.`);
+  sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask, deleteTask): Create, list, and complete tasks.`);
+
+  // Scheduling capabilities
+  sections.push(`\n## Scheduling & Reminders`);
+  sections.push(`You can schedule things to happen in the future:`);
+  sections.push(`- **Create reminders** (createReminder): Set one-time reminders. When the user says "remind me to X at Y time", create a reminder.`);
+  sections.push(`- **Create follow-ups** (createFollowUp): Schedule yourself to check on something later. Use for "follow up if X doesn't happen by Y".`);
+  sections.push(`- **Create recurring jobs** (createRecurringJob): Set up recurring schedules using cron expressions (e.g., daily briefs, weekly summaries).`);
+  sections.push(`- **List scheduled jobs** (listScheduledJobs): Show all upcoming reminders and scheduled jobs.`);
+  sections.push(`- **Cancel/update jobs** (cancelScheduledJob, updateScheduledJob): Modify or cancel scheduled items.`);
+  sections.push(`\nWhen the user asks about their schedule or upcoming reminders, use listScheduledJobs. When they say "remind me" or "follow up", create the appropriate scheduled job.`);
+
   sections.push(`\nIMPORTANT: When the user asks about past conversations or if you remember something, USE the searchMemory tool to actually search. Don't say you can't remember - search your memory first!`);
 
   return sections.join("\n");

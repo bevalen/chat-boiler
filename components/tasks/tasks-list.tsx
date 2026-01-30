@@ -1,31 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Plus,
-  ListTodo,
-  MoreHorizontal,
-  Trash2,
-  Check,
-  Circle,
-  Clock,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -38,26 +17,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
-
-interface Task {
-  id: string;
-  title: string;
-  description: string | null;
-  status: string | null;
-  priority: string | null;
-  due_date: string | null;
-  project_id: string | null;
-  created_at: string | null;
-  completed_at: string | null;
-  projects?: { title: string } | null;
-}
-
-interface Project {
-  id: string;
-  title: string;
-}
+import { ItemRow } from "@/components/shared/item-row";
+import { TaskDialog, Task, Project } from "@/components/shared/task-dialog";
 
 interface TasksListProps {
   tasks: Task[];
@@ -70,9 +39,12 @@ export function TasksList({
   projects,
   agentId,
 }: TasksListProps) {
+  const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -98,11 +70,11 @@ export function TasksList({
         due_date: newTask.due_date || null,
         status: "pending",
       })
-      .select("*, projects(title)")
+      .select("*, projects(id, title)")
       .single();
 
     if (!error && data) {
-      setTasks([data, ...tasks]);
+      setTasks([data as Task, ...tasks]);
       setNewTask({
         title: "",
         description: "",
@@ -116,52 +88,38 @@ export function TasksList({
   };
 
   const handleToggleComplete = async (task: Task) => {
-    const supabase = createClient();
     const newStatus = task.status === "completed" ? "pending" : "completed";
-    const { error } = await supabase
+    const supabase = createClient();
+    const { data, error } = await supabase
       .from("tasks")
       .update({
         status: newStatus,
-        completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+        completed_at:
+          newStatus === "completed" ? new Date().toISOString() : null,
       })
-      .eq("id", task.id);
+      .eq("id", task.id)
+      .select("*, projects(id, title)")
+      .single();
 
-    if (!error) {
-      setTasks(
-        tasks.map((t) =>
-          t.id === task.id
-            ? {
-                ...t,
-                status: newStatus,
-                completed_at:
-                  newStatus === "completed" ? new Date().toISOString() : null,
-              }
-            : t
-        )
-      );
+    if (!error && data) {
+      setTasks(tasks.map((t) => (t.id === task.id ? (data as Task) : t)));
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
-
-    if (!error) {
-      setTasks(tasks.filter((t) => t.id !== id));
-    }
+  const handleTaskUpdate = (updatedTask: Task) => {
+    setTasks(tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+    setSelectedTask(updatedTask);
   };
 
-  const getPriorityColor = (priority: string | null) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-500/10 text-red-500 border-red-500/20";
-      case "medium":
-        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      case "low":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
+  const handleTaskDelete = (taskId: string) => {
+    setTasks(tasks.filter((t) => t.id !== taskId));
+    setIsDialogOpen(false);
+    setSelectedTask(null);
+  };
+
+  const handleNavigateToProject = (projectId: string) => {
+    setIsDialogOpen(false);
+    router.push(`/projects/${projectId}`);
   };
 
   const filteredTasks = tasks.filter((task) => {
@@ -220,18 +178,21 @@ export function TasksList({
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="priority">Priority</Label>
-                  <select
-                    id="priority"
+                  <Select
                     value={newTask.priority}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, priority: e.target.value })
+                    onValueChange={(value) =>
+                      setNewTask({ ...newTask, priority: value })
                     }
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="due_date">Due Date</Label>
@@ -247,21 +208,27 @@ export function TasksList({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="project">Project (optional)</Label>
-                <select
-                  id="project"
-                  value={newTask.project_id}
-                  onChange={(e) =>
-                    setNewTask({ ...newTask, project_id: e.target.value })
+                <Select
+                  value={newTask.project_id || "none"}
+                  onValueChange={(value) =>
+                    setNewTask({
+                      ...newTask,
+                      project_id: value === "none" ? "" : value,
+                    })
                   }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="">No project</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.title}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No project</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
@@ -322,93 +289,37 @@ export function TasksList({
       ) : (
         <div className="space-y-2">
           {filteredTasks.map((task) => (
-            <Card
+            <ItemRow
               key={task.id}
-              className={cn(
-                "group transition-opacity",
-                task.status === "completed" && "opacity-60"
-              )}
-            >
-              <CardContent className="flex items-center gap-4 p-4">
-                <Checkbox
-                  checked={task.status === "completed"}
-                  onCheckedChange={() => handleToggleComplete(task)}
-                  className="h-5 w-5"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "font-medium",
-                        task.status === "completed" && "line-through"
-                      )}
-                    >
-                      {task.title}
-                    </span>
-                    {task.projects?.title && (
-                      <Badge variant="outline" className="text-xs">
-                        {task.projects.title}
-                      </Badge>
-                    )}
-                  </div>
-                  {(task.description || task.due_date) && (
-                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                      {task.description && (
-                        <span className="truncate">{task.description}</span>
-                      )}
-                      {task.due_date && (
-                        <span className="flex items-center gap-1 text-xs">
-                          <Clock className="h-3 w-3" />
-                          {new Date(task.due_date).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <Badge
-                  variant="outline"
-                  className={getPriorityColor(task.priority)}
-                >
-                  {task.priority}
-                </Badge>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
-                      {task.status === "completed" ? (
-                        <>
-                          <Circle className="mr-2 h-4 w-4" />
-                          Mark Pending
-                        </>
-                      ) : (
-                        <>
-                          <Check className="mr-2 h-4 w-4" />
-                          Mark Complete
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => handleDelete(task.id)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardContent>
-            </Card>
+              title={task.title}
+              description={task.description}
+              status={task.status}
+              priority={task.priority}
+              dueDate={task.due_date}
+              projectName={task.projects?.title}
+              isCompleted={task.status === "completed"}
+              showCheckbox
+              onCheckboxChange={() => handleToggleComplete(task)}
+              onClick={() => {
+                setSelectedTask(task);
+                setIsDialogOpen(true);
+              }}
+              variant="task"
+            />
           ))}
         </div>
       )}
+
+      {/* Task Dialog */}
+      <TaskDialog
+        task={selectedTask}
+        projects={projects}
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onUpdate={handleTaskUpdate}
+        onDelete={handleTaskDelete}
+        onNavigateToProject={handleNavigateToProject}
+      />
     </div>
   );
 }

@@ -510,6 +510,302 @@ export async function POST(request: Request) {
           return { success: true, message: `Task "${task.title}" has been deleted`, deletedTaskId: taskId };
         },
       }),
+
+      // === SCHEDULING TOOLS ===
+
+      createReminder: tool({
+        description: "Create a reminder or scheduled notification. Use this when the user wants to be reminded about something at a specific time. Can optionally link to an existing task.",
+        inputSchema: z.object({
+          title: z.string().describe("What to remind the user about"),
+          runAt: z.string().describe("When to send the reminder (ISO datetime string, e.g., '2026-01-31T15:00:00')"),
+          description: z.string().optional().describe("Additional details for the reminder"),
+          message: z.string().optional().describe("The notification message to show"),
+          taskId: z.string().optional().describe("Link to an existing task ID"),
+          projectId: z.string().optional().describe("Link to an existing project ID"),
+        }),
+        execute: async ({ title, runAt, description, message, taskId, projectId }: { title: string; runAt: string; description?: string; message?: string; taskId?: string; projectId?: string }) => {
+          try {
+            const { data, error } = await adminSupabase
+              .from("scheduled_jobs")
+              .insert({
+                agent_id: agentId,
+                job_type: "reminder",
+                title,
+                description: description || null,
+                schedule_type: "once",
+                run_at: runAt,
+                next_run_at: runAt,
+                timezone: profile?.timezone || "America/New_York",
+                action_type: "notify",
+                action_payload: { message: message || title },
+                task_id: taskId || null,
+                project_id: projectId || null,
+                conversation_id: conversation.id,
+                status: "active",
+              })
+              .select()
+              .single();
+
+            if (error) return { success: false, error: error.message };
+
+            const reminderTime = new Date(runAt).toLocaleString();
+            return {
+              success: true,
+              reminder: {
+                id: data.id,
+                title: data.title,
+                scheduledFor: reminderTime,
+              },
+              message: `Reminder set for ${reminderTime}: "${title}"`,
+            };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
+
+      createRecurringJob: tool({
+        description: "Create a recurring scheduled job that runs on a cron schedule. Use this for things like daily briefs, weekly summaries, or regular check-ins.",
+        inputSchema: z.object({
+          title: z.string().describe("Name of the recurring job"),
+          cronExpression: z.string().describe("Cron expression (e.g., '0 8 * * *' for 8am daily, '0 8 * * 1' for 8am Mondays)"),
+          description: z.string().optional().describe("What this job does"),
+          instruction: z.string().optional().describe("Instructions for the agent when this job runs"),
+          actionType: z.enum(["notify", "agent_task"]).optional().default("notify").describe("Type of action: 'notify' for simple message, 'agent_task' for agent execution"),
+        }),
+        execute: async ({ title, cronExpression, description, instruction, actionType }: { title: string; cronExpression: string; description?: string; instruction?: string; actionType?: "notify" | "agent_task" }) => {
+          try {
+            // Calculate next run time from cron expression
+            const { calculateNextRunFromCron } = await import("@/lib/db/scheduled-jobs");
+            const nextRun = calculateNextRunFromCron(cronExpression, profile?.timezone || "America/New_York");
+
+            const { data, error } = await adminSupabase
+              .from("scheduled_jobs")
+              .insert({
+                agent_id: agentId,
+                job_type: "recurring",
+                title,
+                description: description || null,
+                schedule_type: "cron",
+                cron_expression: cronExpression,
+                next_run_at: nextRun.toISOString(),
+                timezone: profile?.timezone || "America/New_York",
+                action_type: actionType || "notify",
+                action_payload: instruction ? { instruction, message: title } : { message: title },
+                conversation_id: conversation.id,
+                status: "active",
+              })
+              .select()
+              .single();
+
+            if (error) return { success: false, error: error.message };
+
+            return {
+              success: true,
+              job: {
+                id: data.id,
+                title: data.title,
+                schedule: cronExpression,
+                nextRun: nextRun.toLocaleString(),
+              },
+              message: `Recurring job created: "${title}" - next run: ${nextRun.toLocaleString()}`,
+            };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
+
+      createFollowUp: tool({
+        description: "Create a follow-up job that triggers the agent to check on something at a later time. Use this for 'remind me to follow up if X doesn't happen' scenarios.",
+        inputSchema: z.object({
+          title: z.string().describe("What to follow up on"),
+          runAt: z.string().describe("When to check (ISO datetime string)"),
+          instruction: z.string().describe("What the agent should check or do when this triggers"),
+          taskId: z.string().optional().describe("Link to an existing task ID"),
+          projectId: z.string().optional().describe("Link to an existing project ID"),
+        }),
+        execute: async ({ title, runAt, instruction, taskId, projectId }: { title: string; runAt: string; instruction: string; taskId?: string; projectId?: string }) => {
+          try {
+            const { data, error } = await adminSupabase
+              .from("scheduled_jobs")
+              .insert({
+                agent_id: agentId,
+                job_type: "follow_up",
+                title,
+                description: instruction,
+                schedule_type: "once",
+                run_at: runAt,
+                next_run_at: runAt,
+                timezone: profile?.timezone || "America/New_York",
+                action_type: "agent_task",
+                action_payload: { instruction },
+                task_id: taskId || null,
+                project_id: projectId || null,
+                conversation_id: conversation.id,
+                status: "active",
+              })
+              .select()
+              .single();
+
+            if (error) return { success: false, error: error.message };
+
+            const followUpTime = new Date(runAt).toLocaleString();
+            return {
+              success: true,
+              followUp: {
+                id: data.id,
+                title: data.title,
+                scheduledFor: followUpTime,
+              },
+              message: `Follow-up scheduled for ${followUpTime}: "${title}"`,
+            };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
+
+      listScheduledJobs: tool({
+        description: "List all scheduled jobs including reminders, follow-ups, and recurring jobs",
+        inputSchema: z.object({
+          status: z.enum(["active", "paused", "completed", "cancelled", "all"]).optional().default("active"),
+          jobType: z.enum(["reminder", "follow_up", "recurring", "one_time"]).optional().describe("Filter by job type"),
+        }),
+        execute: async ({ status, jobType }: { status?: "active" | "paused" | "completed" | "cancelled" | "all"; jobType?: "reminder" | "follow_up" | "recurring" | "one_time" }) => {
+          try {
+            let query = adminSupabase
+              .from("scheduled_jobs")
+              .select("id, title, job_type, schedule_type, next_run_at, status, cron_expression, run_at")
+              .eq("agent_id", agentId)
+              .order("next_run_at", { ascending: true });
+
+            if (status && status !== "all") {
+              query = query.eq("status", status);
+            }
+            if (jobType) {
+              query = query.eq("job_type", jobType);
+            }
+
+            const { data, error } = await query.limit(50);
+
+            if (error) return { success: false, error: error.message };
+
+            const jobs = (data || []).map((job) => ({
+              id: job.id,
+              title: job.title,
+              type: job.job_type,
+              scheduleType: job.schedule_type,
+              nextRun: job.next_run_at ? new Date(job.next_run_at).toLocaleString() : null,
+              cronExpression: job.cron_expression,
+              status: job.status,
+            }));
+
+            return { success: true, jobs, count: jobs.length };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
+
+      cancelScheduledJob: tool({
+        description: "Cancel a scheduled job (reminder, follow-up, or recurring job)",
+        inputSchema: z.object({
+          jobId: z.string().describe("The ID of the scheduled job to cancel"),
+        }),
+        execute: async ({ jobId }: { jobId: string }) => {
+          try {
+            // First get the job to verify ownership and get the title
+            const { data: job, error: fetchError } = await adminSupabase
+              .from("scheduled_jobs")
+              .select("id, title")
+              .eq("id", jobId)
+              .eq("agent_id", agentId)
+              .single();
+
+            if (fetchError || !job) {
+              return { success: false, error: "Scheduled job not found or access denied" };
+            }
+
+            const { error } = await adminSupabase
+              .from("scheduled_jobs")
+              .update({ status: "cancelled" })
+              .eq("id", jobId)
+              .eq("agent_id", agentId);
+
+            if (error) return { success: false, error: error.message };
+
+            return { success: true, message: `Cancelled: "${job.title}"`, cancelledJobId: jobId };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
+
+      updateScheduledJob: tool({
+        description: "Update a scheduled job's timing, title, or pause/resume it",
+        inputSchema: z.object({
+          jobId: z.string().describe("The ID of the scheduled job to update"),
+          title: z.string().optional().describe("New title"),
+          runAt: z.string().optional().describe("New run time for one-time jobs (ISO datetime)"),
+          cronExpression: z.string().optional().describe("New cron expression for recurring jobs"),
+          status: z.enum(["active", "paused"]).optional().describe("Pause or resume the job"),
+        }),
+        execute: async ({ jobId, title, runAt, cronExpression, status }: { jobId: string; title?: string; runAt?: string; cronExpression?: string; status?: "active" | "paused" }) => {
+          try {
+            // First get the current job
+            const { data: currentJob, error: fetchError } = await adminSupabase
+              .from("scheduled_jobs")
+              .select("*")
+              .eq("id", jobId)
+              .eq("agent_id", agentId)
+              .single();
+
+            if (fetchError || !currentJob) {
+              return { success: false, error: "Scheduled job not found or access denied" };
+            }
+
+            const updates: Record<string, unknown> = {};
+            if (title) updates.title = title;
+            if (status) updates.status = status;
+
+            if (runAt) {
+              updates.run_at = runAt;
+              updates.next_run_at = runAt;
+            }
+
+            if (cronExpression) {
+              const { calculateNextRunFromCron } = await import("@/lib/db/scheduled-jobs");
+              updates.cron_expression = cronExpression;
+              const nextRun = calculateNextRunFromCron(cronExpression, currentJob.timezone || "America/New_York");
+              updates.next_run_at = nextRun.toISOString();
+            }
+
+            const { data, error } = await adminSupabase
+              .from("scheduled_jobs")
+              .update(updates)
+              .eq("id", jobId)
+              .eq("agent_id", agentId)
+              .select()
+              .single();
+
+            if (error) return { success: false, error: error.message };
+
+            return {
+              success: true,
+              job: {
+                id: data.id,
+                title: data.title,
+                status: data.status,
+                nextRun: data.next_run_at ? new Date(data.next_run_at).toLocaleString() : null,
+              },
+              message: `Updated scheduled job: "${data.title}"`,
+            };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
     };
 
     // Stream the response with tools

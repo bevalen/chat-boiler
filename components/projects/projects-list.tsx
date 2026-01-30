@@ -1,22 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, FolderKanban, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -29,8 +17,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { ItemRow } from "@/components/shared/item-row";
 
 interface Project {
   id: string;
@@ -47,16 +42,20 @@ interface ProjectsListProps {
   agentId: string;
 }
 
-export function ProjectsList({ projects: initialProjects, agentId }: ProjectsListProps) {
+export function ProjectsList({
+  projects: initialProjects,
+  agentId,
+}: ProjectsListProps) {
+  const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [newProject, setNewProject] = useState({
     title: "",
     description: "",
     priority: "medium",
   });
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleCreate = async () => {
     if (!newProject.title.trim()) return;
@@ -76,61 +75,21 @@ export function ProjectsList({ projects: initialProjects, agentId }: ProjectsLis
       .single();
 
     if (!error && data) {
-      setProjects([data, ...projects]);
+      setProjects([data as Project, ...projects]);
       setNewProject({ title: "", description: "", priority: "medium" });
       setIsCreateOpen(false);
     }
     setIsLoading(false);
   };
 
-  const handleDelete = async (id: string) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("projects").delete().eq("id", id);
+  const filteredProjects = projects.filter((project) => {
+    if (filter === "active") return project.status === "active";
+    if (filter === "completed") return project.status === "completed";
+    return true;
+  });
 
-    if (!error) {
-      setProjects(projects.filter((p) => p.id !== id));
-    }
-  };
-
-  const handleStatusChange = async (id: string, status: string) => {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("projects")
-      .update({ status })
-      .eq("id", id);
-
-    if (!error) {
-      setProjects(
-        projects.map((p) => (p.id === id ? { ...p, status } : p))
-      );
-    }
-  };
-
-  const getPriorityColor = (priority: string | null) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-500/10 text-red-500 border-red-500/20";
-      case "medium":
-        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      case "low":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
-  };
-
-  const getStatusColor = (status: string | null) => {
-    switch (status) {
-      case "active":
-        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-      case "paused":
-        return "bg-orange-500/10 text-orange-500 border-orange-500/20";
-      case "completed":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
-  };
+  const activeCount = projects.filter((p) => p.status === "active").length;
+  const completedCount = projects.filter((p) => p.status === "completed").length;
 
   return (
     <div className="p-6">
@@ -138,7 +97,7 @@ export function ProjectsList({ projects: initialProjects, agentId }: ProjectsLis
         <div>
           <h1 className="text-2xl font-bold">Projects</h1>
           <p className="text-muted-foreground">
-            Manage your projects and initiatives
+            {activeCount} active · {completedCount} completed
           </p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -180,25 +139,25 @@ export function ProjectsList({ projects: initialProjects, agentId }: ProjectsLis
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="priority">Priority</Label>
-                <select
-                  id="priority"
+                <Select
                   value={newProject.priority}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, priority: e.target.value })
+                  onValueChange={(value) =>
+                    setNewProject({ ...newProject, priority: value })
                   }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                 Cancel
               </Button>
               <Button onClick={handleCreate} disabled={isLoading}>
@@ -209,80 +168,61 @@ export function ProjectsList({ projects: initialProjects, agentId }: ProjectsLis
         </Dialog>
       </div>
 
-      {projects.length === 0 ? (
+      {/* Filter tabs */}
+      <div className="flex gap-2 mb-6">
+        <Button
+          variant={filter === "all" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("all")}
+        >
+          All ({projects.length})
+        </Button>
+        <Button
+          variant={filter === "active" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("active")}
+        >
+          Active ({activeCount})
+        </Button>
+        <Button
+          variant={filter === "completed" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("completed")}
+        >
+          Completed ({completedCount})
+        </Button>
+      </div>
+
+      {filteredProjects.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-1">No projects yet</h3>
+            <h3 className="text-lg font-semibold mb-1">No projects found</h3>
             <p className="text-muted-foreground text-sm mb-4">
-              Create your first project to start tracking your work.
+              {filter === "all"
+                ? "Create your first project to start tracking your work."
+                : `No ${filter} projects.`}
             </p>
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Project
-            </Button>
+            {filter === "all" && (
+              <Button onClick={() => setIsCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Project
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
-            <Card key={project.id} className="group">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-lg">{project.title}</CardTitle>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => handleStatusChange(project.id, "active")}
-                      >
-                        Mark Active
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleStatusChange(project.id, "paused")}
-                      >
-                        Mark Paused
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleStatusChange(project.id, "completed")}
-                      >
-                        Mark Completed
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => handleDelete(project.id)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                {project.description && (
-                  <CardDescription className="line-clamp-2">
-                    {project.description}
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <Badge variant="outline" className={getStatusColor(project.status)}>
-                    {project.status}
-                  </Badge>
-                  <Badge variant="outline" className={getPriorityColor(project.priority)}>
-                    {project.priority} priority
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
+        <div className="space-y-2">
+          {filteredProjects.map((project) => (
+            <ItemRow
+              key={project.id}
+              title={project.title}
+              description={project.description}
+              status={project.status}
+              priority={project.priority}
+              variant="project"
+              onClick={() => router.push(`/projects/${project.id}`)}
+            />
           ))}
         </div>
       )}
