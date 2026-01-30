@@ -211,12 +211,20 @@ async function sendToMaia(
 
     let fullResponse = "";
     const decoder = new TextDecoder();
+    let isFirstChunk = true;
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       
       const chunk = decoder.decode(value);
+      
+      // Debug: log first chunk to see stream format
+      if (isFirstChunk) {
+        console.log("[slack-bot] First chunk (first 300 chars):", chunk.substring(0, 300));
+        isFirstChunk = false;
+      }
+      
       // AI SDK v6 uses SSE format with data: prefix and JSON objects
       // Format: data: {"type":"text-delta","delta":"Hello"}\n\n
       const lines = chunk.split("\n");
@@ -249,7 +257,8 @@ async function sendToMaia(
 
     return fullResponse || "I processed your message but have nothing to say right now.";
   } catch (error) {
-    console.error("[slack-bot] Error calling chat API:", error);
+    console.error("[slack-bot] Error calling chat API:", error instanceof Error ? error.message : error);
+    console.error("[slack-bot] Error stack:", error instanceof Error ? error.stack : "no stack");
     return "Sorry, I encountered an error. Please try again later.";
   }
 }
