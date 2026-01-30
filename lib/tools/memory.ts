@@ -3,21 +3,23 @@ import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 
+const searchMemoryParameters = z.object({
+  query: z
+    .string()
+    .describe(
+      "The search query - what you're looking for in memory (e.g., 'conversations about sales automation', 'tasks related to Chris', 'project deadlines')"
+    ),
+  limit: z
+    .number()
+    .optional()
+    .default(10)
+    .describe("Maximum number of results to return"),
+});
+
 export const searchMemoryTool = tool({
   description:
     "Search your memory for relevant information from past conversations, projects, tasks, and context. Use this when the user asks about something you've discussed before, mentions a project or task, or when you need to recall past context.",
-  parameters: z.object({
-    query: z
-      .string()
-      .describe(
-        "The search query - what you're looking for in memory (e.g., 'conversations about sales automation', 'tasks related to Chris', 'project deadlines')"
-      ),
-    limit: z
-      .number()
-      .optional()
-      .default(10)
-      .describe("Maximum number of results to return"),
-  }),
+  parameters: searchMemoryParameters,
   execute: async ({ query, limit }, options) => {
     const agentId = (options as { agentId?: string }).agentId;
     if (!agentId) throw new Error("Agent ID is required");
