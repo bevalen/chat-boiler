@@ -20,8 +20,8 @@ export const searchMemoryTool = tool({
   description:
     "Search your memory for relevant information from past conversations, projects, tasks, and context. Use this when the user asks about something you've discussed before, mentions a project or task, or when you need to recall past context.",
   parameters: searchMemoryParameters,
-  execute: async ({ query, limit }, options) => {
-    const agentId = (options as { agentId?: string }).agentId;
+  execute: async ({ query, limit }: z.infer<typeof searchMemoryParameters>, options: any) => {
+    const agentId = options?.agentId as string | undefined;
     if (!agentId) throw new Error("Agent ID is required");
 
     const supabase = getAdminClient();
@@ -97,19 +97,21 @@ export const searchMemoryTool = tool({
   },
 });
 
+const saveToMemoryParameters = z.object({
+  title: z.string().describe("A short title for this memory"),
+  content: z.string().describe("The content to remember"),
+  type: z
+    .enum(["user_profile", "preferences", "identity", "tools"])
+    .default("user_profile")
+    .describe("The type of context block to create"),
+});
+
 export const saveToMemoryTool = tool({
   description:
     "Save an important piece of information to memory for future reference. Use this when the user tells you something important they want you to remember, like preferences, facts about themselves, or key decisions.",
-  parameters: z.object({
-    title: z.string().describe("A short title for this memory"),
-    content: z.string().describe("The content to remember"),
-    type: z
-      .enum(["user_profile", "preferences", "identity", "tools"])
-      .default("user_profile")
-      .describe("The type of context block to create"),
-  }),
-  execute: async ({ title, content, type }, options) => {
-    const agentId = (options as { agentId?: string }).agentId;
+  parameters: saveToMemoryParameters,
+  execute: async ({ title, content, type }: z.infer<typeof saveToMemoryParameters>, options: any) => {
+    const agentId = options?.agentId as string | undefined;
     if (!agentId) throw new Error("Agent ID is required");
 
     const supabase = getAdminClient();
