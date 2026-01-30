@@ -19,8 +19,10 @@ const searchMemoryParameters = z.object({
 export const searchMemoryTool = tool({
   description:
     "Search your memory for relevant information from past conversations, projects, tasks, and context. Use this when the user asks about something you've discussed before, mentions a project or task, or when you need to recall past context.",
-  parameters: searchMemoryParameters,
-  execute: async ({ query, limit }: z.infer<typeof searchMemoryParameters>, options: any) => {
+  parameters: searchMemoryParameters as z.ZodType<any>,
+  // @ts-ignore
+  execute: async (args: any, options: any) => {
+    const { query, limit } = args;
     const agentId = options?.agentId as string | undefined;
     if (!agentId) throw new Error("Agent ID is required");
 
@@ -109,8 +111,10 @@ const saveToMemoryParameters = z.object({
 export const saveToMemoryTool = tool({
   description:
     "Save an important piece of information to memory for future reference. Use this when the user tells you something important they want you to remember, like preferences, facts about themselves, or key decisions.",
-  parameters: saveToMemoryParameters,
-  execute: async ({ title, content, type }: z.infer<typeof saveToMemoryParameters>, options: any) => {
+  parameters: saveToMemoryParameters as z.ZodType<any>,
+  // @ts-ignore
+  execute: async (args: any, options: any) => {
+    const { title, content, type } = args;
     const agentId = options?.agentId as string | undefined;
     if (!agentId) throw new Error("Agent ID is required");
 
