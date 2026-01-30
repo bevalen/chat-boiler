@@ -1,9 +1,15 @@
 # Railway configuration for the Slack bot service
-# Deploy with: railway up
+# This runs ONLY the Slack bot, not the Next.js app
+# The Next.js app is deployed separately on Vercel
 
 [build]
 builder = "nixpacks"
+# Skip Next.js build, just install deps
+buildCommand = "npm ci"
 
 [deploy]
+# Only run the Slack bot, not the web server
 startCommand = "npm run slack-bot"
 restartPolicyType = "always"
+# Keep it small - bot doesn't need much resources
+numReplicas = 1
