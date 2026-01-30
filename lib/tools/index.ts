@@ -16,11 +16,13 @@ export {
   deleteTaskTool,
 } from "./tasks";
 
-export { checkEmailTool, sendEmailTool } from "./email";
+export { createCheckEmailTool, createSendEmailTool } from "./email";
 
 export { checkCalendarTool } from "./calendar";
 
 export { searchMemoryTool, saveToMemoryTool } from "./memory";
+
+export { createResearchTool } from "./research";
 
 // Export tool types
 export type {
@@ -40,6 +42,8 @@ export type {
   DeleteTaskToolInvocation,
 } from "./tasks";
 
-export type { CheckEmailToolInvocation, SendEmailToolInvocation } from "./email";
+export type { CheckEmailTool, SendEmailTool, CheckEmailToolInvocation, SendEmailToolInvocation } from "./email";
 
 export type { CheckCalendarToolInvocation } from "./calendar";
+
+export type { ResearchToolInvocation } from "./research";

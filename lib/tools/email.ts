@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getZapierMCPCredentialsByAgent } from "@/lib/db/channel-credentials";
 import { ZapierMCPCredentials } from "@/lib/types/database";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 // Email types
 interface EmailMessage {
@@ -13,18 +15,6 @@ interface EmailMessage {
   date: string;
   snippet: string;
   isUnread?: boolean;
-}
-
-interface ZapierEmailResponse {
-  success: boolean;
-  emails?: EmailMessage[];
-  error?: string;
-}
-
-interface ZapierSendEmailResponse {
-  success: boolean;
-  messageId?: string;
-  error?: string;
 }
 
 // Log tool action to the action_log table
@@ -58,37 +48,107 @@ async function getEmailCredentials(agentId: string): Promise<{
 }
 
 /**
- * Call the Zapier MCP endpoint for email operations
+ * Create an MCP client and call a tool on the Zapier MCP server
  */
-async function callZapierMCP<T>(
+async function callZapierMCPTool(
   credentials: ZapierMCPCredentials,
-  action: string,
-  payload: Record<string, unknown>
-): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Accept": "application/json, text/event-stream",
-  };
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<{ success: boolean; result?: unknown; error?: string }> {
+  let client: Client | null = null;
+  
+  try {
+    // Create MCP client
+    client = new Client({
+      name: "maia-email-client",
+      version: "1.0.0",
+    });
 
-  if (credentials.api_key) {
-    headers["Authorization"] = `Bearer ${credentials.api_key}`;
+    // Build the URL with authentication
+    const url = new URL(credentials.endpoint_url);
+    
+    // Create transport with auth headers if API key is provided
+    const transportOptions: { requestInit?: RequestInit } = {};
+    if (credentials.api_key) {
+      transportOptions.requestInit = {
+        headers: {
+          "Authorization": `Bearer ${credentials.api_key}`,
+        },
+      };
+    }
+    
+    const transport = new StreamableHTTPClientTransport(url, transportOptions);
+    
+    // Connect to the server
+    await client.connect(transport);
+
+    // List available tools to find the right one
+    const toolsList = await client.listTools();
+    console.log("[email] Available MCP tools:", toolsList.tools.map((t: { name: string }) => t.name));
+
+    // Find the matching tool (Zapier tools might have different naming)
+    const availableToolNames = toolsList.tools.map((t: { name: string }) => t.name);
+    let actualToolName = toolName;
+    
+    // Try to find a matching tool
+    if (!availableToolNames.includes(toolName)) {
+      // Try common variations
+      const variations = [
+        toolName,
+        toolName.toLowerCase(),
+        toolName.replace(/_/g, "-"),
+        `gmail_${toolName}`,
+        `gmail-${toolName}`,
+      ];
+      
+      for (const variation of variations) {
+        const match = availableToolNames.find((name: string) => 
+          name.toLowerCase().includes(variation.toLowerCase()) ||
+          variation.toLowerCase().includes(name.toLowerCase())
+        );
+        if (match) {
+          actualToolName = match;
+          break;
+        }
+      }
+    }
+
+    console.log(`[email] Calling MCP tool: ${actualToolName} with args:`, args);
+
+    // Call the tool
+    const result = await client.callTool({
+      name: actualToolName,
+      arguments: args,
+    });
+
+    console.log("[email] MCP tool result:", result);
+
+    // Close the connection
+    await client.close();
+    client = null;
+
+    return {
+      success: true,
+      result: result.structuredContent || result.content,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[email] MCP tool error:", errorMessage);
+    
+    // Try to close the client if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch {
+        // Ignore close errors
+      }
+    }
+    
+    return {
+      success: false,
+      error: errorMessage,
+    };
   }
-
-  const response = await fetch(credentials.endpoint_url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      action,
-      ...payload,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Zapier MCP error (${response.status}): ${errorText}`);
-  }
-
-  return response.json() as Promise<T>;
 }
 
 /**
@@ -160,20 +220,21 @@ export function createCheckEmailTool(agentId: string) {
       }
 
       try {
-        // Call Zapier MCP endpoint
-        const response = await callZapierMCP<ZapierEmailResponse>(credentials, "check_inbox", {
-          count: emailCount,
-          unreadOnly: onlyUnread,
+        // Call Zapier MCP using proper MCP protocol
+        const response = await callZapierMCPTool(credentials, "find_email", {
+          Search_String: onlyUnread ? "is:unread" : "",
+          Max_Results: String(emailCount),
         });
 
+        if (!response.success) {
+          throw new Error(response.error || "Failed to check emails");
+        }
+
         const result = {
-          success: response.success,
-          message: response.success
-            ? `Found ${response.emails?.length || 0} email(s)`
-            : response.error || "Failed to check emails",
-          emails: response.emails || [],
-          emailCount: response.emails?.length || 0,
-          unreadCount: response.emails?.filter((e) => e.isUnread).length || 0,
+          success: true,
+          message: `Email check completed`,
+          emails: response.result,
+          emailCount: Array.isArray(response.result) ? response.result.length : 0,
         };
 
         // Log the action
@@ -291,22 +352,33 @@ export function createSendEmailTool(agentId: string) {
       }
 
       try {
-        // Call Zapier MCP endpoint
-        const response = await callZapierMCP<ZapierSendEmailResponse>(credentials, "send_email", {
-          to,
-          subject,
-          body,
-          cc,
-          bcc,
-          signature: includeSignature,
-        });
+        // Build the email arguments for Zapier MCP Gmail tool
+        // Zapier Gmail tools typically use these field names
+        const emailArgs: Record<string, string> = {
+          To: to,
+          Subject: subject,
+          Body: body,
+          Signature: includeSignature ? "true" : "false",
+        };
+
+        if (cc) {
+          emailArgs.Cc = cc;
+        }
+        if (bcc) {
+          emailArgs.Bcc = bcc;
+        }
+
+        // Call Zapier MCP using proper MCP protocol
+        const response = await callZapierMCPTool(credentials, "send_email", emailArgs);
+
+        if (!response.success) {
+          throw new Error(response.error || "Failed to send email");
+        }
 
         const result = {
-          success: response.success,
-          message: response.success
-            ? `Email sent successfully to ${to}`
-            : response.error || "Failed to send email",
-          messageId: response.messageId,
+          success: true,
+          message: `Email sent successfully to ${to}`,
+          result: response.result,
           emailDetails: {
             to,
             subject,
@@ -322,7 +394,7 @@ export function createSendEmailTool(agentId: string) {
           "sendEmail",
           "send_email",
           { to, subject, bodyLength: body.length, hasCc: !!cc, hasBcc: !!bcc },
-          { success: result.success, messageId: result.messageId }
+          { success: result.success }
         );
 
         return result;

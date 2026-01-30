@@ -11,6 +11,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 import { ChannelType, MessageMetadata } from "@/lib/types/database";
 import { createCheckEmailTool, createSendEmailTool } from "@/lib/tools/email";
+import { createResearchTool } from "@/lib/tools/research";
 
 export const maxDuration = 60;
 
@@ -1035,6 +1036,9 @@ export async function POST(request: Request) {
       // Email tools (Zapier MCP integration)
       checkEmail: createCheckEmailTool(agentId),
       sendEmail: createSendEmailTool(agentId),
+
+      // Research tool (Perplexity Sonar API)
+      research: createResearchTool(agentId),
     };
 
     // Stream the response with tools
