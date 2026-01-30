@@ -36,7 +36,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const mainNavItems = [
+
+const navItems = [
   {
     title: "Chat",
     url: "/",
@@ -52,9 +53,6 @@ const mainNavItems = [
     url: "/tasks",
     icon: ListTodo,
   },
-];
-
-const systemNavItems = [
   {
     title: "Notifications",
     url: "/notifications",
@@ -71,6 +69,7 @@ const systemNavItems = [
     icon: Bell,
   },
 ];
+
 
 interface AppSidebarProps {
   user: {
@@ -91,50 +90,24 @@ export function AppSidebar({ user }: AppSidebarProps) {
     : user.email.substring(0, 2).toUpperCase();
 
   return (
-    <Sidebar className="border-r border-white/5 bg-sidebar/50 backdrop-blur-xl">
-      <SidebarHeader className="pt-4 pb-2">
-        <div className="flex items-center gap-3 px-2 py-1">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-primary/10 border border-primary/20 text-primary">
-            <Bot className="h-6 w-6" />
+    <Sidebar className="border-r border-sidebar-border bg-sidebar/50 backdrop-blur-xl">
+      <SidebarHeader className="h-14 flex items-center justify-center border-b border-sidebar-border p-0">
+        <div className="flex w-full items-center gap-3 px-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shrink-0">
+            <Bot className="h-5 w-5" />
           </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-base tracking-tight">MAIA</span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Executive Assistant</span>
+          <div className="flex flex-col overflow-hidden">
+            <span className="font-bold text-base tracking-tight truncate">MAIA</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium truncate">Executive Assistant</span>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarSeparator className="bg-white/5 my-2" />
-
-      <SidebarContent>
+      <SidebarContent className="pt-2">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground/50 uppercase tracking-widest text-[10px] font-bold">Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.url}
-                    tooltip={item.title}
-                    className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-white/5 transition-all duration-200"
-                  >
-                    <Link href={item.url} className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground/50 uppercase tracking-widest text-[10px] font-bold mt-4">Automation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {systemNavItems.map((item) => (
+              {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
