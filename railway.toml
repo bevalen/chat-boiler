@@ -5,7 +5,7 @@
 [build]
 builder = "nixpacks"
 # Skip Next.js build, just install deps
-buildCommand = "npm ci"
+buildCommand = "npm install"
 
 [deploy]
 # Only run the Slack bot, not the web server
@@ -13,3 +13,7 @@ startCommand = "npm run slack-bot"
 restartPolicyType = "always"
 # Keep it small - bot doesn't need much resources
 numReplicas = 1
+
+[nixpacks]
+# Use Node 20 (required by Supabase and Next.js packages)
+nodeVersion = "20"
