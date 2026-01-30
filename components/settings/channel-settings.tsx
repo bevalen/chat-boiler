@@ -12,7 +12,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Check, X, Loader2, Eye, EyeOff, ExternalLink } from "lucide-react";
+import { MessageSquare, Check, X, Loader2, Eye, EyeOff, ExternalLink, Bell } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type NotificationChannel = "app" | "slack" | "email" | "sms";
 
 interface SlackConfig {
   configured: boolean;
@@ -34,6 +43,10 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Preferred notification channel
+  const [preferredChannel, setPreferredChannel] = useState<NotificationChannel>("app");
+  const [savingPreference, setSavingPreference] = useState(false);
+
   // Form state
   const [botToken, setBotToken] = useState("");
   const [appToken, setAppToken] = useState("");
@@ -53,13 +66,14 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
     error?: string;
   } | null>(null);
 
-  // Fetch current Slack configuration
+  // Fetch current configuration
   useEffect(() => {
-    async function fetchSlackConfig() {
+    async function fetchConfig() {
       try {
-        const response = await fetch("/api/channels/slack");
-        if (response.ok) {
-          const data = await response.json();
+        // Fetch Slack config
+        const slackResponse = await fetch("/api/channels/slack");
+        if (slackResponse.ok) {
+          const data = await slackResponse.json();
           setSlackConfig(data);
           if (data.configured) {
             setUserSlackId(data.user_slack_id || "");
@@ -67,14 +81,23 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
             setIsActive(data.active);
           }
         }
+
+        // Fetch user's preferred notification channel
+        const prefResponse = await fetch("/api/user/preferences");
+        if (prefResponse.ok) {
+          const prefData = await prefResponse.json();
+          if (prefData.preferred_notification_channel) {
+            setPreferredChannel(prefData.preferred_notification_channel);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching Slack config:", error);
+        console.error("Error fetching config:", error);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchSlackConfig();
+    fetchConfig();
   }, []);
 
   const handleTestConnection = async () => {
@@ -110,6 +133,37 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
       setMessage({ type: "error", text: "Failed to test connection" });
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handlePreferredChannelChange = async (channel: NotificationChannel) => {
+    // Don't allow selecting Slack if not configured
+    if (channel === "slack" && !slackConfig?.configured) {
+      setMessage({ type: "error", text: "Please configure Slack first before setting it as your preferred channel" });
+      return;
+    }
+
+    setSavingPreference(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferred_notification_channel: channel }),
+      });
+
+      if (response.ok) {
+        setPreferredChannel(channel);
+        setMessage({ type: "success", text: `Preferred notification channel set to ${channel}` });
+      } else {
+        const data = await response.json();
+        setMessage({ type: "error", text: data.error || "Failed to update preference" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to update preference" });
+    } finally {
+      setSavingPreference(false);
     }
   };
 
@@ -265,6 +319,40 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
             {message.text}
           </div>
         )}
+
+        {/* Preferred Notification Channel */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <Label className="font-medium">Preferred Notification Channel</Label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Where should reminders, scheduled notifications, and proactive messages be sent?
+          </p>
+          <Select
+            value={preferredChannel}
+            onValueChange={(value) => handlePreferredChannelChange(value as NotificationChannel)}
+            disabled={savingPreference}
+          >
+            <SelectTrigger className="w-full md:w-[200px]">
+              <SelectValue placeholder="Select channel" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="app">In-App</SelectItem>
+              <SelectItem value="slack" disabled={!slackConfig?.configured}>
+                Slack {!slackConfig?.configured && "(not configured)"}
+              </SelectItem>
+              <SelectItem value="email" disabled>
+                Email (coming soon)
+              </SelectItem>
+              <SelectItem value="sms" disabled>
+                SMS (coming soon)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
 
         {/* Slack Configuration */}
         <div className="space-y-4">

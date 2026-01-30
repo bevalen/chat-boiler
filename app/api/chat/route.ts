@@ -72,10 +72,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get user profile for context
+    // Get user profile for context (including notification preferences)
     const { data: profile } = await supabase
       .from("users")
-      .select("name, timezone")
+      .select("name, timezone, preferred_notification_channel")
       .eq("id", user.id)
       .single();
 
@@ -589,6 +589,13 @@ export async function POST(request: Request) {
               return { success: false, error: `Invalid datetime format: ${runAt}. Please use UTC ISO format like '2026-01-31T20:00:00Z'` };
             }
             
+            // Build action payload with preferred channel
+            const preferredChannel = profile?.preferred_notification_channel || "app";
+            const actionPayload: Record<string, unknown> = { 
+              message: message || title,
+              preferred_channel: preferredChannel,
+            };
+            
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
               .insert({
@@ -601,7 +608,7 @@ export async function POST(request: Request) {
                 next_run_at: runAtDate.toISOString(),
                 timezone: userTimezone,
                 action_type: "notify",
-                action_payload: { message: message || title },
+                action_payload: actionPayload,
                 task_id: taskId || null,
                 project_id: projectId || null,
                 conversation_id: createNewConversation ? null : conversation.id,
@@ -663,6 +670,14 @@ export async function POST(request: Request) {
             // For recurring jobs, default to creating new conversations (makes more sense for daily briefs, etc.)
             const shouldCreateNewConversation = createNewConversation !== false;
 
+            // Build action payload with preferred channel
+            const preferredChannel = profile?.preferred_notification_channel || "app";
+            const recurringActionPayload: Record<string, unknown> = {
+              message: title,
+              preferred_channel: preferredChannel,
+              ...(instruction ? { instruction } : {}),
+            };
+
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
               .insert({
@@ -675,7 +690,7 @@ export async function POST(request: Request) {
                 next_run_at: nextRun.toISOString(),
                 timezone: userTimezone,
                 action_type: actionType || "notify",
-                action_payload: instruction ? { instruction, message: title } : { message: title },
+                action_payload: recurringActionPayload,
                 conversation_id: shouldCreateNewConversation ? null : conversation.id,
                 status: "active",
               })
