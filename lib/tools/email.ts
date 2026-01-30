@@ -283,14 +283,14 @@ export function createCheckEmailTool(agentId: string) {
 export function createSendEmailTool(agentId: string) {
   return tool({
     description:
-      "Send an email from YOUR (the AI assistant's) email account. This is NOT the user's email - it's your own email address. Use this when the user asks you to send an email, follow up with someone, or reach out to a contact on their behalf. IMPORTANT: Always set signature=true to include your email signature. Do NOT add a sign-off or your name at the end of the email body - the signature handles that automatically.",
+      "Send an email from YOUR (the AI assistant's) email account. This is NOT the user's email - it's your own email address. Use this when the user asks you to send an email, follow up with someone, or reach out to a contact on their behalf. Your HTML email signature will be automatically appended to the email. Do NOT add a sign-off or your name at the end of the email body - the signature handles that automatically.",
     inputSchema: z.object({
       to: z.string().describe("Recipient email address"),
       subject: z.string().describe("Email subject line"),
-      body: z.string().describe("Email body content (plain text or markdown). Do NOT include a sign-off or name at the end - the signature handles this."),
+      body: z.string().describe("Email body content (plain text or HTML). Do NOT include a sign-off or name at the end - your configured HTML signature will be automatically appended."),
       cc: z.string().optional().describe("CC recipient email address (optional)"),
       bcc: z.string().optional().describe("BCC recipient email address (optional)"),
-      signature: z.boolean().optional().default(true).describe("Include email signature (always set to true)"),
+      signature: z.boolean().optional().default(true).describe("Include email signature (default: true)"),
     }),
     execute: async ({ to, subject, body, cc, bcc, signature }: { 
       to: string; 
@@ -356,9 +356,17 @@ export function createSendEmailTool(agentId: string) {
       }
 
       try {
+        // Build the full email body with signature if configured
+        let fullBody = body;
+        
+        // Append the custom HTML signature if enabled and configured
+        if (includeSignature && credentials.email_signature) {
+          // Add a line break before the signature
+          fullBody = `${body}\n\n${credentials.email_signature}`;
+        }
+
         // Zapier MCP expects natural language instructions for the main content
-        // Do NOT mention signature in instructions - use the Signature field instead
-        let instruction = `Send an email to ${to} with subject "${subject}" and the following body (do not add any signature or sign-off, just use the body exactly as provided): "${body}"`;
+        let instruction = `Send an email to ${to} with subject "${subject}" and the following body (use the body exactly as provided, it already includes the signature): "${fullBody}"`;
         
         if (cc) {
           instruction += ` CC: ${cc}`;
@@ -367,12 +375,12 @@ export function createSendEmailTool(agentId: string) {
           instruction += ` BCC: ${bcc}`;
         }
 
-        // Build the arguments - instructions is required, Signature is a separate field
-        // that tells Gmail to use the account's built-in signature
+        // Build the arguments - instructions is required
+        // We include the signature in the body directly, so don't use Gmail's built-in signature
         const args: Record<string, string | boolean> = {
           instructions: instruction,
-          // Use Gmail's built-in signature feature (must be boolean, not string)
-          Signature: includeSignature,
+          // Disable Gmail's built-in signature since we're including our own
+          Signature: false,
         };
 
         // Call Zapier MCP using proper MCP protocol

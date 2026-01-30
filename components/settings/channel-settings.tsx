@@ -44,6 +44,7 @@ interface ZapierMCPConfig {
     check_calendar: boolean;
   };
   description?: string;
+  email_signature?: string;
 }
 
 interface ChannelSettingsProps {
@@ -85,6 +86,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
   const [zapierEndpointUrl, setZapierEndpointUrl] = useState("");
   const [zapierApiKey, setZapierApiKey] = useState("");
   const [zapierDescription, setZapierDescription] = useState("");
+  const [zapierEmailSignature, setZapierEmailSignature] = useState("");
   const [zapierCheckEmail, setZapierCheckEmail] = useState(true);
   const [zapierSendEmail, setZapierSendEmail] = useState(true);
   const [zapierCheckCalendar, setZapierCheckCalendar] = useState(false);
@@ -122,6 +124,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
           if (data.configured) {
             setZapierEndpointUrl(data.endpoint_url || "");
             setZapierDescription(data.description || "");
+            setZapierEmailSignature(data.email_signature || "");
             setZapierCheckEmail(data.capabilities?.check_email ?? true);
             setZapierSendEmail(data.capabilities?.send_email ?? true);
             setZapierCheckCalendar(data.capabilities?.check_calendar ?? false);
@@ -383,6 +386,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
             check_calendar: zapierCheckCalendar,
           },
           description: zapierDescription || undefined,
+          email_signature: zapierEmailSignature || undefined,
           is_active: zapierIsActive,
         }),
       });
@@ -402,6 +406,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
             check_calendar: zapierCheckCalendar,
           },
           description: zapierDescription,
+          email_signature: zapierEmailSignature,
         });
         // Clear the API key from the form for security
         setZapierApiKey("");
@@ -467,6 +472,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
         setZapierEndpointUrl("");
         setZapierApiKey("");
         setZapierDescription("");
+        setZapierEmailSignature("");
         setZapierCheckEmail(true);
         setZapierSendEmail(true);
         setZapierCheckCalendar(false);
@@ -876,6 +882,21 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
                 onChange={(e) => setZapierDescription(e.target.value)}
                 placeholder="e.g., Ben's Gmail via Zapier"
               />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="zapierEmailSignature">Email Signature (HTML)</Label>
+              <textarea
+                id="zapierEmailSignature"
+                value={zapierEmailSignature}
+                onChange={(e) => setZapierEmailSignature(e.target.value)}
+                placeholder="Paste your HTML email signature here..."
+                rows={6}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                HTML signature that will be appended to all outgoing emails
+              </p>
             </div>
 
             {/* Capabilities */}

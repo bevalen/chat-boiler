@@ -69,6 +69,7 @@ export interface ZapierMCPCredentials {
     check_calendar: boolean;
   };
   description?: string; // User-friendly description
+  email_signature?: string; // HTML email signature to append to outgoing emails
 }
 
 // Union type for all channel credentials

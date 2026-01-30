@@ -46,6 +46,7 @@ export async function GET() {
       has_api_key: !!credentials.api_key,
       capabilities: credentials.capabilities,
       description: credentials.description,
+      email_signature: credentials.email_signature,
     });
   } catch (error) {
     console.error("[zapier-mcp] Error getting credentials:", error);
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
       api_key,
       capabilities = { check_email: true, send_email: true, check_calendar: false },
       description,
+      email_signature,
       is_active = true,
     } = body;
 
@@ -101,6 +103,7 @@ export async function POST(request: NextRequest) {
       api_key,
       capabilities,
       description,
+      email_signature,
     };
 
     const { credentials: saved, error } = await updateZapierMCPCredentials(
