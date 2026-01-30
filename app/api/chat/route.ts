@@ -209,6 +209,97 @@ export async function POST(request: Request) {
         },
       }),
 
+      getRecentConversations: tool({
+        description: "Get recent conversations and their messages. Use this to recall what was discussed recently, summarize past conversations, or find specific discussions. This is a direct database query, not semantic search.",
+        inputSchema: z.object({
+          daysBack: z.number().optional().default(7).describe("How many days back to look (default 7)"),
+          limit: z.number().optional().default(5).describe("Max number of conversations to return (default 5)"),
+          includeMessages: z.boolean().optional().default(true).describe("Whether to include message content"),
+          messagesPerConversation: z.number().optional().default(10).describe("Max messages per conversation (default 10)"),
+        }),
+        execute: async ({ daysBack, limit, includeMessages, messagesPerConversation }: { 
+          daysBack?: number; 
+          limit?: number; 
+          includeMessages?: boolean;
+          messagesPerConversation?: number;
+        }) => {
+          try {
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - (daysBack || 7));
+
+            // Get recent conversations
+            const { data: conversations, error: convError } = await adminSupabase
+              .from("conversations")
+              .select("id, title, channel_type, created_at, updated_at")
+              .eq("agent_id", agentId)
+              .gte("updated_at", cutoffDate.toISOString())
+              .order("updated_at", { ascending: false })
+              .limit(limit || 5);
+
+            if (convError) {
+              return { success: false, error: convError.message, conversations: [] };
+            }
+
+            if (!conversations || conversations.length === 0) {
+              return { 
+                success: true, 
+                message: `No conversations found in the last ${daysBack || 7} days.`,
+                conversations: [] 
+              };
+            }
+
+            // Optionally fetch messages for each conversation
+            const results = [];
+            for (const conv of conversations) {
+              const convResult: {
+                id: string;
+                title: string | null;
+                channel: string;
+                lastUpdated: string;
+                created: string;
+                messages?: Array<{ role: string; content: string; timestamp: string }>;
+                messageCount?: number;
+              } = {
+                id: conv.id,
+                title: conv.title,
+                channel: conv.channel_type || "app",
+                lastUpdated: new Date(conv.updated_at).toLocaleString(),
+                created: new Date(conv.created_at).toLocaleString(),
+              };
+
+              if (includeMessages !== false) {
+                const { data: messages } = await adminSupabase
+                  .from("messages")
+                  .select("role, content, created_at")
+                  .eq("conversation_id", conv.id)
+                  .order("created_at", { ascending: true })
+                  .limit(messagesPerConversation || 10);
+
+                if (messages && messages.length > 0) {
+                  convResult.messages = messages.map(m => ({
+                    role: m.role,
+                    content: m.content.length > 500 ? m.content.substring(0, 500) + "..." : m.content,
+                    timestamp: new Date(m.created_at).toLocaleString(),
+                  }));
+                  convResult.messageCount = messages.length;
+                }
+              }
+
+              results.push(convResult);
+            }
+
+            return { 
+              success: true, 
+              daysBack: daysBack || 7,
+              conversationCount: results.length,
+              conversations: results,
+            };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error", conversations: [] };
+          }
+        },
+      }),
+
       createProject: tool({
         description: "Create a new project to track work",
         inputSchema: z.object({
