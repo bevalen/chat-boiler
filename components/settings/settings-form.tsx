@@ -13,11 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { User, Bot, Shield, Upload, X } from "lucide-react";
+import { User, Bot, Shield, Upload, X, MessageSquare, Sparkles, Radio, Menu } from "lucide-react";
 import Image from "next/image";
 import { AgentPersonality, UserPreferences } from "@/lib/types/database";
+import { useEffect } from "react";
+
+type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "channels" | "security";
 
 interface SettingsFormProps {
   user: {
@@ -36,10 +40,20 @@ interface SettingsFormProps {
     personality: AgentPersonality | null;
     userPreferences: UserPreferences | null;
   } | null;
+  channelsComponent?: React.ReactNode;
 }
 
-export function SettingsForm({ user, agent }: SettingsFormProps) {
+export function SettingsForm({ user, agent, channelsComponent }: SettingsFormProps) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
+  const [showSidebar, setShowSidebar] = useState(false);
   const [name, setName] = useState(user.name);
+  
+  // Auto-open sidebar on desktop
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setShowSidebar(true);
+    }
+  }, []);
   const [timezone, setTimezone] = useState(user.timezone);
   const [userAvatarUrl, setUserAvatarUrl] = useState(user.avatarUrl || "");
   const [uploadingUserAvatar, setUploadingUserAvatar] = useState(false);
@@ -256,30 +270,104 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
     "Pacific/Auckland",
   ];
 
+  const settingsSections = [
+    { id: "profile" as SettingsSection, label: "Profile", icon: <User className="h-4 w-4" />, description: "Personal information" },
+    { id: "identity" as SettingsSection, label: "AI Identity", icon: <Bot className="h-4 w-4" />, description: "Assistant appearance" },
+    { id: "personality" as SettingsSection, label: "AI Personality", icon: <Sparkles className="h-4 w-4" />, description: "Traits & style" },
+    { id: "preferences" as SettingsSection, label: "Preferences", icon: <MessageSquare className="h-4 w-4" />, description: "Communication style" },
+    { id: "channels" as SettingsSection, label: "Channels", icon: <Radio className="h-4 w-4" />, description: "Communication channels" },
+    { id: "security" as SettingsSection, label: "Security", icon: <Shield className="h-4 w-4" />, description: "Account security" },
+  ];
+
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and preferences
-        </p>
+    <div className="flex h-full bg-background/50 relative overflow-hidden">
+      {/* Settings Sidebar */}
+      <div
+        className={`absolute md:relative z-30 h-full bg-background/95 backdrop-blur-md border-r border-white/5 transition-all duration-300 ${
+          showSidebar ? "w-64 opacity-100" : "w-0 opacity-0 md:w-0"
+        } overflow-hidden flex flex-col`}
+      >
+        <div className="w-64 h-full flex flex-col">
+          <div className="h-14 border-b border-white/5 flex items-center justify-between px-4 shrink-0">
+            <h3 className="font-semibold">Settings</h3>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setShowSidebar(false)} 
+              className="md:hidden h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 px-2">
+            <div className="space-y-1 py-2">
+              {settingsSections.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => {
+                    setActiveSection(section.id);
+                    if (typeof window !== "undefined" && window.innerWidth < 768) {
+                      setShowSidebar(false);
+                    }
+                  }}
+                  className={`group w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer ${
+                    activeSection === section.id
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-secondary/50 text-muted-foreground"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0">{section.icon}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{section.label}</div>
+                      <div className="text-xs opacity-60 truncate">{section.description}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
       </div>
 
-      {message && (
-        <div
-          className={`mb-4 p-3 rounded-md text-sm ${
-            message.includes("Failed")
-              ? "bg-destructive/10 text-destructive"
-              : "bg-green-500/10 text-green-500"
-          }`}
-        >
-          {message}
-        </div>
-      )}
+      {/* Main Settings Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 max-w-2xl">
+          {/* Section Header */}
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="shrink-0 h-8 w-8"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+              <h1 className="text-2xl font-bold">
+                {settingsSections.find(s => s.id === activeSection)?.label}
+              </h1>
+            </div>
+            <p className="text-muted-foreground ml-11">
+              {settingsSections.find(s => s.id === activeSection)?.description}
+            </p>
+          </div>
 
-      <div className="space-y-6">
-        {/* Profile Settings */}
-        <Card>
+          {message && (
+            <div
+              className={`mb-4 p-3 rounded-md text-sm ${
+                message.includes("Failed")
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-green-500/10 text-green-500"
+              }`}
+            >
+              {message}
+            </div>
+          )}
+
+          {/* Profile Section */}
+          {activeSection === "profile" && (
+            <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-muted-foreground" />
@@ -374,10 +462,10 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
             </Button>
           </CardContent>
         </Card>
+          )}
 
-        {/* Agent Settings */}
-        {agent && (
-          <>
+        {/* AI Identity Section */}
+        {activeSection === "identity" && agent && (
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -476,7 +564,10 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
                 </div>
               </CardContent>
             </Card>
+          )}
 
+        {/* Personality Section */}
+        {activeSection === "personality" && agent && (
             <Card>
               <CardHeader>
                 <CardTitle>Personality</CardTitle>
@@ -529,7 +620,10 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
                 </div>
               </CardContent>
             </Card>
+          )}
 
+        {/* Preferences Section */}
+        {activeSection === "preferences" && agent && (
             <Card>
               <CardHeader>
                 <CardTitle>Your Preferences</CardTitle>
@@ -619,10 +713,17 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
                 </Button>
               </CardContent>
             </Card>
-          </>
+          )}
+
+        {/* Channels Section */}
+        {activeSection === "channels" && channelsComponent && (
+          <div className="space-y-6">
+            {channelsComponent}
+          </div>
         )}
 
-        {/* Security */}
+        {/* Security Section */}
+        {activeSection === "security" && (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -657,6 +758,8 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
             </div>
           </CardContent>
         </Card>
+        )}
+        </div>
       </div>
     </div>
   );

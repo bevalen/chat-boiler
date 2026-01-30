@@ -28,7 +28,7 @@ export default async function SettingsPage() {
     .single();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="h-full">
       <SettingsForm
         user={{
           id: user.id,
@@ -50,10 +50,8 @@ export default async function SettingsPage() {
               }
             : null
         }
+        channelsComponent={<ChannelSettings userId={user.id} />}
       />
-      <div className="p-6 pt-0 max-w-2xl">
-        <ChannelSettings userId={user.id} />
-      </div>
     </div>
   );
 }
