@@ -1,0 +1,14 @@
+# Nixpacks configuration for Railway
+# Forces Node 20 and uses npm install instead of npm ci
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm"]
+
+[phases.install]
+cmds = ["npm install --legacy-peer-deps"]
+
+[phases.build]
+cmds = ["echo 'Skipping build - only running Slack bot'"]
+
+[start]
+cmd = "npm run slack-bot"
