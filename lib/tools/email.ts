@@ -356,9 +356,9 @@ export function createSendEmailTool(agentId: string) {
       }
 
       try {
-        // Zapier MCP expects natural language instructions, not structured fields
-        // Build an instruction string that describes what to do
-        let instruction = `Send an email to ${to} with subject "${subject}" and body: "${body}"`;
+        // Zapier MCP expects natural language instructions for the main content
+        // Do NOT mention signature in instructions - use the Signature field instead
+        let instruction = `Send an email to ${to} with subject "${subject}" and the following body (do not add any signature or sign-off, just use the body exactly as provided): "${body}"`;
         
         if (cc) {
           instruction += ` CC: ${cc}`;
@@ -366,14 +366,17 @@ export function createSendEmailTool(agentId: string) {
         if (bcc) {
           instruction += ` BCC: ${bcc}`;
         }
-        if (includeSignature) {
-          instruction += `. Include my email signature.`;
-        }
 
-        // Call Zapier MCP using proper MCP protocol with instructions parameter
-        const response = await callZapierMCPTool(credentials, "gmail_send_email", {
+        // Build the arguments - instructions is required, Signature is a separate field
+        // that tells Gmail to use the account's built-in signature
+        const args: Record<string, string | boolean> = {
           instructions: instruction,
-        });
+          // Use Gmail's built-in signature feature
+          Signature: includeSignature ? "true" : "false",
+        };
+
+        // Call Zapier MCP using proper MCP protocol
+        const response = await callZapierMCPTool(credentials, "gmail_send_email", args);
 
         if (!response.success) {
           throw new Error(response.error || "Failed to send email");
