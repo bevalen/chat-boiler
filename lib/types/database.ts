@@ -35,7 +35,10 @@ export interface AgentIdentityContext {
 }
 
 // Channel types
-export type ChannelType = "app" | "slack" | "email" | "sms" | "discord";
+export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp";
+
+// Database-level channel type (subset that can be stored)
+export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "zapier_mcp";
 
 // Slack-specific credentials
 export interface SlackCredentials {
@@ -56,8 +59,20 @@ export interface EmailCredentials {
   from_address?: string;
 }
 
+// Zapier MCP credentials for email/calendar integration
+export interface ZapierMCPCredentials {
+  endpoint_url: string;
+  api_key?: string; // Optional API key for authentication
+  capabilities: {
+    check_email: boolean;
+    send_email: boolean;
+    check_calendar: boolean;
+  };
+  description?: string; // User-friendly description
+}
+
 // Union type for all channel credentials
-export type ChannelCredentials = SlackCredentials | EmailCredentials | Record<string, unknown>;
+export type ChannelCredentials = SlackCredentials | EmailCredentials | ZapierMCPCredentials | Record<string, unknown>;
 
 // Action payload with preferred channel support
 export interface ActionPayload {
@@ -484,7 +499,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          channel_type: "slack" | "email" | "sms" | "discord";
+          channel_type: "slack" | "email" | "sms" | "discord" | "zapier_mcp";
           credentials: Json;
           is_active: boolean;
           created_at: string | null;
@@ -493,7 +508,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          channel_type: "slack" | "email" | "sms" | "discord";
+          channel_type: "slack" | "email" | "sms" | "discord" | "zapier_mcp";
           credentials: Json;
           is_active?: boolean;
           created_at?: string | null;
@@ -502,7 +517,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          channel_type?: "slack" | "email" | "sms" | "discord";
+          channel_type?: "slack" | "email" | "sms" | "discord" | "zapier_mcp";
           credentials?: Json;
           is_active?: boolean;
           created_at?: string | null;

@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Check, X, Loader2, Eye, EyeOff, ExternalLink, Bell } from "lucide-react";
+import { MessageSquare, Check, X, Loader2, Eye, EyeOff, ExternalLink, Bell, Zap, Mail, Calendar } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type NotificationChannel = "app" | "slack" | "email" | "sms";
 
@@ -32,12 +33,26 @@ interface SlackConfig {
   default_channel_id?: string;
 }
 
+interface ZapierMCPConfig {
+  configured: boolean;
+  active: boolean;
+  endpoint_url?: string;
+  has_api_key?: boolean;
+  capabilities?: {
+    check_email: boolean;
+    send_email: boolean;
+    check_calendar: boolean;
+  };
+  description?: string;
+}
+
 interface ChannelSettingsProps {
   userId: string;
 }
 
 export function ChannelSettings({ userId }: ChannelSettingsProps) {
   const [slackConfig, setSlackConfig] = useState<SlackConfig | null>(null);
+  const [zapierConfig, setZapierConfig] = useState<ZapierMCPConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -47,7 +62,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
   const [preferredChannel, setPreferredChannel] = useState<NotificationChannel>("app");
   const [savingPreference, setSavingPreference] = useState(false);
 
-  // Form state
+  // Slack form state
   const [botToken, setBotToken] = useState("");
   const [appToken, setAppToken] = useState("");
   const [userSlackId, setUserSlackId] = useState("");
@@ -58,11 +73,28 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
   const [showBotToken, setShowBotToken] = useState(false);
   const [showAppToken, setShowAppToken] = useState(false);
 
-  // Test result
+  // Slack test result
   const [testResult, setTestResult] = useState<{
     success: boolean;
     team_name?: string;
     bot_name?: string;
+    error?: string;
+  } | null>(null);
+
+  // Zapier MCP form state
+  const [zapierEndpointUrl, setZapierEndpointUrl] = useState("");
+  const [zapierApiKey, setZapierApiKey] = useState("");
+  const [zapierDescription, setZapierDescription] = useState("");
+  const [zapierCheckEmail, setZapierCheckEmail] = useState(true);
+  const [zapierSendEmail, setZapierSendEmail] = useState(true);
+  const [zapierCheckCalendar, setZapierCheckCalendar] = useState(false);
+  const [zapierIsActive, setZapierIsActive] = useState(true);
+  const [showZapierApiKey, setShowZapierApiKey] = useState(false);
+  const [savingZapier, setSavingZapier] = useState(false);
+  const [testingZapier, setTestingZapier] = useState(false);
+  const [zapierTestResult, setZapierTestResult] = useState<{
+    success: boolean;
+    message?: string;
     error?: string;
   } | null>(null);
 
@@ -79,6 +111,21 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
             setUserSlackId(data.user_slack_id || "");
             setDefaultChannelId(data.default_channel_id || "");
             setIsActive(data.active);
+          }
+        }
+
+        // Fetch Zapier MCP config
+        const zapierResponse = await fetch("/api/channels/zapier-mcp");
+        if (zapierResponse.ok) {
+          const data = await zapierResponse.json();
+          setZapierConfig(data);
+          if (data.configured) {
+            setZapierEndpointUrl(data.endpoint_url || "");
+            setZapierDescription(data.description || "");
+            setZapierCheckEmail(data.capabilities?.check_email ?? true);
+            setZapierSendEmail(data.capabilities?.send_email ?? true);
+            setZapierCheckCalendar(data.capabilities?.check_calendar ?? false);
+            setZapierIsActive(data.active);
           }
         }
 
@@ -275,6 +322,162 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
       setMessage({ type: "error", text: "Failed to disconnect" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Zapier MCP handlers
+  const handleZapierTestConnection = async () => {
+    if (!zapierEndpointUrl) {
+      setMessage({ type: "error", text: "Please enter the Zapier MCP endpoint URL" });
+      return;
+    }
+
+    setTestingZapier(true);
+    setZapierTestResult(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/channels/zapier-mcp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint_url: zapierEndpointUrl,
+          api_key: zapierApiKey || undefined,
+        }),
+      });
+
+      const data = await response.json();
+      setZapierTestResult(data);
+
+      if (data.success) {
+        setMessage({ type: "success", text: "Zapier MCP connection successful" });
+      } else {
+        setMessage({ type: "error", text: data.error || "Connection test failed" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to test connection" });
+    } finally {
+      setTestingZapier(false);
+    }
+  };
+
+  const handleZapierSave = async () => {
+    if (!zapierEndpointUrl) {
+      setMessage({ type: "error", text: "Please enter the Zapier MCP endpoint URL" });
+      return;
+    }
+
+    setSavingZapier(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/channels/zapier-mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint_url: zapierEndpointUrl,
+          api_key: zapierApiKey || undefined,
+          capabilities: {
+            check_email: zapierCheckEmail,
+            send_email: zapierSendEmail,
+            check_calendar: zapierCheckCalendar,
+          },
+          description: zapierDescription || undefined,
+          is_active: zapierIsActive,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: "success", text: "Zapier MCP configuration saved successfully" });
+        setZapierConfig({
+          configured: true,
+          active: zapierIsActive,
+          endpoint_url: zapierEndpointUrl,
+          has_api_key: !!zapierApiKey,
+          capabilities: {
+            check_email: zapierCheckEmail,
+            send_email: zapierSendEmail,
+            check_calendar: zapierCheckCalendar,
+          },
+          description: zapierDescription,
+        });
+        // Clear the API key from the form for security
+        setZapierApiKey("");
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to save configuration" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to save configuration" });
+    } finally {
+      setSavingZapier(false);
+    }
+  };
+
+  const handleZapierToggleActive = async () => {
+    if (!zapierConfig?.configured) return;
+
+    setSavingZapier(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/channels/zapier-mcp", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !zapierConfig.active }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setZapierConfig({ ...zapierConfig, active: data.active });
+        setZapierIsActive(data.active);
+        setMessage({
+          type: "success",
+          text: data.active ? "Zapier MCP enabled" : "Zapier MCP disabled",
+        });
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to update status" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to update status" });
+    } finally {
+      setSavingZapier(false);
+    }
+  };
+
+  const handleZapierDisconnect = async () => {
+    if (!confirm("Are you sure you want to disconnect Zapier MCP? Your agent will no longer be able to check or send emails.")) {
+      return;
+    }
+
+    setSavingZapier(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/channels/zapier-mcp", {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setZapierConfig({ configured: false, active: false });
+        setZapierEndpointUrl("");
+        setZapierApiKey("");
+        setZapierDescription("");
+        setZapierCheckEmail(true);
+        setZapierSendEmail(true);
+        setZapierCheckCalendar(false);
+        setMessage({ type: "success", text: "Zapier MCP disconnected successfully" });
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to disconnect" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to disconnect" });
+    } finally {
+      setSavingZapier(false);
     }
   };
 
@@ -565,21 +768,225 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
 
         <Separator />
 
-        {/* Future channels placeholder */}
-        <div className="space-y-4 opacity-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-              <svg className="w-6 h-6 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <polyline points="22,6 12,13 2,6"/>
-              </svg>
+        {/* Zapier MCP Configuration */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-medium">Zapier MCP (Email & Calendar)</h3>
+                <p className="text-sm text-muted-foreground">
+                  {zapierConfig?.configured
+                    ? zapierConfig.active
+                      ? "Connected and active"
+                      : "Configured but disabled"
+                    : "Not connected"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-medium">Email</h3>
-              <p className="text-sm text-muted-foreground">Coming soon</p>
-            </div>
+            {zapierConfig?.configured && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleZapierToggleActive}
+                  disabled={savingZapier}
+                >
+                  {zapierConfig.active ? "Disable" : "Enable"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleZapierDisconnect}
+                  disabled={savingZapier}
+                  className="text-destructive hover:text-destructive"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            )}
           </div>
 
+          <Separator />
+
+          {/* Setup instructions */}
+          {!zapierConfig?.configured && (
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+              <p className="text-sm font-medium">To connect Zapier MCP for email integration:</p>
+              <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+                <li>
+                  Create a Zapier automation with a webhook trigger
+                </li>
+                <li>Configure actions for checking Gmail and sending emails</li>
+                <li>Copy the webhook URL and paste it below</li>
+                <li>Test the connection to verify it works</li>
+              </ol>
+            </div>
+          )}
+
+          {/* Zapier MCP form */}
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="zapierEndpointUrl">
+                Zapier Webhook URL <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="zapierEndpointUrl"
+                type="url"
+                value={zapierEndpointUrl}
+                onChange={(e) => setZapierEndpointUrl(e.target.value)}
+                placeholder={zapierConfig?.configured ? "Enter new URL to update" : "https://hooks.zapier.com/hooks/catch/..."}
+              />
+              <p className="text-xs text-muted-foreground">
+                The webhook URL from your Zapier automation
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="zapierApiKey">API Key (optional)</Label>
+              <div className="relative">
+                <Input
+                  id="zapierApiKey"
+                  type={showZapierApiKey ? "text" : "password"}
+                  value={zapierApiKey}
+                  onChange={(e) => setZapierApiKey(e.target.value)}
+                  placeholder={zapierConfig?.has_api_key ? "Enter new key to update" : "Optional authentication key"}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowZapierApiKey(!showZapierApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showZapierApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Optional API key for additional authentication
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="zapierDescription">Description (optional)</Label>
+              <Input
+                id="zapierDescription"
+                value={zapierDescription}
+                onChange={(e) => setZapierDescription(e.target.value)}
+                placeholder="e.g., Ben's Gmail via Zapier"
+              />
+            </div>
+
+            {/* Capabilities */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Enabled Capabilities</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="checkEmail"
+                    checked={zapierCheckEmail}
+                    onCheckedChange={(checked) => setZapierCheckEmail(checked === true)}
+                  />
+                  <label
+                    htmlFor="checkEmail"
+                    className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    Check Emails
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="sendEmail"
+                    checked={zapierSendEmail}
+                    onCheckedChange={(checked) => setZapierSendEmail(checked === true)}
+                  />
+                  <label
+                    htmlFor="sendEmail"
+                    className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    Send Emails
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="checkCalendar"
+                    checked={zapierCheckCalendar}
+                    onCheckedChange={(checked) => setZapierCheckCalendar(checked === true)}
+                  />
+                  <label
+                    htmlFor="checkCalendar"
+                    className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    Check Calendar
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {zapierTestResult && (
+              <div
+                className={`flex items-center gap-2 p-3 rounded-md text-sm ${
+                  zapierTestResult.success
+                    ? "bg-green-500/10 text-green-500"
+                    : "bg-destructive/10 text-destructive"
+                }`}
+              >
+                {zapierTestResult.success ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    {zapierTestResult.message || "Connection successful"}
+                  </>
+                ) : (
+                  <>
+                    <X className="h-4 w-4" />
+                    {zapierTestResult.error}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleZapierTestConnection}
+                disabled={testingZapier || !zapierEndpointUrl}
+              >
+                {testingZapier ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Testing...
+                  </>
+                ) : (
+                  "Test Connection"
+                )}
+              </Button>
+              <Button
+                onClick={handleZapierSave}
+                disabled={savingZapier || !zapierEndpointUrl}
+              >
+                {savingZapier ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : zapierConfig?.configured ? (
+                  "Update Configuration"
+                ) : (
+                  "Connect Zapier MCP"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Future channels placeholder */}
+        <div className="space-y-4 opacity-50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
               <svg className="w-6 h-6 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -2,7 +2,9 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import {
   Database,
   ChannelType,
+  StorableChannelType,
   SlackCredentials,
+  ZapierMCPCredentials,
   ChannelCredentials,
 } from "@/lib/types/database";
 
@@ -12,7 +14,7 @@ type ChannelCredentialsRow =
 export interface UserChannelCredential {
   id: string;
   userId: string;
-  channelType: "slack" | "email" | "sms" | "discord";
+  channelType: StorableChannelType;
   credentials: ChannelCredentials;
   isActive: boolean;
   createdAt: string | null;
@@ -277,4 +279,75 @@ export async function getAllActiveSlackUsers(
     })),
     error: null,
   };
+}
+
+/**
+ * Get Zapier MCP credentials for a user
+ */
+export async function getZapierMCPCredentials(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ credentials: ZapierMCPCredentials | null; isActive: boolean; error: string | null }> {
+  const { credentials, error } = await getChannelCredentials(
+    supabase,
+    userId,
+    "zapier_mcp" as ChannelType
+  );
+
+  if (error || !credentials) {
+    return { credentials: null, isActive: false, error };
+  }
+
+  return {
+    credentials: credentials.credentials as ZapierMCPCredentials,
+    isActive: credentials.isActive,
+    error: null,
+  };
+}
+
+/**
+ * Update Zapier MCP credentials
+ */
+export async function updateZapierMCPCredentials(
+  supabase: SupabaseClient,
+  userId: string,
+  zapierCredentials: ZapierMCPCredentials,
+  isActive: boolean = true
+): Promise<{ credentials: UserChannelCredential | null; error: string | null }> {
+  return upsertChannelCredentials(supabase, userId, "zapier_mcp" as ChannelType, zapierCredentials, isActive);
+}
+
+/**
+ * Check if a user has active Zapier MCP credentials
+ */
+export async function hasActiveZapierMCP(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { credentials, isActive, error } = await getZapierMCPCredentials(
+    supabase,
+    userId
+  );
+  return !error && credentials !== null && isActive;
+}
+
+/**
+ * Get Zapier MCP credentials by agent ID (for use in tools)
+ */
+export async function getZapierMCPCredentialsByAgent(
+  supabase: SupabaseClient,
+  agentId: string
+): Promise<{ credentials: ZapierMCPCredentials | null; isActive: boolean; error: string | null }> {
+  // First get the user_id from the agent
+  const { data: agent, error: agentError } = await supabase
+    .from("agents")
+    .select("user_id")
+    .eq("id", agentId)
+    .single();
+
+  if (agentError || !agent) {
+    return { credentials: null, isActive: false, error: agentError?.message || "Agent not found" };
+  }
+
+  return getZapierMCPCredentials(supabase, agent.user_id);
 }

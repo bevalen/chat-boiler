@@ -10,6 +10,7 @@ import {
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 import { ChannelType, MessageMetadata } from "@/lib/types/database";
+import { createCheckEmailTool, createSendEmailTool } from "@/lib/tools/email";
 
 export const maxDuration = 60;
 
@@ -1030,6 +1031,10 @@ export async function POST(request: Request) {
           }
         },
       }),
+
+      // Email tools (Zapier MCP integration)
+      checkEmail: createCheckEmailTool(agentId),
+      sendEmail: createSendEmailTool(agentId),
     };
 
     // Stream the response with tools

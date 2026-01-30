@@ -233,6 +233,13 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   sections.push(`- **Cancel/update jobs** (cancelScheduledJob, updateScheduledJob): Modify or cancel scheduled items.`);
   sections.push(`\nWhen the user asks about their schedule or upcoming reminders, use listScheduledJobs. When they say "remind me" or "follow up", create the appropriate scheduled job.`);
 
+  // Email capabilities
+  sections.push(`\n## Email Integration`);
+  sections.push(`You have access to email tools for managing communications:`);
+  sections.push(`- **Check emails** (checkEmail): Check the user's inbox for recent or unread emails. Use when they ask "do I have any emails?", "what's in my inbox?", or "any important messages?".`);
+  sections.push(`- **Send emails** (sendEmail): Send an email from your assistant email address. Use when they ask you to "email someone", "send a message to X", or "follow up with Y via email".`);
+  sections.push(`\nWhen sending emails, always confirm the recipient, subject, and key points of the message before sending unless the user has given explicit instructions. Be professional but personable in your email drafts.`);
+
   sections.push(`\nIMPORTANT: When the user asks about past conversations or if you remember something, USE the searchMemory tool to actually search. Don't say you can't remember - search your memory first!`);
 
   return sections.join("\n");
