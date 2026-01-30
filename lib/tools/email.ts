@@ -97,17 +97,22 @@ export function createCheckEmailTool(agentId: string) {
   return tool({
     description:
       "Check the user's email inbox for recent messages. Returns a summary of unread emails. Use this when the user asks about their emails, inbox, or wants to know if they have any messages.",
-    parameters: z.object({
+    inputSchema: z.object({
       count: z
         .number()
         .optional()
+        .default(10)
         .describe("Number of recent emails to retrieve (default: 10)"),
       unreadOnly: z
         .boolean()
         .optional()
+        .default(true)
         .describe("Only show unread emails (default: true)"),
     }),
-    execute: async ({ count = 10, unreadOnly = true }) => {
+    execute: async ({ count, unreadOnly }: { count?: number; unreadOnly?: boolean }) => {
+      const emailCount = count ?? 10;
+      const onlyUnread = unreadOnly ?? true;
+      
       // Get credentials from database
       const { credentials, isActive, error: credError } = await getEmailCredentials(agentId);
 
@@ -127,7 +132,7 @@ export function createCheckEmailTool(agentId: string) {
           agentId,
           "checkEmail",
           "check_inbox",
-          { count, unreadOnly },
+          { count: emailCount, unreadOnly: onlyUnread },
           result
         );
 
@@ -146,7 +151,7 @@ export function createCheckEmailTool(agentId: string) {
           agentId,
           "checkEmail",
           "check_inbox",
-          { count, unreadOnly },
+          { count: emailCount, unreadOnly: onlyUnread },
           result
         );
 
@@ -156,8 +161,8 @@ export function createCheckEmailTool(agentId: string) {
       try {
         // Call Zapier MCP endpoint
         const response = await callZapierMCP<ZapierEmailResponse>(credentials, "check_inbox", {
-          count,
-          unreadOnly,
+          count: emailCount,
+          unreadOnly: onlyUnread,
         });
 
         const result = {
@@ -175,7 +180,7 @@ export function createCheckEmailTool(agentId: string) {
           agentId,
           "checkEmail",
           "check_inbox",
-          { count, unreadOnly },
+          { count: emailCount, unreadOnly: onlyUnread },
           { success: result.success, emailCount: result.emailCount }
         );
 
@@ -196,7 +201,7 @@ export function createCheckEmailTool(agentId: string) {
           agentId,
           "checkEmail",
           "check_inbox_error",
-          { count, unreadOnly },
+          { count: emailCount, unreadOnly: onlyUnread },
           { success: false, error: errorMessage }
         );
 
@@ -213,15 +218,24 @@ export function createSendEmailTool(agentId: string) {
   return tool({
     description:
       "Send an email from YOUR (the AI assistant's) email account. This is NOT the user's email - it's your own email address. Use this when the user asks you to send an email, follow up with someone, or reach out to a contact on their behalf. IMPORTANT: Always set signature=true to include your email signature. Do NOT add a sign-off or your name at the end of the email body - the signature handles that automatically.",
-    parameters: z.object({
+    inputSchema: z.object({
       to: z.string().describe("Recipient email address"),
       subject: z.string().describe("Email subject line"),
       body: z.string().describe("Email body content (plain text or markdown). Do NOT include a sign-off or name at the end - the signature handles this."),
       cc: z.string().optional().describe("CC recipient email address (optional)"),
       bcc: z.string().optional().describe("BCC recipient email address (optional)"),
-      signature: z.boolean().default(true).describe("Include email signature (always set to true)"),
+      signature: z.boolean().optional().default(true).describe("Include email signature (always set to true)"),
     }),
-    execute: async ({ to, subject, body, cc, bcc, signature = true }) => {
+    execute: async ({ to, subject, body, cc, bcc, signature }: { 
+      to: string; 
+      subject: string; 
+      body: string; 
+      cc?: string; 
+      bcc?: string; 
+      signature?: boolean;
+    }) => {
+      const includeSignature = signature ?? true;
+      
       // Get credentials from database
       const { credentials, isActive, error: credError } = await getEmailCredentials(agentId);
 
@@ -283,7 +297,7 @@ export function createSendEmailTool(agentId: string) {
           body,
           cc,
           bcc,
-          signature,
+          signature: includeSignature,
         });
 
         const result = {
