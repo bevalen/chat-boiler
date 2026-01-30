@@ -227,6 +227,81 @@ export const updateTaskTool = tool({
   },
 });
 
+export const getTaskTool = tool({
+  description: "Get details of a specific task by ID",
+  inputSchema: z.object({
+    taskId: z.string().describe("The ID of the task to retrieve"),
+  }),
+  execute: async ({ taskId }, options) => {
+    const agentId = (options as { agentId?: string }).agentId;
+    if (!agentId) throw new Error("Agent ID is required");
+    const supabase = getAdminClient();
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .select(
+        "id, title, description, status, priority, due_date, project_id, created_at, completed_at"
+      )
+      .eq("id", taskId)
+      .eq("agent_id", agentId as string)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return { success: false, error: "Task not found" };
+    }
+
+    return {
+      success: true,
+      task: data,
+    };
+  },
+});
+
+export const deleteTaskTool = tool({
+  description: "Delete a task",
+  inputSchema: z.object({
+    taskId: z.string().describe("The ID of the task to delete"),
+  }),
+  execute: async ({ taskId }, options) => {
+    const agentId = (options as { agentId?: string }).agentId;
+    if (!agentId) throw new Error("Agent ID is required");
+    const supabase = getAdminClient();
+
+    // First verify the task belongs to this agent and get its title
+    const { data: task, error: fetchError } = await supabase
+      .from("tasks")
+      .select("id, title")
+      .eq("id", taskId)
+      .eq("agent_id", agentId as string)
+      .single();
+
+    if (fetchError || !task) {
+      return { success: false, error: "Task not found or access denied" };
+    }
+
+    // Delete the task
+    const { error: deleteError } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", taskId)
+      .eq("agent_id", agentId as string);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
+    }
+
+    return {
+      success: true,
+      message: `Task "${task.title}" has been deleted`,
+      deletedTaskId: taskId,
+    };
+  },
+});
+
 // Export types for UI components
 export type CreateTaskToolInvocation = UIToolInvocation<typeof createTaskTool>;
 export type ListTasksToolInvocation = UIToolInvocation<typeof listTasksTool>;
@@ -234,3 +309,5 @@ export type CompleteTaskToolInvocation = UIToolInvocation<
   typeof completeTaskTool
 >;
 export type UpdateTaskToolInvocation = UIToolInvocation<typeof updateTaskTool>;
+export type GetTaskToolInvocation = UIToolInvocation<typeof getTaskTool>;
+export type DeleteTaskToolInvocation = UIToolInvocation<typeof deleteTaskTool>;

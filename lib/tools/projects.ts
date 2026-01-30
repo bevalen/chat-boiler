@@ -164,6 +164,104 @@ export const updateProjectTool = tool({
   },
 });
 
+export const getProjectTool = tool({
+  description: "Get details of a specific project by ID",
+  inputSchema: z.object({
+    projectId: z.string().describe("The ID of the project to retrieve"),
+  }),
+  execute: async ({ projectId }, options) => {
+    const agentId = (options as { agentId?: string }).agentId;
+    if (!agentId) throw new Error("Agent ID is required");
+    const supabase = getAdminClient();
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select("id, title, description, status, priority, created_at, updated_at")
+      .eq("id", projectId)
+      .eq("agent_id", agentId as string)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return { success: false, error: "Project not found" };
+    }
+
+    return {
+      success: true,
+      project: data,
+    };
+  },
+});
+
+export const deleteProjectTool = tool({
+  description: "Delete a project and optionally its associated tasks",
+  inputSchema: z.object({
+    projectId: z.string().describe("The ID of the project to delete"),
+    deleteTasks: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Whether to also delete all tasks associated with this project"),
+  }),
+  execute: async ({ projectId, deleteTasks }, options) => {
+    const agentId = (options as { agentId?: string }).agentId;
+    if (!agentId) throw new Error("Agent ID is required");
+    const supabase = getAdminClient();
+
+    // First verify the project belongs to this agent
+    const { data: project, error: fetchError } = await supabase
+      .from("projects")
+      .select("id, title")
+      .eq("id", projectId)
+      .eq("agent_id", agentId as string)
+      .single();
+
+    if (fetchError || !project) {
+      return { success: false, error: "Project not found or access denied" };
+    }
+
+    // If deleteTasks is true, delete associated tasks first
+    if (deleteTasks) {
+      const { error: tasksError } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("agent_id", agentId as string);
+
+      if (tasksError) {
+        return { success: false, error: `Failed to delete tasks: ${tasksError.message}` };
+      }
+    } else {
+      // Unlink tasks from the project (set project_id to null)
+      await supabase
+        .from("tasks")
+        .update({ project_id: null })
+        .eq("project_id", projectId)
+        .eq("agent_id", agentId as string);
+    }
+
+    // Delete the project
+    const { error: deleteError } = await supabase
+      .from("projects")
+      .delete()
+      .eq("id", projectId)
+      .eq("agent_id", agentId as string);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
+    }
+
+    return {
+      success: true,
+      message: `Project "${project.title}" has been deleted${deleteTasks ? " along with its tasks" : ""}`,
+      deletedProjectId: projectId,
+    };
+  },
+});
+
 // Export types for UI components
 export type CreateProjectToolInvocation = UIToolInvocation<
   typeof createProjectTool
@@ -173,4 +271,8 @@ export type ListProjectsToolInvocation = UIToolInvocation<
 >;
 export type UpdateProjectToolInvocation = UIToolInvocation<
   typeof updateProjectTool
+>;
+export type GetProjectToolInvocation = UIToolInvocation<typeof getProjectTool>;
+export type DeleteProjectToolInvocation = UIToolInvocation<
+  typeof deleteProjectTool
 >;

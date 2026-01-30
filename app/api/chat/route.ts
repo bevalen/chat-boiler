@@ -212,6 +212,125 @@ export async function POST(request: Request) {
         },
       }),
 
+      getProject: tool({
+        description: "Get details of a specific project by ID",
+        inputSchema: z.object({
+          projectId: z.string().describe("The ID of the project to retrieve"),
+        }),
+        execute: async ({ projectId }: { projectId: string }) => {
+          const { data, error } = await adminSupabase
+            .from("projects")
+            .select("id, title, description, status, priority, created_at, updated_at")
+            .eq("id", projectId)
+            .eq("agent_id", agentId)
+            .single();
+
+          if (error) return { success: false, error: error.message };
+          if (!data) return { success: false, error: "Project not found" };
+          return { success: true, project: data };
+        },
+      }),
+
+      updateProject: tool({
+        description: "Update an existing project's title, description, status, or priority",
+        inputSchema: z.object({
+          projectId: z.string().describe("The ID of the project to update"),
+          title: z.string().optional().describe("New title for the project"),
+          description: z.string().optional().describe("New description"),
+          status: z.enum(["active", "paused", "completed"]).optional().describe("New status"),
+          priority: z.enum(["high", "medium", "low"]).optional().describe("New priority level"),
+        }),
+        execute: async ({ projectId, title, description, status, priority }: { projectId: string; title?: string; description?: string; status?: "active" | "paused" | "completed"; priority?: "high" | "medium" | "low" }) => {
+          const updates: Record<string, unknown> = {};
+          if (title) updates.title = title;
+          if (description !== undefined) updates.description = description;
+          if (status) updates.status = status;
+          if (priority) updates.priority = priority;
+
+          // If title or description changed, regenerate embedding
+          if (title || description !== undefined) {
+            const { data: current } = await adminSupabase
+              .from("projects")
+              .select("title, description")
+              .eq("id", projectId)
+              .single();
+
+            if (current) {
+              const newTitle = title || current.title;
+              const newDescription = description !== undefined ? description : current.description;
+              const textToEmbed = newDescription ? `${newTitle}\n\n${newDescription}` : newTitle;
+              try {
+                updates.embedding = await generateEmbedding(textToEmbed);
+              } catch (err) {
+                console.error("Error generating project embedding:", err);
+              }
+            }
+          }
+
+          const { data, error } = await adminSupabase
+            .from("projects")
+            .update(updates)
+            .eq("id", projectId)
+            .eq("agent_id", agentId)
+            .select()
+            .single();
+
+          if (error) return { success: false, error: error.message };
+          return { success: true, project: { id: data.id, title: data.title, status: data.status, priority: data.priority } };
+        },
+      }),
+
+      deleteProject: tool({
+        description: "Delete a project and optionally its associated tasks",
+        inputSchema: z.object({
+          projectId: z.string().describe("The ID of the project to delete"),
+          deleteTasks: z.boolean().optional().default(false).describe("Whether to also delete all tasks associated with this project"),
+        }),
+        execute: async ({ projectId, deleteTasks }: { projectId: string; deleteTasks?: boolean }) => {
+          // First verify the project belongs to this agent
+          const { data: project, error: fetchError } = await adminSupabase
+            .from("projects")
+            .select("id, title")
+            .eq("id", projectId)
+            .eq("agent_id", agentId)
+            .single();
+
+          if (fetchError || !project) {
+            return { success: false, error: "Project not found or access denied" };
+          }
+
+          // If deleteTasks is true, delete associated tasks first
+          if (deleteTasks) {
+            const { error: tasksError } = await adminSupabase
+              .from("tasks")
+              .delete()
+              .eq("project_id", projectId)
+              .eq("agent_id", agentId);
+
+            if (tasksError) {
+              return { success: false, error: `Failed to delete tasks: ${tasksError.message}` };
+            }
+          } else {
+            // Unlink tasks from the project (set project_id to null)
+            await adminSupabase
+              .from("tasks")
+              .update({ project_id: null })
+              .eq("project_id", projectId)
+              .eq("agent_id", agentId);
+          }
+
+          // Delete the project
+          const { error: deleteError } = await adminSupabase
+            .from("projects")
+            .delete()
+            .eq("id", projectId)
+            .eq("agent_id", agentId);
+
+          if (deleteError) return { success: false, error: deleteError.message };
+          return { success: true, message: `Project "${project.title}" has been deleted${deleteTasks ? " along with its tasks" : ""}`, deletedProjectId: projectId };
+        },
+      }),
+
       createTask: tool({
         description: "Create a new task",
         inputSchema: z.object({
@@ -266,6 +385,83 @@ export async function POST(request: Request) {
         },
       }),
 
+      getTask: tool({
+        description: "Get details of a specific task by ID",
+        inputSchema: z.object({
+          taskId: z.string().describe("The ID of the task to retrieve"),
+        }),
+        execute: async ({ taskId }: { taskId: string }) => {
+          const { data, error } = await adminSupabase
+            .from("tasks")
+            .select("id, title, description, status, priority, due_date, project_id, created_at, completed_at")
+            .eq("id", taskId)
+            .eq("agent_id", agentId)
+            .single();
+
+          if (error) return { success: false, error: error.message };
+          if (!data) return { success: false, error: "Task not found" };
+          return { success: true, task: data };
+        },
+      }),
+
+      updateTask: tool({
+        description: "Update an existing task's details or status",
+        inputSchema: z.object({
+          taskId: z.string().describe("The ID of the task to update"),
+          title: z.string().optional().describe("New title for the task"),
+          description: z.string().optional().describe("New description"),
+          status: z.enum(["pending", "in_progress", "completed"]).optional().describe("New status"),
+          priority: z.enum(["high", "medium", "low"]).optional().describe("New priority level"),
+          dueDate: z.string().optional().describe("New due date in ISO format"),
+          projectId: z.string().optional().describe("Project ID to link the task to"),
+        }),
+        execute: async ({ taskId, title, description, status, priority, dueDate, projectId }: { taskId: string; title?: string; description?: string; status?: "pending" | "in_progress" | "completed"; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string }) => {
+          const updates: Record<string, unknown> = {};
+          if (title) updates.title = title;
+          if (description !== undefined) updates.description = description;
+          if (status) {
+            updates.status = status;
+            if (status === "completed") {
+              updates.completed_at = new Date().toISOString();
+            }
+          }
+          if (priority) updates.priority = priority;
+          if (dueDate !== undefined) updates.due_date = dueDate || null;
+          if (projectId !== undefined) updates.project_id = projectId || null;
+
+          // If title or description changed, regenerate embedding
+          if (title || description !== undefined) {
+            const { data: current } = await adminSupabase
+              .from("tasks")
+              .select("title, description")
+              .eq("id", taskId)
+              .single();
+
+            if (current) {
+              const newTitle = title || current.title;
+              const newDescription = description !== undefined ? description : current.description;
+              const textToEmbed = newDescription ? `${newTitle}\n\n${newDescription}` : newTitle;
+              try {
+                updates.embedding = await generateEmbedding(textToEmbed);
+              } catch (err) {
+                console.error("Error generating task embedding:", err);
+              }
+            }
+          }
+
+          const { data, error } = await adminSupabase
+            .from("tasks")
+            .update(updates)
+            .eq("id", taskId)
+            .eq("agent_id", agentId)
+            .select()
+            .single();
+
+          if (error) return { success: false, error: error.message };
+          return { success: true, task: { id: data.id, title: data.title, status: data.status, priority: data.priority } };
+        },
+      }),
+
       completeTask: tool({
         description: "Mark a task as completed",
         inputSchema: z.object({
@@ -282,6 +478,36 @@ export async function POST(request: Request) {
 
           if (error) return { success: false, error: error.message };
           return { success: true, task: { id: data.id, title: data.title, status: "completed" } };
+        },
+      }),
+
+      deleteTask: tool({
+        description: "Delete a task",
+        inputSchema: z.object({
+          taskId: z.string().describe("The ID of the task to delete"),
+        }),
+        execute: async ({ taskId }: { taskId: string }) => {
+          // First verify the task belongs to this agent and get its title
+          const { data: task, error: fetchError } = await adminSupabase
+            .from("tasks")
+            .select("id, title")
+            .eq("id", taskId)
+            .eq("agent_id", agentId)
+            .single();
+
+          if (fetchError || !task) {
+            return { success: false, error: "Task not found or access denied" };
+          }
+
+          // Delete the task
+          const { error: deleteError } = await adminSupabase
+            .from("tasks")
+            .delete()
+            .eq("id", taskId)
+            .eq("agent_id", agentId);
+
+          if (deleteError) return { success: false, error: deleteError.message };
+          return { success: true, message: `Task "${task.title}" has been deleted`, deletedTaskId: taskId };
         },
       }),
     };

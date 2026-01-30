@@ -44,8 +44,16 @@ interface ChatInterfaceProps {
   user?: UserInfo;
 }
 
+const STORAGE_KEY = "maia_active_conversation_id";
+
 export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  // Initialize from localStorage if available
+  const [conversationId, setConversationId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(STORAGE_KEY);
+    }
+    return null;
+  });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
@@ -121,6 +129,8 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
     setConversationId(null);
     setMessages([]);
     setShowSidebar(false);
+    // Clear localStorage when explicitly starting a new conversation
+    localStorage.removeItem(STORAGE_KEY);
   }, [setMessages]);
 
   // Generate title for conversation
@@ -177,10 +187,11 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
           method: "DELETE",
         });
 
-        // If we deleted the current conversation, clear the chat
+        // If we deleted the current conversation, clear the chat and localStorage
         if (conversationId === convId) {
           setConversationId(null);
           setMessages([]);
+          localStorage.removeItem(STORAGE_KEY);
         }
 
         loadConversations();
@@ -199,10 +210,39 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
     setDeleteDialogOpen(true);
   };
 
-  // Initial load
+  // Initial load - load conversations list and restore active conversation
   useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+    const init = async () => {
+      await loadConversations();
+      
+      // After loading conversations list, restore the saved conversation if any
+      const savedId = localStorage.getItem(STORAGE_KEY);
+      if (savedId) {
+        // Verify the conversation still exists before loading
+        try {
+          const res = await fetch(`/api/conversations/${savedId}/messages`);
+          if (res.ok) {
+            loadConversation(savedId);
+          } else {
+            // Conversation no longer exists, clear the saved ID
+            localStorage.removeItem(STORAGE_KEY);
+            setConversationId(null);
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_KEY);
+          setConversationId(null);
+        }
+      }
+    };
+    init();
+  }, [loadConversations, loadConversation]);
+
+  // Persist conversationId to localStorage when it changes
+  useEffect(() => {
+    if (conversationId) {
+      localStorage.setItem(STORAGE_KEY, conversationId);
+    }
+  }, [conversationId]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
