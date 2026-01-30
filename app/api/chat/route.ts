@@ -10,7 +10,7 @@ import {
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 import { ChannelType, MessageMetadata } from "@/lib/types/database";
-import { createCheckEmailTool, createSendEmailTool } from "@/lib/tools/email";
+import { createCheckEmailTool, createSendEmailTool, createForwardEmailToUserTool } from "@/lib/tools/email";
 import { createResearchTool } from "@/lib/tools/research";
 
 export const maxDuration = 60;
@@ -33,6 +33,9 @@ export async function POST(request: Request) {
         slack_channel_id?: string;
         slack_thread_ts?: string;
         slack_user_id?: string;
+        email_from?: string;
+        email_subject?: string;
+        email_message_id?: string;
       };
       userId?: string;
     } = await request.json();
@@ -66,10 +69,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get user profile for context (including notification preferences)
+    // Get user profile for context (including notification preferences and email)
     const { data: profile } = await supabase
       .from("users")
-      .select("name, timezone, preferred_notification_channel")
+      .select("name, email, timezone, preferred_notification_channel")
       .eq("id", user.id)
       .single();
 
@@ -110,6 +113,7 @@ export async function POST(request: Request) {
     const systemPrompt = buildSystemPrompt(agent, {
       name: profile?.name || "User",
       timezone: profile?.timezone || undefined,
+      email: profile?.email || undefined,
     });
 
     console.log("[chat/route] Using agent:", agent.name);
@@ -123,6 +127,9 @@ export async function POST(request: Request) {
             slack_channel_id: channelMetadata?.slack_channel_id,
             slack_thread_ts: channelMetadata?.slack_thread_ts,
             slack_user_id: channelMetadata?.slack_user_id,
+            email_from: channelMetadata?.email_from,
+            email_subject: channelMetadata?.email_subject,
+            email_message_id: channelMetadata?.email_message_id,
           }
         : undefined;
 
@@ -1036,6 +1043,11 @@ export async function POST(request: Request) {
       // Email tools (Zapier MCP integration)
       checkEmail: createCheckEmailTool(agentId),
       sendEmail: createSendEmailTool(agentId),
+      // Forward email to user tool - available when handling incoming emails
+      // so the agent can escalate to the user when uncertain
+      ...(channelSource === "email" && profile?.email
+        ? { forwardEmailToUser: createForwardEmailToUserTool(agentId, profile.email) }
+        : {}),
 
       // Research tool (Perplexity Sonar API)
       research: createResearchTool(agentId),
@@ -1052,6 +1064,7 @@ export async function POST(request: Request) {
       onStepFinish: ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
           toolCalls.forEach((tc, i) => {
+            if (!tc) return;
             console.log(`[chat/route] 🔧 Tool "${tc.toolName}" called`);
             const toolResult = toolResults?.[i];
             if (toolResult) {

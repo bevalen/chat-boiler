@@ -88,7 +88,7 @@ export interface ActionPayload {
 
 // Message metadata with channel source tracking
 export interface MessageMetadata extends Record<string, unknown> {
-  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "slack_message";
+  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "slack_message" | "incoming_email";
   job_id?: string;
   job_type?: string;
   instruction?: string;
@@ -97,6 +97,9 @@ export interface MessageMetadata extends Record<string, unknown> {
   slack_channel_id?: string;
   slack_thread_ts?: string;
   slack_user_id?: string;
+  email_from?: string;
+  email_subject?: string;
+  email_message_id?: string;
 }
 
 export interface Database {

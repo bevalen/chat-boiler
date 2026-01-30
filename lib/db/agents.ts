@@ -127,7 +127,7 @@ export async function updateAgent(
 /**
  * Build a system prompt from agent configuration
  */
-export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?: string }): string {
+export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?: string; email?: string }): string {
   const personality = agent.personality || {};
   const preferences = agent.userPreferences || {};
   const identity = agent.identityContext || {};
@@ -172,6 +172,9 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
     const tz = user?.timezone || identity.owner?.timezone;
     if (tz) {
       sections.push(`Their timezone is ${tz}.`);
+    }
+    if (user?.email) {
+      sections.push(`Their email address is: ${user.email}`);
     }
   }
 

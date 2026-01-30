@@ -334,6 +334,37 @@ export async function getRelevantContext(
 }
 
 /**
+ * Gather relevant context for an incoming email
+ * Searches projects, past conversations, and memories to find related content
+ */
+export async function gatherContextForEmail(
+  supabase: SupabaseClient,
+  agentId: string,
+  emailContent: string,
+  options: { matchCount?: number; matchThreshold?: number } = {}
+): Promise<string> {
+  const { matchCount = 15, matchThreshold = 0.6 } = options;
+
+  try {
+    // Search for related content across all sources
+    const results = await semanticSearchAll(supabase, emailContent, agentId, {
+      matchCount,
+      matchThreshold,
+    });
+
+    if (results.length === 0) {
+      return "";
+    }
+
+    // Format the results for the AI
+    return formatContextForAI(results);
+  } catch (error) {
+    console.error("[search] Error gathering context for email:", error);
+    return "";
+  }
+}
+
+/**
  * Format semantic search results for inclusion in AI context
  */
 export function formatContextForAI(results: UnifiedSearchResult[]): string {
