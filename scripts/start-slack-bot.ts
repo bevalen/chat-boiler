@@ -217,23 +217,41 @@ async function sendToMaia(
       if (done) break;
       
       const chunk = decoder.decode(value);
-      // The AI SDK streams in a specific format, parse it
-      // Each line is prefixed with data type
+      // Debug: log raw chunk to understand stream format
+      if (fullResponse.length === 0) {
+        console.log("[slack-bot] First chunk sample:", chunk.substring(0, 200));
+      }
+      // AI SDK v6 uses SSE format with data: prefix and JSON objects
+      // Format: data: {"type":"text-delta","delta":"Hello"}\n\n
       const lines = chunk.split("\n");
       for (const line of lines) {
-        if (line.startsWith("0:")) {
-          // Text content - remove the prefix and parse JSON string
+        // Handle SSE data: prefix format (AI SDK v6)
+        if (line.startsWith("data: ")) {
+          try {
+            const jsonStr = line.slice(6); // Remove "data: " prefix
+            if (jsonStr.trim()) {
+              const data = JSON.parse(jsonStr);
+              if (data.type === "text-delta" && data.delta) {
+                fullResponse += data.delta;
+              }
+            }
+          } catch {
+            // Ignore parse errors for non-JSON lines
+          }
+        }
+        // Also handle older format with 0: prefix (AI SDK v5 and earlier)
+        else if (line.startsWith("0:")) {
           try {
             const textContent = JSON.parse(line.slice(2));
             fullResponse += textContent;
           } catch {
-            // Not valid JSON, might be raw text
             fullResponse += line.slice(2);
           }
         }
       }
     }
 
+    console.log("[slack-bot] Parsed response length:", fullResponse.length);
     return fullResponse || "I processed your message but have nothing to say right now.";
   } catch (error) {
     console.error("[slack-bot] Error calling chat API:", error);
