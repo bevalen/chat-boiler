@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       conversationId,
       channelSource,
       channelMetadata,
+      userId: externalUserId, // For internal API calls (e.g., Slack bot)
     }: {
       messages: UIMessage[];
       conversationId?: string;
@@ -31,15 +32,29 @@ export async function POST(request: Request) {
         slack_thread_ts?: string;
         slack_user_id?: string;
       };
+      userId?: string;
     } = await request.json();
     console.log("[chat/route] Messages received:", messages.length);
     console.log("[chat/route] Channel source:", channelSource || "app");
 
-    // Get the authenticated user
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // Check for internal API authentication (service role key)
+    const authHeader = request.headers.get("Authorization");
+    const isInternalCall = authHeader === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+    
+    let user: { id: string } | null = null;
+    let supabase;
+    
+    if (isInternalCall && externalUserId) {
+      // Internal API call with service role key - use admin client
+      console.log("[chat/route] Internal API call for user:", externalUserId);
+      supabase = getAdminClient();
+      user = { id: externalUserId };
+    } else {
+      // Regular browser-based authentication
+      supabase = await createClient();
+      const { data } = await supabase.auth.getUser();
+      user = data.user;
+    }
 
     if (!user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {

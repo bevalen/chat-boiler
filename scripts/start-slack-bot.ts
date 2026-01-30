@@ -15,8 +15,12 @@
  * NO SLACK TOKENS NEEDED IN ENV - They are pulled from Supabase!
  */
 
-import "dotenv/config";
+import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+
+// Load environment variables from .env.local (like Next.js does)
+config({ path: ".env.local" });
+config({ path: ".env" }); // Fallback to .env if .env.local doesn't exist
 import { App, LogLevel } from "@slack/bolt";
 import { SlackMessageContext } from "../lib/slack/types";
 import { markdownToSlackMrkdwn } from "../lib/slack/client";
@@ -183,6 +187,7 @@ async function sendToMaia(
       body: JSON.stringify({
         messages,
         conversationId,
+        userId, // Required for internal API authentication
         channelSource: "slack",
         channelMetadata: {
           slack_channel_id: slackContext.channelId,
