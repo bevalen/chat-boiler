@@ -7,10 +7,12 @@
  * Run with: npx tsx scripts/start-slack-bot.ts
  * 
  * Prerequisites:
- * - Set SLACK_BOT_TOKEN (xoxb-...) in .env.local
- * - Set SLACK_APP_TOKEN (xapp-...) in .env.local
+ * - Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local
+ * - Configure Slack credentials in MAIA Settings (stored in Supabase)
  * - Have Socket Mode enabled in your Slack app settings
  * - Have Event Subscriptions enabled with message.im and app_mention scopes
+ * 
+ * NO SLACK TOKENS NEEDED IN ENV - They are pulled from Supabase!
  */
 
 import "dotenv/config";
@@ -18,13 +20,12 @@ import { createClient } from "@supabase/supabase-js";
 import { App, LogLevel } from "@slack/bolt";
 import { SlackMessageContext } from "../lib/slack/types";
 import { markdownToSlackMrkdwn } from "../lib/slack/client";
+import { SlackCredentials } from "../lib/types/database";
 
-// Validate environment variables
+// Validate environment variables (only Supabase, NOT Slack tokens)
 const requiredEnvVars = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "SLACK_BOT_TOKEN",
-  "SLACK_APP_TOKEN",
 ];
 
 const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
@@ -36,20 +37,34 @@ if (missingVars.length > 0) {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const slackBotToken = process.env.SLACK_BOT_TOKEN!;
-const slackAppToken = process.env.SLACK_APP_TOKEN!;
 const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 // Create Supabase client with service role
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Create Slack Bolt app
-const app = new App({
-  token: slackBotToken,
-  socketMode: true,
-  appToken: slackAppToken,
-  logLevel: process.env.NODE_ENV === "development" ? LogLevel.DEBUG : LogLevel.INFO,
-});
+// Store active Slack app instances per user
+const activeApps: Map<string, { app: App; userId: string; credentials: SlackCredentials }> = new Map();
+
+/**
+ * Fetch all active Slack credentials from Supabase
+ */
+async function fetchActiveSlackCredentials(): Promise<Array<{ userId: string; credentials: SlackCredentials }>> {
+  const { data, error } = await supabase
+    .from("user_channel_credentials")
+    .select("user_id, credentials")
+    .eq("channel_type", "slack")
+    .eq("is_active", true);
+
+  if (error) {
+    console.error("[slack-bot] Error fetching Slack credentials:", error);
+    return [];
+  }
+
+  return (data || []).map((row) => ({
+    userId: row.user_id,
+    credentials: row.credentials as SlackCredentials,
+  }));
+}
 
 /**
  * Look up MAIA user and agent from Slack user ID
@@ -254,104 +269,199 @@ async function handleMessage(context: SlackMessageContext, respond: (text: strin
   await respond(response);
 }
 
-// Set up message handlers
-app.message(async ({ message, say, client }) => {
-  // Type guard for message with text
-  if (!("text" in message) || !message.text) {
-    return;
-  }
-
-  // Skip bot messages to avoid loops
-  if ("bot_id" in message && message.bot_id) {
-    return;
-  }
-
-  // Only handle DMs
-  const channelType = message.channel_type;
-  if (channelType !== "im") {
-    // For channel messages, check if the bot was mentioned
-    const authResult = await client.auth.test();
-    const botUserId = authResult.user_id;
-
-    if (!botUserId || !message.text.includes(`<@${botUserId}>`)) {
-      return; // Ignore channel messages where bot isn't mentioned
+/**
+ * Set up message handlers for a Slack app instance
+ */
+function setupSlackAppHandlers(app: App, userId: string) {
+  // Handle direct messages
+  app.message(async ({ message, say, client }) => {
+    // Type guard for message with text
+    if (!("text" in message) || !message.text) {
+      return;
     }
-  }
 
-  const context: SlackMessageContext = {
-    userId: "user" in message ? message.user || "" : "",
-    channelId: message.channel,
-    teamId: "team" in message ? (message.team as string) || "" : "",
-    text: message.text,
-    threadTs: "thread_ts" in message ? message.thread_ts : undefined,
-    messageTs: message.ts,
-    isDirectMessage: channelType === "im",
-    isMention: message.text.includes("<@"),
-  };
+    // Skip bot messages to avoid loops
+    if ("bot_id" in message && message.bot_id) {
+      return;
+    }
 
-  const respond = async (text: string) => {
-    const slackText = markdownToSlackMrkdwn(text);
-    await say({
-      text: slackText,
-      thread_ts: context.threadTs || context.messageTs,
-    });
-  };
+    // Only handle DMs
+    const channelType = message.channel_type;
+    if (channelType !== "im") {
+      // For channel messages, check if the bot was mentioned
+      const authResult = await client.auth.test();
+      const botUserId = authResult.user_id;
 
-  await handleMessage(context, respond);
-});
+      if (!botUserId || !message.text.includes(`<@${botUserId}>`)) {
+        return; // Ignore channel messages where bot isn't mentioned
+      }
+    }
 
-// Handle app mentions
-app.event("app_mention", async ({ event, say }) => {
-  const text = event.text.replace(/<@[A-Z0-9]+>/g, "").trim();
+    const context: SlackMessageContext = {
+      userId: "user" in message ? message.user || "" : "",
+      channelId: message.channel,
+      teamId: "team" in message ? (message.team as string) || "" : "",
+      text: message.text,
+      threadTs: "thread_ts" in message ? message.thread_ts : undefined,
+      messageTs: message.ts,
+      isDirectMessage: channelType === "im",
+      isMention: message.text.includes("<@"),
+    };
 
-  const context: SlackMessageContext = {
-    userId: event.user || "",
-    channelId: event.channel,
-    teamId: event.team || "",
-    text,
-    threadTs: event.thread_ts,
-    messageTs: event.ts,
-    isDirectMessage: false,
-    isMention: true,
-  };
+    const respond = async (text: string) => {
+      const slackText = markdownToSlackMrkdwn(text);
+      await say({
+        text: slackText,
+        thread_ts: context.threadTs || context.messageTs,
+      });
+    };
 
-  const respond = async (responseText: string) => {
-    const slackText = markdownToSlackMrkdwn(responseText);
-    await say({
-      text: slackText,
-      thread_ts: context.threadTs || context.messageTs,
-    });
-  };
+    await handleMessage(context, respond);
+  });
 
-  await handleMessage(context, respond);
-});
+  // Handle app mentions
+  app.event("app_mention", async ({ event, say }) => {
+    const text = event.text.replace(/<@[A-Z0-9]+>/g, "").trim();
 
-// Start the bot
-async function main() {
-  console.log("[slack-bot] Starting MAIA Slack bot...");
-  console.log(`[slack-bot] App base URL: ${appBaseUrl}`);
+    const context: SlackMessageContext = {
+      userId: event.user || "",
+      channelId: event.channel,
+      teamId: event.team || "",
+      text,
+      threadTs: event.thread_ts,
+      messageTs: event.ts,
+      isDirectMessage: false,
+      isMention: true,
+    };
 
+    const respond = async (responseText: string) => {
+      const slackText = markdownToSlackMrkdwn(responseText);
+      await say({
+        text: slackText,
+        thread_ts: context.threadTs || context.messageTs,
+      });
+    };
+
+    await handleMessage(context, respond);
+  });
+
+  console.log(`[slack-bot] Handlers registered for user ${userId}`);
+}
+
+/**
+ * Create and start a Slack app for a user's credentials
+ */
+async function startSlackAppForUser(userId: string, credentials: SlackCredentials): Promise<App | null> {
   try {
+    if (!credentials.bot_token || !credentials.app_token) {
+      console.error(`[slack-bot] Missing tokens for user ${userId}`);
+      return null;
+    }
+
+    const app = new App({
+      token: credentials.bot_token,
+      socketMode: true,
+      appToken: credentials.app_token,
+      logLevel: process.env.NODE_ENV === "development" ? LogLevel.DEBUG : LogLevel.INFO,
+    });
+
+    // Set up handlers
+    setupSlackAppHandlers(app, userId);
+
+    // Start the app
     await app.start();
-    console.log("[slack-bot] ⚡️ MAIA Slack bot is running!");
-    console.log("[slack-bot] Listening for messages...");
+
+    console.log(`[slack-bot] ⚡️ Started Slack bot for user ${userId}`);
+    return app;
   } catch (error) {
-    console.error("[slack-bot] Failed to start:", error);
-    process.exit(1);
+    console.error(`[slack-bot] Failed to start Slack bot for user ${userId}:`, error);
+    return null;
   }
 }
 
-// Handle shutdown gracefully
-process.on("SIGINT", async () => {
-  console.log("\n[slack-bot] Shutting down...");
-  await app.stop();
-  process.exit(0);
-});
+/**
+ * Stop a Slack app for a user
+ */
+async function stopSlackAppForUser(userId: string) {
+  const entry = activeApps.get(userId);
+  if (entry) {
+    try {
+      await entry.app.stop();
+      activeApps.delete(userId);
+      console.log(`[slack-bot] Stopped Slack bot for user ${userId}`);
+    } catch (error) {
+      console.error(`[slack-bot] Error stopping Slack bot for user ${userId}:`, error);
+    }
+  }
+}
 
-process.on("SIGTERM", async () => {
-  console.log("\n[slack-bot] Shutting down...");
-  await app.stop();
+/**
+ * Sync active Slack apps with database credentials
+ * This allows for dynamic updates when users add/remove Slack credentials
+ */
+async function syncSlackApps() {
+  console.log("[slack-bot] Syncing Slack apps with database...");
+
+  const dbCredentials = await fetchActiveSlackCredentials();
+  const dbUserIds = new Set(dbCredentials.map((c) => c.userId));
+  const activeUserIds = new Set(activeApps.keys());
+
+  // Start apps for new users
+  for (const { userId, credentials } of dbCredentials) {
+    if (!activeApps.has(userId)) {
+      const app = await startSlackAppForUser(userId, credentials);
+      if (app) {
+        activeApps.set(userId, { app, userId, credentials });
+      }
+    }
+  }
+
+  // Stop apps for users who removed credentials
+  for (const userId of activeUserIds) {
+    if (!dbUserIds.has(userId)) {
+      await stopSlackAppForUser(userId);
+    }
+  }
+
+  console.log(`[slack-bot] Active Slack bots: ${activeApps.size}`);
+}
+
+// Start the bot manager
+async function main() {
+  console.log("[slack-bot] Starting MAIA Slack bot manager...");
+  console.log(`[slack-bot] App base URL: ${appBaseUrl}`);
+  console.log("[slack-bot] Credentials are loaded from Supabase (no env vars needed for Slack tokens)");
+
+  // Initial sync
+  await syncSlackApps();
+
+  if (activeApps.size === 0) {
+    console.log("[slack-bot] No active Slack credentials found in database.");
+    console.log("[slack-bot] Configure Slack in MAIA Settings, then restart this bot.");
+    console.log("[slack-bot] Waiting for credentials... (checking every 30 seconds)");
+  }
+
+  // Periodically check for new/removed credentials
+  setInterval(async () => {
+    await syncSlackApps();
+  }, 30000); // Check every 30 seconds
+
+  console.log("[slack-bot] ⚡️ MAIA Slack bot manager is running!");
+  console.log("[slack-bot] Listening for messages...");
+}
+
+// Handle shutdown gracefully
+async function shutdown() {
+  console.log("\n[slack-bot] Shutting down all Slack bots...");
+  
+  const stopPromises = Array.from(activeApps.keys()).map((userId) => stopSlackAppForUser(userId));
+  await Promise.all(stopPromises);
+  
+  console.log("[slack-bot] All bots stopped. Goodbye!");
   process.exit(0);
-});
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 main();
