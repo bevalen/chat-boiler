@@ -371,8 +371,8 @@ export function createSendEmailTool(agentId: string) {
         // that tells Gmail to use the account's built-in signature
         const args: Record<string, string | boolean> = {
           instructions: instruction,
-          // Use Gmail's built-in signature feature
-          Signature: includeSignature ? "true" : "false",
+          // Use Gmail's built-in signature feature (must be boolean, not string)
+          Signature: includeSignature,
         };
 
         // Call Zapier MCP using proper MCP protocol
