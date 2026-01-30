@@ -2,7 +2,7 @@
 # Forces Node 20 and uses npm install instead of npm ci
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = ["npm install --legacy-peer-deps"]
