@@ -330,16 +330,34 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
 
           // Only add if not already in messages (avoid duplicates from local sends)
           setMessages((prev) => {
-            const exists = prev.some((m) => m.id === newMessage.id);
-            if (exists) return prev;
+            // Check by ID first
+            const existsById = prev.some((m) => m.id === newMessage.id);
+            if (existsById) return prev;
+
+            // For user messages, check by content to avoid duplicates
+            // User messages are already added by useChat, so we should skip them
+            // unless they came from an external source (like Slack)
+            if (newMessage.role === "user") {
+              const isExternalMessage = newMessage.metadata?.channel_source && 
+                newMessage.metadata.channel_source !== "app";
+              
+              if (!isExternalMessage) {
+                // This is a local user message - already handled by useChat
+                // Check if we have a message with the same content recently
+                const recentUserMessages = prev.filter((m) => m.role === "user").slice(-3);
+                const isDuplicate = recentUserMessages.some(
+                  (m) => m.parts.some((p) => p.type === "text" && (p as { text: string }).text === newMessage.content)
+                );
+                if (isDuplicate) return prev;
+              }
+            }
 
             // Check if this is a scheduled notification (from cron)
             const isScheduledMessage = newMessage.metadata?.type === "scheduled_notification" ||
               newMessage.metadata?.type === "daily_brief" ||
               newMessage.metadata?.type === "scheduled_agent_task";
 
-            // Only add messages that came from external sources (scheduled jobs)
-            // Regular chat messages are already handled by useChat
+            // For assistant messages, check for duplicates from streaming response
             if (!isScheduledMessage && newMessage.role === "assistant") {
               // This might be a duplicate from the streaming response
               // Check if we recently added a similar message
