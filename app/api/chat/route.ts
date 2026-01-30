@@ -39,7 +39,14 @@ export async function POST(request: Request) {
 
     // Check for internal API authentication (service role key)
     const authHeader = request.headers.get("Authorization");
-    const isInternalCall = authHeader === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+    const expectedAuth = `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+    const isInternalCall = authHeader === expectedAuth;
+    
+    console.log("[chat/route] Auth header present:", !!authHeader);
+    console.log("[chat/route] Auth header starts with Bearer:", authHeader?.startsWith("Bearer "));
+    console.log("[chat/route] Service role key set:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    console.log("[chat/route] Is internal call:", isInternalCall);
+    console.log("[chat/route] External userId provided:", !!externalUserId);
     
     let user: { id: string } | null = null;
     let supabase;
@@ -51,9 +58,11 @@ export async function POST(request: Request) {
       user = { id: externalUserId };
     } else {
       // Regular browser-based authentication
+      console.log("[chat/route] Attempting browser-based authentication");
       supabase = await createClient();
       const { data } = await supabase.auth.getUser();
       user = data.user;
+      console.log("[chat/route] Browser auth user:", user?.id || "none");
     }
 
     if (!user) {
