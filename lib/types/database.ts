@@ -707,6 +707,56 @@ export interface Database {
           updated_at?: string | null;
         };
       };
+      activity_log: {
+        Row: {
+          id: string;
+          agent_id: string;
+          activity_type: "tool_call" | "cron_execution" | "email_sent" | "email_received" | "research" | "memory_saved" | "task_created" | "task_updated" | "project_created" | "project_updated" | "reminder_created" | "job_scheduled" | "notification_sent" | "slack_message" | "webhook_triggered" | "error" | "system";
+          source: "chat" | "cron" | "webhook" | "slack" | "email" | "system";
+          title: string;
+          description: string | null;
+          metadata: Json;
+          conversation_id: string | null;
+          task_id: string | null;
+          project_id: string | null;
+          job_id: string | null;
+          status: "started" | "completed" | "failed";
+          duration_ms: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          activity_type: "tool_call" | "cron_execution" | "email_sent" | "email_received" | "research" | "memory_saved" | "task_created" | "task_updated" | "project_created" | "project_updated" | "reminder_created" | "job_scheduled" | "notification_sent" | "slack_message" | "webhook_triggered" | "error" | "system";
+          source: "chat" | "cron" | "webhook" | "slack" | "email" | "system";
+          title: string;
+          description?: string | null;
+          metadata?: Json;
+          conversation_id?: string | null;
+          task_id?: string | null;
+          project_id?: string | null;
+          job_id?: string | null;
+          status?: "started" | "completed" | "failed";
+          duration_ms?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          activity_type?: "tool_call" | "cron_execution" | "email_sent" | "email_received" | "research" | "memory_saved" | "task_created" | "task_updated" | "project_created" | "project_updated" | "reminder_created" | "job_scheduled" | "notification_sent" | "slack_message" | "webhook_triggered" | "error" | "system";
+          source?: "chat" | "cron" | "webhook" | "slack" | "email" | "system";
+          title?: string;
+          description?: string | null;
+          metadata?: Json;
+          conversation_id?: string | null;
+          task_id?: string | null;
+          project_id?: string | null;
+          job_id?: string | null;
+          status?: "started" | "completed" | "failed";
+          duration_ms?: number | null;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

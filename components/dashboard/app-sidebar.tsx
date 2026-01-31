@@ -16,6 +16,7 @@ import {
   MessageSquarePlus,
   Lightbulb,
   Bug,
+  Activity,
 } from "lucide-react";
 import {
   Sidebar,
@@ -70,6 +71,11 @@ const navItems = [
     title: "Reminders",
     url: "/reminders",
     icon: Bell,
+  },
+  {
+    title: "Activity",
+    url: "/activity",
+    icon: Activity,
   },
 ];
 

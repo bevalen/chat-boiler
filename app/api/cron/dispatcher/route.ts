@@ -7,6 +7,7 @@ import {
   updateJobExecution,
 } from "@/lib/db/scheduled-jobs";
 import { createNotification } from "@/lib/db/notifications";
+import { logCronExecution, logActivity } from "@/lib/db/activity-log";
 import { getSlackCredentials } from "@/lib/db/channel-credentials";
 import { createSlackClient, sendSlackDirectMessage, sendSlackMessage } from "@/lib/slack";
 import { Database, ActionPayload, ChannelType } from "@/lib/types/database";
@@ -62,8 +63,24 @@ export async function POST(request: Request) {
 
     // Process each job
     for (const job of jobs) {
+      const jobStartTime = Date.now();
       try {
         console.log(`[dispatcher] Processing job: ${job.title} (${job.id})`);
+
+        // Log job start to activity log
+        logActivity(supabase, {
+          agentId: job.agent_id,
+          activityType: "cron_execution",
+          source: "cron",
+          title: `Starting: ${job.title}`,
+          description: `Executing ${job.job_type} (${job.action_type})`,
+          metadata: {
+            jobType: job.job_type,
+            actionType: job.action_type,
+          },
+          jobId: job.id,
+          status: "started",
+        }).catch((err) => console.error("[dispatcher] Failed to log job start:", err));
 
         // Create execution record
         const { execution } = await createJobExecution(
@@ -105,6 +122,21 @@ export async function POST(request: Request) {
         if (result.success) {
           await markJobExecuted(supabase, job.id, job);
         }
+
+        // Log to activity log with duration
+        const jobDurationMs = Date.now() - jobStartTime;
+        const resultData = result.data as Record<string, unknown> | undefined;
+        logCronExecution(supabase, {
+          agentId: job.agent_id,
+          jobId: job.id,
+          jobTitle: job.title,
+          jobType: job.job_type,
+          success: result.success,
+          result: resultData,
+          error: result.error,
+          durationMs: jobDurationMs,
+          conversationId: resultData?.conversationId as string | undefined,
+        }).catch((err) => console.error("[dispatcher] Failed to log activity:", err));
 
         results.push({
           jobId: job.id,

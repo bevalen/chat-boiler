@@ -20,6 +20,7 @@ import {
 } from "@/lib/tools/email";
 import { createResearchTool } from "@/lib/tools/research";
 import { createFeedback, searchFeedback, updateFeedback, deleteFeedback, createAutomaticBugReport } from "@/lib/db/feedback";
+import { logActivity, ActivityType, ActivitySource } from "@/lib/db/activity-log";
 
 export const maxDuration = 60;
 
@@ -1377,25 +1378,70 @@ export async function POST(request: Request) {
       stopWhen: stepCountIs(5), // Allow multiple tool calls in sequence
       onStepFinish: async ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
+          // Determine the activity source based on channel
+          // Note: channelSource may be "cron" from dispatcher even though it's not in ChannelType
+          const activitySource: ActivitySource = 
+            channelSource === "slack" ? "slack" :
+            channelSource === "email" ? "email" :
+            (channelSource as string) === "cron" ? "cron" :
+            "chat";
+
           for (let i = 0; i < toolCalls.length; i++) {
             const tc = toolCalls[i];
             if (!tc) continue;
             console.log(`[chat/route] 🔧 Tool "${tc.toolName}" called`);
             const toolResult = toolResults?.[i];
+            const toolInput = (tc as { input?: unknown }).input as Record<string, unknown> | undefined;
+
             if (toolResult) {
               // Check if the tool result indicates an error
-              // Access 'output' property which contains the tool's return value
               const output = (toolResult as { output?: unknown }).output as Record<string, unknown> | undefined;
-              if (output && output.success === false && output.error) {
-                console.log(`[chat/route] ⚠️ Tool "${tc.toolName}" failed:`, output.error);
+              const isError = output && output.success === false && output.error;
+              
+              // Map tool names to activity types
+              const getActivityType = (toolName: string): ActivityType => {
+                if (toolName === "sendEmail" || toolName === "replyToEmail" || toolName === "forwardEmailToUser") return "email_sent";
+                if (toolName === "checkEmail") return "email_received";
+                if (toolName === "research") return "research";
+                if (toolName === "saveToMemory") return "memory_saved";
+                if (toolName === "createTask") return "task_created";
+                if (toolName === "updateTask" || toolName === "completeTask") return "task_updated";
+                if (toolName === "createProject") return "project_created";
+                if (toolName === "updateProject") return "project_updated";
+                if (toolName === "scheduleReminder") return "reminder_created";
+                if (toolName === "scheduleAgentTask") return "job_scheduled";
+                if (isError) return "error";
+                return "tool_call";
+              };
+
+              // Log to activity log (fire and forget)
+              console.log(`[chat/route] 📝 Logging activity for tool "${tc.toolName}" (source: ${activitySource})`);
+              logActivity(adminSupabase, {
+                agentId,
+                activityType: getActivityType(tc.toolName),
+                source: activitySource,
+                title: `Tool: ${tc.toolName}`,
+                description: isError ? String(output?.error) : (output?.message as string) || "Completed",
+                metadata: {
+                  tool: tc.toolName,
+                  params: toolInput,
+                  result: output,
+                  success: !isError,
+                },
+                conversationId: conversation.id,
+                status: isError ? "failed" : "completed",
+              }).then(() => {
+                console.log(`[chat/route] ✅ Activity logged for tool "${tc.toolName}"`);
+              }).catch((err) => console.error("[chat/route] Failed to log activity:", err));
+
+              if (isError) {
+                console.log(`[chat/route] ⚠️ Tool "${tc.toolName}" failed:`, output?.error);
                 // Automatically create a bug report for tool errors
                 try {
-                  // Access 'input' property for tool arguments
-                  const toolInput = (tc as { input?: unknown }).input as Record<string, unknown> | undefined;
                   const { skipped } = await createAutomaticBugReport(adminSupabase, agentId, {
                     toolName: tc.toolName,
                     toolInput: toolInput || {},
-                    errorMessage: String(output.error),
+                    errorMessage: String(output?.error),
                     conversationId: conversation.id,
                   });
                   if (!skipped) {

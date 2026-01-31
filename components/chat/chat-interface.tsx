@@ -3,7 +3,7 @@
 import { useChat, UIMessage } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,8 @@ interface UserInfo {
 
 interface ChatInterfaceProps {
   agent?: AgentInfo;
+  /** Agent ID for filtering realtime subscriptions */
+  agentId?: string;
   user?: UserInfo;
   /** Custom API endpoint (default: /api/chat) */
   apiEndpoint?: string;
@@ -71,6 +73,7 @@ const DEFAULT_STORAGE_KEY = "maia_active_conversation_id";
 
 export function ChatInterface({ 
   agent, 
+  agentId,
   user: userInfo,
   apiEndpoint = "/api/chat",
   hideSidebar = false,
@@ -78,7 +81,6 @@ export function ChatInterface({
   welcomeMessage,
 }: ChatInterfaceProps) {
   const searchParams = useSearchParams();
-  const router = useRouter();
   
   // Initialize from URL param first, then fall back to localStorage
   const [conversationId, setConversationId] = useState<string | null>(() => {
@@ -356,52 +358,80 @@ export function ChatInterface({
   }, [channelFilter, loadConversations]);
 
   // Realtime subscription for conversations list updates
+  // Only listen to INSERT and DELETE events (not UPDATE) to avoid excessive refreshes
+  // when updated_at timestamps change. Debounce to prevent rapid fire updates.
+  // Filter by agentId to only receive updates for this user's conversations.
   useEffect(() => {
+    // Skip subscription if we don't have an agentId to filter by
+    if (!agentId) return;
+    
     const supabase = createClient();
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    
+    const debouncedLoadConversations = () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        loadConversations();
+      }, 500); // 500ms debounce
+    };
     
     const channel = supabase
-      .channel("conversations-list")
+      .channel(`conversations-list:${agentId}`)
       .on(
         "postgres_changes",
         {
-          event: "*", // Listen to INSERT, UPDATE, DELETE
+          event: "INSERT",
           schema: "public",
           table: "conversations",
+          filter: `agent_id=eq.${agentId}`,
         },
-        () => {
-          // Refresh conversations list when any change occurs
-          loadConversations();
-        }
+        debouncedLoadConversations
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "conversations",
+          filter: `agent_id=eq.${agentId}`,
+        },
+        debouncedLoadConversations
       )
       .subscribe();
 
     return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
       supabase.removeChannel(channel);
     };
-  }, [loadConversations]);
+  }, [agentId, loadConversations]);
 
   // Persist conversationId to localStorage and URL when it changes
+  // Use History API directly to avoid Next.js router overhead and potential navigation issues
   useEffect(() => {
     if (conversationId) {
       // Update localStorage
       if (storageKey) {
         localStorage.setItem(storageKey, conversationId);
       }
-      // Update URL without triggering navigation
+      // Update URL without triggering navigation - use History API directly
       const url = new URL(window.location.href);
       if (url.searchParams.get("conversation") !== conversationId) {
         url.searchParams.set("conversation", conversationId);
-        router.replace(url.pathname + url.search, { scroll: false });
+        window.history.replaceState(null, "", url.pathname + url.search);
       }
     } else {
       // Clear URL param when no conversation
       const url = new URL(window.location.href);
       if (url.searchParams.has("conversation")) {
         url.searchParams.delete("conversation");
-        router.replace(url.pathname + url.search, { scroll: false });
+        window.history.replaceState(null, "", url.pathname + url.search);
       }
     }
-  }, [conversationId, storageKey, router]);
+  }, [conversationId, storageKey]);
 
   // Ref to track if initial load has completed (to avoid duplicate loads)
   const initialLoadCompleteRef = useRef(false);

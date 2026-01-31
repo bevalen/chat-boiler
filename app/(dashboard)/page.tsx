@@ -36,6 +36,7 @@ export default async function ChatPage() {
               }
             : undefined
         }
+        agentId={agent?.id}
         user={
           userProfile
             ? {

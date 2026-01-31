@@ -36,6 +36,7 @@ export default async function FeedbackPage() {
               }
             : undefined
         }
+        agentId={agent?.id}
         user={
           userProfile
             ? {
