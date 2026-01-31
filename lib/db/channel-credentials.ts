@@ -5,6 +5,7 @@ import {
   StorableChannelType,
   SlackCredentials,
   ZapierMCPCredentials,
+  LinkedInCredentials,
   ChannelCredentials,
 } from "@/lib/types/database";
 
@@ -350,4 +351,147 @@ export async function getZapierMCPCredentialsByAgent(
   }
 
   return getZapierMCPCredentials(supabase, agent.user_id);
+}
+
+// ============================================================================
+// LinkedIn Credentials Functions
+// ============================================================================
+
+/**
+ * Get LinkedIn credentials for a user
+ */
+export async function getLinkedInCredentials(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ credentials: LinkedInCredentials | null; isActive: boolean; error: string | null }> {
+  const { credentials, error } = await getChannelCredentials(
+    supabase,
+    userId,
+    "linkedin"
+  );
+
+  if (error || !credentials) {
+    return { credentials: null, isActive: false, error };
+  }
+
+  return {
+    credentials: credentials.credentials as LinkedInCredentials,
+    isActive: credentials.isActive,
+    error: null,
+  };
+}
+
+/**
+ * Update LinkedIn credentials
+ */
+export async function updateLinkedInCredentials(
+  supabase: SupabaseClient,
+  userId: string,
+  linkedInCredentials: LinkedInCredentials,
+  isActive: boolean = true
+): Promise<{ credentials: UserChannelCredential | null; error: string | null }> {
+  return upsertChannelCredentials(supabase, userId, "linkedin", linkedInCredentials, isActive);
+}
+
+/**
+ * Check if a user has active LinkedIn credentials
+ */
+export async function hasActiveLinkedIn(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { credentials, isActive, error } = await getLinkedInCredentials(
+    supabase,
+    userId
+  );
+  return !error && credentials !== null && isActive;
+}
+
+/**
+ * Get LinkedIn credentials by agent ID (for use in tools and chat API)
+ */
+export async function getLinkedInCredentialsByAgent(
+  supabase: SupabaseClient,
+  agentId: string
+): Promise<{ credentials: LinkedInCredentials | null; isActive: boolean; error: string | null }> {
+  // First get the user_id from the agent
+  const { data: agent, error: agentError } = await supabase
+    .from("agents")
+    .select("user_id")
+    .eq("id", agentId)
+    .single();
+
+  if (agentError || !agent) {
+    return { credentials: null, isActive: false, error: agentError?.message || "Agent not found" };
+  }
+
+  return getLinkedInCredentials(supabase, agent.user_id);
+}
+
+/**
+ * Get user by LinkedIn extension token (for incoming LinkedIn messages via extension)
+ */
+export async function getUserByLinkedInToken(
+  supabase: SupabaseClient,
+  extensionToken: string
+): Promise<{ userId: string | null; agentId: string | null; error: string | null }> {
+  // Query for credentials containing this extension token
+  const { data, error } = await supabase
+    .from("user_channel_credentials")
+    .select("user_id")
+    .eq("channel_type", "linkedin")
+    .eq("is_active", true)
+    .contains("credentials", { extension_token: extensionToken })
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return { userId: null, agentId: null, error: null };
+    }
+    console.error("Error finding user by LinkedIn token:", error);
+    return { userId: null, agentId: null, error: error.message };
+  }
+
+  // Get the user's agent
+  const { data: agent, error: agentError } = await supabase
+    .from("agents")
+    .select("id")
+    .eq("user_id", data.user_id)
+    .single();
+
+  if (agentError) {
+    console.error("Error finding agent for user:", agentError);
+    return { userId: data.user_id, agentId: null, error: agentError.message };
+  }
+
+  return { userId: data.user_id, agentId: agent.id, error: null };
+}
+
+/**
+ * Get all users with active LinkedIn credentials (for monitoring/analytics)
+ */
+export async function getAllActiveLinkedInUsers(
+  supabase: SupabaseClient
+): Promise<{
+  users: Array<{ userId: string; credentials: LinkedInCredentials }>;
+  error: string | null;
+}> {
+  const { data, error } = await supabase
+    .from("user_channel_credentials")
+    .select("user_id, credentials")
+    .eq("channel_type", "linkedin")
+    .eq("is_active", true);
+
+  if (error) {
+    console.error("Error fetching active LinkedIn users:", error);
+    return { users: [], error: error.message };
+  }
+
+  return {
+    users: (data || []).map((row) => ({
+      userId: row.user_id,
+      credentials: row.credentials as LinkedInCredentials,
+    })),
+    error: null,
+  };
 }

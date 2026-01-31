@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { ChannelSettings } from "@/components/settings/channel-settings";
-import { AgentPersonality, UserPreferences } from "@/lib/types/database";
+import { LinkedInSDRSettings } from "@/components/settings/linkedin-sdr-settings";
+import { AgentPersonality, UserPreferences, AgentIdentityContext } from "@/lib/types/database";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -27,6 +28,8 @@ export default async function SettingsPage() {
     .eq("user_id", user.id)
     .single();
 
+  const identityContext = agent?.identity_context as AgentIdentityContext | null;
+
   return (
     <div className="h-full">
       <SettingsForm
@@ -51,6 +54,14 @@ export default async function SettingsPage() {
             : null
         }
         channelsComponent={<ChannelSettings userId={user.id} />}
+        linkedInComponent={
+          agent ? (
+            <LinkedInSDRSettings
+              agentId={agent.id}
+              initialConfig={identityContext?.sdrConfig}
+            />
+          ) : null
+        }
       />
     </div>
   );

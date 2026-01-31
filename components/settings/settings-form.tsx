@@ -16,12 +16,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { User, Bot, Shield, Upload, X, MessageSquare, Sparkles, Radio, Menu } from "lucide-react";
+import { User, Bot, Shield, Upload, X, MessageSquare, Sparkles, Radio, Menu, Linkedin } from "lucide-react";
 import Image from "next/image";
 import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 import { useEffect } from "react";
 
-type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "channels" | "security";
+type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "channels" | "linkedin" | "security";
 
 interface SettingsFormProps {
   user: {
@@ -41,9 +41,10 @@ interface SettingsFormProps {
     userPreferences: UserPreferences | null;
   } | null;
   channelsComponent?: React.ReactNode;
+  linkedInComponent?: React.ReactNode;
 }
 
-export function SettingsForm({ user, agent, channelsComponent }: SettingsFormProps) {
+export function SettingsForm({ user, agent, channelsComponent, linkedInComponent }: SettingsFormProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [showSidebar, setShowSidebar] = useState(false);
   const [name, setName] = useState(user.name);
@@ -276,6 +277,7 @@ export function SettingsForm({ user, agent, channelsComponent }: SettingsFormPro
     { id: "personality" as SettingsSection, label: "AI Personality", icon: <Sparkles className="h-4 w-4" />, description: "Traits & style" },
     { id: "preferences" as SettingsSection, label: "Preferences", icon: <MessageSquare className="h-4 w-4" />, description: "Communication style" },
     { id: "channels" as SettingsSection, label: "Channels", icon: <Radio className="h-4 w-4" />, description: "Communication channels" },
+    { id: "linkedin" as SettingsSection, label: "LinkedIn SDR", icon: <Linkedin className="h-4 w-4" />, description: "AI sales assistant" },
     { id: "security" as SettingsSection, label: "Security", icon: <Shield className="h-4 w-4" />, description: "Account security" },
   ];
 
@@ -719,6 +721,13 @@ export function SettingsForm({ user, agent, channelsComponent }: SettingsFormPro
         {activeSection === "channels" && channelsComponent && (
           <div className="space-y-6">
             {channelsComponent}
+          </div>
+        )}
+
+        {/* LinkedIn SDR Section */}
+        {activeSection === "linkedin" && linkedInComponent && (
+          <div className="space-y-6">
+            {linkedInComponent}
           </div>
         )}
 

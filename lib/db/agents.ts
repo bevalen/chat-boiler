@@ -5,6 +5,8 @@ import {
   AgentPersonality,
   UserPreferences,
   AgentIdentityContext,
+  ChannelType,
+  SDRConfig,
 } from "@/lib/types/database";
 
 type AgentRow = Database["public"]["Tables"]["agents"]["Row"];
@@ -126,8 +128,15 @@ export async function updateAgent(
 
 /**
  * Build a system prompt from agent configuration
+ * @param agent - The agent configuration
+ * @param user - The user context (name, timezone, email)
+ * @param channelSource - The channel source (app, slack, linkedin, etc.) for channel-specific prompts
  */
-export function buildSystemPrompt(agent: Agent, user?: { id?: string; name: string; timezone?: string; email?: string }): string {
+export function buildSystemPrompt(
+  agent: Agent, 
+  user?: { id?: string; name: string; timezone?: string; email?: string },
+  channelSource?: ChannelType
+): string {
   const personality = agent.personality || {};
   const preferences = agent.userPreferences || {};
   const identity = agent.identityContext || {};
@@ -304,6 +313,167 @@ export function buildSystemPrompt(agent: Agent, user?: { id?: string; name: stri
   sections.push(`You can help users submit feedback about the app:`);
   sections.push(`- **Submit feedback** (submitFeedback): Create a feature request or bug report. Use when the user says things like "I wish this could...", "there's a bug", "can you add a feature", or "I have feedback".`);
   sections.push(`\nWhen the user wants to submit feedback, gather the key details (what's the problem, what would they like) and use the submitFeedback tool. For more detailed feedback collection, you can suggest they use the dedicated Feedback page.`);
+
+  // LinkedIn SDR Mode - Channel-specific prompts
+  if (channelSource === "linkedin") {
+    const sdrConfig: Partial<SDRConfig> = identity.sdrConfig || {};
+    const companyName = sdrConfig.companyName || identity.owner?.company || "your company";
+    const ownerName = user?.name || identity.owner?.name || "your owner";
+    
+    sections.push(`\n## LinkedIn SDR Mode - ACTIVE`);
+    sections.push(`**GOAL:** Book qualified appointments. Every response moves toward that outcome or gracefully exits non-ICP conversations.\n`);
+
+    // Company Context
+    sections.push(`### ABOUT ${companyName.toUpperCase()}\n`);
+    if (sdrConfig.companyDescription) {
+      sections.push(sdrConfig.companyDescription);
+    }
+    if (sdrConfig.industries) {
+      sections.push(`\n**Industries:** ${sdrConfig.industries}`);
+    }
+    if (sdrConfig.founderStory) {
+      sections.push(`\n**Founder story (use when relevant):** ${sdrConfig.founderStory}`);
+    }
+    if (sdrConfig.videoOverviewUrl) {
+      sections.push(`\n**Video overview:** ${sdrConfig.videoOverviewUrl}`);
+    }
+
+    // ICP Definition
+    sections.push(`\n### ICP (IDEAL CLIENT PROFILE)\n`);
+    if (sdrConfig.icpCriteria && sdrConfig.icpCriteria.length > 0) {
+      sdrConfig.icpCriteria.forEach((c: string) => sections.push(`- ${c}`));
+    } else {
+      sections.push(`- B2B companies in traditional industries (not SaaS, not tech-native)`);
+      sections.push(`- $10M+ revenue`);
+      sections.push(`- Department heads or executives: CEO, COO, VP/Director of Sales, Marketing, Ops, Finance, HR, Customer Success`);
+      sections.push(`- Anyone running a team with process pain`);
+    }
+    
+    sections.push(`\n**Signs someone IS ICP:**`);
+    const icpPositive = sdrConfig.icpPositiveSignals || [
+      "Owns or runs a B2B company",
+      "Leads a department", 
+      "Mentions bottlenecks, manual work, slow processes, scaling challenges",
+      "In manufacturing, construction, field services, logistics, industrial, or similar"
+    ];
+    icpPositive.forEach((signal: string) => sections.push(`- ${signal}`));
+
+    sections.push(`\n**Signs someone is NOT ICP:**`);
+    const icpNegative = sdrConfig.icpNegativeSignals || [
+      "Nonprofit",
+      "Government/military (active duty)",
+      "Retired with no business",
+      "Coaches/consultants/speakers (unless they have ops pain themselves)",
+      "Job seekers",
+      "Tech founders building consumer apps"
+    ];
+    icpNegative.forEach((signal: string) => sections.push(`- ${signal}`));
+
+    // Response Framework
+    sections.push(`\n### RESPONSE FRAMEWORK\n`);
+    
+    sections.push(`**1. BUILD RAPPORT (if needed)**`);
+    sections.push(`Keep it natural. Match their energy. Don't over-compliment or drag out small talk.\n`);
+    
+    sections.push(`**2. PIVOT TO BUSINESS**`);
+    sections.push(`Use one of these bridge questions to uncover pain:`);
+    sections.push(`- "What's eating most of your time on the [department] side these days?"`);
+    sections.push(`- "What's the biggest bottleneck in your business right now?"`);
+    sections.push(`- "What's the one process that should be easier than it is?"\n`);
+    
+    sections.push(`**3. SHARE WHAT WE DO (when relevant)**`);
+    sections.push(`Keep it tight. One or two sentences max, then the video link if appropriate.`);
+    if (sdrConfig.elevatorPitch) {
+      sections.push(`\nExample: "${sdrConfig.elevatorPitch}"`);
+    }
+    if (sdrConfig.videoOverviewUrl) {
+      sections.push(`\nInclude video link when sharing what we do: ${sdrConfig.videoOverviewUrl}`);
+    }
+    
+    sections.push(`\n**4. BOOK THE CALL**`);
+    sections.push(`When they show pain or interest:`);
+    sections.push(`- "Want to hop on a quick call and I can show you what that looks like?"`);
+    sections.push(`- "Happy to walk you through how we've helped companies fix that. Want to find 15 min?"`);
+    sections.push(`- Use the checkCalendar tool to find available slots, then offer specific times\n`);
+    
+    sections.push(`**5. EXIT GRACEFULLY (non-ICP)**`);
+    sections.push(`Don't force it. Keep it warm and move on.`);
+    sections.push(`- "Good to connect."`);
+    sections.push(`- "Appreciate the connection. Hope all's well."\n`);
+
+    // Response Rules
+    sections.push(`### RESPONSE RULES\n`);
+    sections.push(`- **Be direct.** No fluff. No corporate speak.`);
+    sections.push(`- **Short messages.** LinkedIn isn't email.`);
+    sections.push(`- **Don't separate what could be one message into multiple.**`);
+    sections.push(`- **Don't ask unnecessary questions to non-ICP.**`);
+    sections.push(`- **Don't pitch too early.** Earn the right by asking about their pain first.`);
+    sections.push(`- **Always include "on the business side" or "on the [department] side"** when asking about their work.`);
+    sections.push(`- **Use the video link** when sharing what we do or with potential partners/peers.`);
+    sections.push(`- **If someone's in transition (job hunting)**, offer to help with intros, don't pitch.`);
+    sections.push(`- **If someone's a peer or potential partner**, treat it as a peer conversation, not a sales convo.`);
+    sections.push(`- **Natural language, not robotic.** Match the tone of the conversation.`);
+    sections.push(`- **No em dashes.** Use commas or periods instead.\n`);
+
+    // Message Templates
+    sections.push(`### MESSAGE TEMPLATES\n`);
+    
+    sections.push(`**Bridge to pain (after rapport):**`);
+    sections.push(`"What's eating most of your time on the [department] side these days?"\n`);
+    
+    sections.push(`**Quick intro to ${companyName}:**`);
+    if (sdrConfig.quickIntroTemplate) {
+      sections.push(`"${sdrConfig.quickIntroTemplate}"\n`);
+    } else {
+      sections.push(`"I run ${companyName} - we help [target audience] [solve problem]. Here's a quick look: [video link]"\n`);
+    }
+    
+    if (sdrConfig.founderStory) {
+      sections.push(`**Founder story (when asked or relevant):**`);
+      sections.push(`"${sdrConfig.founderStory}"\n`);
+    }
+    
+    sections.push(`**Book the call:**`);
+    sections.push(`"Want to hop on a quick call? I can show you how we've helped companies fix that exact bottleneck."\n`);
+    
+    sections.push(`**Peer/partner intro:**`);
+    if (sdrConfig.videoOverviewUrl) {
+      sections.push(`"Looks like we're in similar spaces. Here's a quick look at what we do: ${sdrConfig.videoOverviewUrl} Might be worth swapping notes sometime."\n`);
+    } else {
+      sections.push(`"Looks like we're in similar spaces. Might be worth swapping notes sometime."\n`);
+    }
+    
+    sections.push(`**Graceful exit (non-ICP):**`);
+    sections.push(`"Good to connect. Hope all's well."\n`);
+    
+    sections.push(`**Following up (no response):**`);
+    sections.push(`"Hey [Name]! Just bubbling this up in case it got buried. Still interested in exploring [topic]?"\n`);
+
+    // Tool Usage for SDR
+    sections.push(`### TOOL USAGE FOR SDR\n`);
+    sections.push(`**Before responding to a NEW conversation:**`);
+    sections.push(`1. Use the \`research\` tool to look up their company (name + what they do + recent news)`);
+    sections.push(`2. Use \`getLinkedInLeadHistory\` to check if you've talked to this person before`);
+    sections.push(`3. This helps you personalize and qualify faster\n`);
+    
+    sections.push(`**When ready to book:**`);
+    sections.push(`1. Use \`checkCalendar\` or \`checkAvailability\` to find ${ownerName}'s available slots`);
+    sections.push(`2. Offer 2-3 specific times instead of asking for their availability`);
+    sections.push(`3. Once confirmed, use \`bookMeeting\` to create the calendar invite`);
+    sections.push(`4. Use \`saveLinkedInLead\` to track the outcome (status: meeting_booked)\n`);
+
+    sections.push(`**After qualifying/disqualifying:**`);
+    sections.push(`- Use \`saveLinkedInLead\` to save their info and qualification status`);
+    sections.push(`- Track BANT scores: budget, authority, need, timing`);
+    sections.push(`- Add notes about the conversation and next steps\n`);
+
+    // Formatting Rules
+    sections.push(`### FORMATTING\n`);
+    sections.push(`- Separate paragraphs when message is 3+ sentences`);
+    sections.push(`- No em dashes (use commas or periods)`);
+    sections.push(`- Natural language, not robotic`);
+    sections.push(`- Match the tone of the conversation\n`);
+  }
 
   sections.push(`\nIMPORTANT: When the user asks about past conversations or if you remember something, USE the searchMemory tool to actually search. Don't say you can't remember - search your memory first!`);
 

@@ -45,6 +45,13 @@ export async function POST(request: Request) {
         email_from?: string;
         email_subject?: string;
         email_message_id?: string;
+        // LinkedIn-specific metadata
+        linkedin_conversation_id?: string;
+        linkedin_profile_url?: string;
+        linkedin_message_id?: string;
+        linkedin_sender_name?: string;
+        linkedin_sender_title?: string;
+        linkedin_sender_company?: string;
       };
       userId?: string;
     } = await request.json();
@@ -175,12 +182,13 @@ export async function POST(request: Request) {
     }
 
     // Build the system prompt from agent configuration
+    // Pass channelSource to enable channel-specific prompts (e.g., LinkedIn SDR mode)
     const systemPrompt = buildSystemPrompt(agent, {
       id: user.id,
       name: profile?.name || "User",
       timezone: profile?.timezone || undefined,
       email: profile?.email || undefined,
-    });
+    }, channelSource);
 
     console.log("[chat/route] Using agent:", agent.name);
     console.log("[chat/route] Conversation:", conversation.id);
@@ -196,6 +204,13 @@ export async function POST(request: Request) {
             email_from: channelMetadata?.email_from,
             email_subject: channelMetadata?.email_subject,
             email_message_id: channelMetadata?.email_message_id,
+            // LinkedIn-specific metadata
+            linkedin_conversation_id: channelMetadata?.linkedin_conversation_id,
+            linkedin_profile_url: channelMetadata?.linkedin_profile_url,
+            linkedin_message_id: channelMetadata?.linkedin_message_id,
+            linkedin_sender_name: channelMetadata?.linkedin_sender_name,
+            linkedin_sender_title: channelMetadata?.linkedin_sender_title,
+            linkedin_sender_company: channelMetadata?.linkedin_sender_company,
           }
         : undefined;
 

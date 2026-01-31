@@ -23,6 +23,29 @@ export interface UserPreferences {
   preferred_communication?: string;
 }
 
+// SDR Configuration for LinkedIn SDR mode
+export interface SDRConfig {
+  // Company info
+  companyName: string;
+  companyDescription: string;
+  industries?: string;
+  elevatorPitch?: string;
+  founderStory?: string;
+  videoOverviewUrl?: string;
+  
+  // ICP criteria
+  icpCriteria?: string[];
+  icpPositiveSignals?: string[];
+  icpNegativeSignals?: string[];
+  
+  // Templates
+  quickIntroTemplate?: string;
+  
+  // Settings
+  minimumRevenue?: string;
+  targetTitles?: string[];
+}
+
 export interface AgentIdentityContext {
   role?: string;
   capabilities?: string[];
@@ -32,6 +55,8 @@ export interface AgentIdentityContext {
     role?: string;
     timezone?: string;
   };
+  // SDR-specific configuration
+  sdrConfig?: SDRConfig;
 }
 
 // Safety permissions for agent actions
@@ -62,10 +87,10 @@ export type FeedbackSource = "manual" | "automatic" | "agent_error";
 export type FeedbackPriority = "critical" | "high" | "medium" | "low";
 
 // Channel types
-export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp";
+export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
 
 // Database-level channel type (subset that can be stored)
-export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "zapier_mcp";
+export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
 
 // Slack-specific credentials
 export interface SlackCredentials {
@@ -99,8 +124,28 @@ export interface ZapierMCPCredentials {
   email_signature?: string; // HTML email signature to append to outgoing emails
 }
 
+// LinkedIn SDR extension credentials
+export interface LinkedInCredentials {
+  extension_token: string;
+  extension_id?: string;
+  user_linkedin_id?: string;
+  user_linkedin_name?: string;
+  capabilities: {
+    auto_respond: boolean;
+    draft_mode: boolean;
+    active_hours_only: boolean;
+  };
+  settings: {
+    response_delay_seconds?: number; // Delay before responding (simulate human)
+    active_hours_start?: string; // e.g., "09:00"
+    active_hours_end?: string; // e.g., "17:00"
+    active_days?: string[]; // e.g., ["monday", "tuesday", ...]
+  };
+  token_expires_at?: string;
+}
+
 // Union type for all channel credentials
-export type ChannelCredentials = SlackCredentials | EmailCredentials | ZapierMCPCredentials | Record<string, unknown>;
+export type ChannelCredentials = SlackCredentials | EmailCredentials | ZapierMCPCredentials | LinkedInCredentials | Record<string, unknown>;
 
 // Action payload with preferred channel support
 export interface ActionPayload {
@@ -115,7 +160,7 @@ export interface ActionPayload {
 
 // Message metadata with channel source tracking
 export interface MessageMetadata extends Record<string, unknown> {
-  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "slack_message" | "incoming_email";
+  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "slack_message" | "incoming_email" | "linkedin_message";
   job_id?: string;
   job_type?: string;
   instruction?: string;
@@ -127,6 +172,13 @@ export interface MessageMetadata extends Record<string, unknown> {
   email_from?: string;
   email_subject?: string;
   email_message_id?: string;
+  // LinkedIn-specific metadata
+  linkedin_conversation_id?: string;
+  linkedin_profile_url?: string;
+  linkedin_message_id?: string;
+  linkedin_sender_name?: string;
+  linkedin_sender_title?: string;
+  linkedin_sender_company?: string;
 }
 
 export interface Database {
@@ -682,7 +734,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          channel_type: "slack" | "email" | "sms" | "discord" | "zapier_mcp";
+          channel_type: "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
           credentials: Json;
           is_active: boolean;
           created_at: string | null;
@@ -691,7 +743,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          channel_type: "slack" | "email" | "sms" | "discord" | "zapier_mcp";
+          channel_type: "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
           credentials: Json;
           is_active?: boolean;
           created_at?: string | null;
@@ -700,9 +752,69 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          channel_type?: "slack" | "email" | "sms" | "discord" | "zapier_mcp";
+          channel_type?: "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
           credentials?: Json;
           is_active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
+      // LinkedIn leads tracking for SDR functionality
+      linkedin_leads: {
+        Row: {
+          id: string;
+          agent_id: string;
+          linkedin_profile_url: string;
+          name: string;
+          company: string | null;
+          title: string | null;
+          email: string | null;
+          status: "new" | "qualified" | "meeting_booked" | "closed" | "disqualified";
+          bant_budget: boolean | null;
+          bant_authority: boolean | null;
+          bant_need: boolean | null;
+          bant_timing: boolean | null;
+          notes: string | null;
+          last_conversation_id: string | null;
+          meeting_booked_at: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          linkedin_profile_url: string;
+          name: string;
+          company?: string | null;
+          title?: string | null;
+          email?: string | null;
+          status?: "new" | "qualified" | "meeting_booked" | "closed" | "disqualified";
+          bant_budget?: boolean | null;
+          bant_authority?: boolean | null;
+          bant_need?: boolean | null;
+          bant_timing?: boolean | null;
+          notes?: string | null;
+          last_conversation_id?: string | null;
+          meeting_booked_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          linkedin_profile_url?: string;
+          name?: string;
+          company?: string | null;
+          title?: string | null;
+          email?: string | null;
+          status?: "new" | "qualified" | "meeting_booked" | "closed" | "disqualified";
+          bant_budget?: boolean | null;
+          bant_authority?: boolean | null;
+          bant_need?: boolean | null;
+          bant_timing?: boolean | null;
+          notes?: string | null;
+          last_conversation_id?: string | null;
+          meeting_booked_at?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };

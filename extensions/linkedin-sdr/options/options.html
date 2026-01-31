@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAIA LinkedIn SDR - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <header class="options-header">
+      <div class="logo">
+        <img src="../icons/icon48.png" alt="MAIA" width="32" height="32">
+        <div>
+          <h1>MAIA LinkedIn SDR</h1>
+          <span class="version">Version 1.0.0</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="options-main">
+      <!-- Connection Section -->
+      <section class="settings-section">
+        <h2>Connection</h2>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>MAIA Server URL</label>
+            <span class="setting-description">The URL of your MAIA deployment</span>
+          </div>
+          <input type="text" id="api-url" class="input-field" placeholder="https://your-maia-domain.com">
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Connection Status</label>
+            <span class="setting-description" id="connection-status">Checking...</span>
+          </div>
+          <button id="reconnect-btn" class="btn btn-secondary">Reconnect</button>
+        </div>
+      </section>
+
+      <!-- Response Behavior Section -->
+      <section class="settings-section">
+        <h2>Response Behavior</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>SDR Active</label>
+            <span class="setting-description">Enable AI-powered responses</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="enabled-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Draft Mode</label>
+            <span class="setting-description">Review messages before sending (recommended)</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="draft-mode-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Response Delay</label>
+            <span class="setting-description">Seconds to wait before sending (simulates human typing)</span>
+          </div>
+          <input type="number" id="response-delay" class="input-field small" min="0" max="30" value="3">
+        </div>
+      </section>
+
+      <!-- Active Hours Section -->
+      <section class="settings-section">
+        <h2>Active Hours</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Limit to Active Hours</label>
+            <span class="setting-description">Only respond during business hours</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="active-hours-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row" id="hours-row">
+          <div class="setting-info">
+            <label>Business Hours</label>
+            <span class="setting-description">Time range for active responses</span>
+          </div>
+          <div class="time-range">
+            <input type="time" id="hours-start" class="input-field small" value="09:00">
+            <span>to</span>
+            <input type="time" id="hours-end" class="input-field small" value="17:00">
+          </div>
+        </div>
+
+        <div class="setting-row" id="days-row">
+          <div class="setting-info">
+            <label>Active Days</label>
+            <span class="setting-description">Days when SDR is active</span>
+          </div>
+          <div class="day-selector">
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="monday" checked>
+              <span>Mon</span>
+            </label>
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="tuesday" checked>
+              <span>Tue</span>
+            </label>
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="wednesday" checked>
+              <span>Wed</span>
+            </label>
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="thursday" checked>
+              <span>Thu</span>
+            </label>
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="friday" checked>
+              <span>Fri</span>
+            </label>
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="saturday">
+              <span>Sat</span>
+            </label>
+            <label class="day-checkbox">
+              <input type="checkbox" name="days" value="sunday">
+              <span>Sun</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Advanced Section -->
+      <section class="settings-section">
+        <h2>Advanced</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Debug Mode</label>
+            <span class="setting-description">Show detailed logs in browser console</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="debug-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Danger Zone -->
+      <section class="settings-section danger-zone">
+        <h2>Danger Zone</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Reset Extension</label>
+            <span class="setting-description">Clear all data and disconnect from MAIA</span>
+          </div>
+          <button id="reset-btn" class="btn btn-danger">Reset</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="options-footer">
+      <p>
+        Need help? Visit the <a href="https://docs.maia.ai/linkedin-sdr" target="_blank">documentation</a>
+        or <a href="mailto:support@maia.ai">contact support</a>.
+      </p>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast">Settings saved</div>
+
+  <script src="options.js"></script>
+</body>
+</html>
