@@ -48,7 +48,7 @@ export async function POST(
       .join("\n");
 
     const { output } = await generateText({
-      model: gateway("openai/gpt-4o-mini"),
+      model: gateway("openai/gpt-5-nano"),
       output: Output.object({ schema: titleSchema }),
       prompt: `Generate a short 2-5 word title for this conversation. Be concise and descriptive.
 
