@@ -323,12 +323,11 @@ export async function getMessagesForSlackThread(
   limit = 50
 ): Promise<Message[]> {
   // Query messages where metadata->slack_thread_ts matches
-  // We use the ->> operator to extract text from JSONB
   const { data, error } = await supabase
     .from("messages")
     .select("*")
     .eq("conversation_id", conversationId)
-    .or(`metadata->>slack_thread_ts.eq.${threadTs},metadata->>slack_message_ts.eq.${threadTs}`)
+    .filter("metadata->>slack_thread_ts", "eq", threadTs)
     .order("created_at", { ascending: true })
     .limit(limit);
 
