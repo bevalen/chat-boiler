@@ -367,7 +367,7 @@ class MAIALinkedInSDR {
     
     if (draftMode) {
       // Inject response but don't send
-      this.injectResponse(cleanedResponse);
+      await this.injectResponse(cleanedResponse);
       this.updateStatusIndicator('success', 'Draft ready - review before sending');
     } else {
       if (this.stopRequested) {
@@ -386,7 +386,7 @@ class MAIALinkedInSDR {
         return;
       }
       
-      this.injectResponse(cleanedResponse);
+      await this.injectResponse(cleanedResponse);
       await this.sleep(500);
       
       if (this.clickSendButton()) {
@@ -402,7 +402,7 @@ class MAIALinkedInSDR {
     }, 3000);
   }
 
-  injectResponse(text) {
+  async injectResponse(text) {
     log('injectResponse called with:', text?.substring(0, 50));
     
     const input = document.querySelector(SELECTORS.messageInput) ||
@@ -415,19 +415,60 @@ class MAIALinkedInSDR {
 
     log('Found input element:', input.className);
 
-    // Clear and set content
-    input.innerHTML = '';
-    input.textContent = text;
-    input.innerText = text;
-
-    // Trigger events to notify LinkedIn's React
-    const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-    input.dispatchEvent(inputEvent);
+    // Click on the input to ensure it's active
+    input.click();
+    await this.sleep(50);
     
-    const changeEvent = new Event('change', { bubbles: true, cancelable: true });
-    input.dispatchEvent(changeEvent);
-    
+    // Focus the input
     input.focus();
+    await this.sleep(50);
+    
+    // Select all existing content and delete it
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+    
+    // Use execCommand to insert text - this simulates actual typing
+    // and properly triggers LinkedIn's React state updates
+    const success = document.execCommand('insertText', false, text);
+    
+    log('execCommand insertText result:', success);
+    
+    if (!success) {
+      log('execCommand failed, trying paste approach');
+      
+      // Fallback: simulate paste
+      input.innerHTML = '';
+      
+      // Try using clipboard API approach
+      const p = document.createElement('p');
+      p.textContent = text;
+      input.appendChild(p);
+      
+      // Dispatch multiple events to trigger React
+      ['input', 'change', 'keyup', 'keydown'].forEach(eventType => {
+        const event = new Event(eventType, { bubbles: true, cancelable: true });
+        input.dispatchEvent(event);
+      });
+      
+      // Also try InputEvent specifically
+      const inputEvent = new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text,
+      });
+      input.dispatchEvent(inputEvent);
+    }
+    
+    // Ensure the input is focused at the end
+    const selection = window.getSelection();
+    if (selection && input.firstChild) {
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false); // false = collapse to end
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
 
     log('Response injected successfully');
     return true;
@@ -448,8 +489,8 @@ class MAIALinkedInSDR {
   setupMessageListener() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === 'INJECT_RESPONSE') {
-        this.injectResponse(message.response);
-        sendResponse({ success: true });
+        this.injectResponse(message.response).then(() => sendResponse({ success: true }));
+        return true; // Keep channel open for async
       } else if (message.type === 'TOGGLE_ENABLED') {
         this.enabled = message.enabled;
         this.updateStatusIndicator(this.enabled ? 'idle' : 'disabled');
