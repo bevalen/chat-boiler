@@ -127,7 +127,7 @@ export async function updateAgent(
 /**
  * Build a system prompt from agent configuration
  */
-export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?: string; email?: string }): string {
+export function buildSystemPrompt(agent: Agent, user?: { id?: string; name: string; timezone?: string; email?: string }): string {
   const personality = agent.personality || {};
   const preferences = agent.userPreferences || {};
   const identity = agent.identityContext || {};
@@ -238,9 +238,11 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   sections.push(`- Add a "question" comment when you need clarification from the user`);
   sections.push(`- Add a "resolution" comment when you complete the task, summarizing what was done`);
   sections.push(`- This creates an activity trail so the user can see what happened`);
-  sections.push(`\nTasks can be assigned to you (the agent) or to the user. When creating tasks:`);
-  sections.push(`- Assign to "agent" for things you should handle autonomously`);
-  sections.push(`- Assign to "user" for things the user needs to do themselves`);
+  sections.push(`\n**Task Assignment:**`);
+  sections.push(`Tasks can be assigned to you (the agent) or to the user. Just specify assigneeType - the ID is resolved automatically.`);
+  sections.push(`- assigneeType="user" → assigns to the human owner`);
+  sections.push(`- assigneeType="agent" → assigns to yourself (the AI assistant)`);
+  sections.push(`- When creating tasks, assign to "agent" for things you should handle, "user" for things they need to do`);
 
   // Scheduling capabilities
   sections.push(`\n## Scheduling & Reminders`);

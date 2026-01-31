@@ -168,6 +168,7 @@ export async function POST(request: Request) {
 
     // Build the system prompt from agent configuration
     const systemPrompt = buildSystemPrompt(agent, {
+      id: user.id,
       name: profile?.name || "User",
       timezone: profile?.timezone || undefined,
       email: profile?.email || undefined,
@@ -210,6 +211,21 @@ export async function POST(request: Request) {
     // Get admin client for tool operations
     const adminSupabase = getAdminClient();
     const agentId = agent.id;
+
+    // Helper to resolve assignee ID from type (no UUID needed from agent)
+    const resolveAssigneeId = async (assigneeType: "user" | "agent" | undefined): Promise<string | null> => {
+      if (!assigneeType) return null;
+      if (assigneeType === "agent") return agentId;
+      if (assigneeType === "user") {
+        const { data: agentData } = await adminSupabase
+          .from("agents")
+          .select("user_id")
+          .eq("id", agentId)
+          .single();
+        return agentData?.user_id || null;
+      }
+      return null;
+    };
 
     // Define tools with agent context captured in closure
     const tools = {
@@ -536,12 +552,13 @@ export async function POST(request: Request) {
           priority: z.enum(["high", "medium", "low"]).optional().default("medium"),
           dueDate: z.string().optional().describe("Due date (ISO format)"),
           projectId: z.string().optional().describe("Project ID to link to"),
-          assigneeType: z.enum(["user", "agent"]).optional().describe("Who should work on this: 'user' (Ben) or 'agent' (AI assistant)"),
-          assigneeId: z.string().optional().describe("ID of the assignee"),
+          assigneeType: z.enum(["user", "agent"]).optional().describe("Who should work on this: 'user' (the human owner) or 'agent' (AI assistant). ID is resolved automatically."),
         }),
-        execute: async ({ title, description, priority, dueDate, projectId, assigneeType, assigneeId }: { title: string; description?: string; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent"; assigneeId?: string }) => {
+        execute: async ({ title, description, priority, dueDate, projectId, assigneeType }: { title: string; description?: string; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent" }) => {
           const textToEmbed = description ? `${title}\n\n${description}` : title;
           const embedding = await generateEmbedding(textToEmbed);
+          // Auto-resolve assignee ID from type
+          const assigneeId = await resolveAssigneeId(assigneeType);
           const { data, error } = await adminSupabase
             .from("tasks")
             .insert({
@@ -553,7 +570,7 @@ export async function POST(request: Request) {
               due_date: dueDate || null,
               project_id: projectId || null,
               assignee_type: assigneeType || null,
-              assignee_id: assigneeId || null,
+              assignee_id: assigneeId,
               embedding,
             })
             .select()
@@ -617,11 +634,10 @@ export async function POST(request: Request) {
           priority: z.enum(["high", "medium", "low"]).optional().describe("New priority level"),
           dueDate: z.string().optional().describe("New due date in ISO format"),
           projectId: z.string().optional().describe("Project ID to link the task to"),
-          assigneeType: z.enum(["user", "agent"]).optional().describe("Reassign to 'user' or 'agent'"),
-          assigneeId: z.string().optional().describe("ID of the new assignee"),
+          assigneeType: z.enum(["user", "agent"]).optional().describe("Reassign to 'user' (the human owner) or 'agent' (AI assistant). ID is resolved automatically."),
           blockedBy: z.array(z.string()).optional().describe("Array of task IDs that block this task"),
         }),
-        execute: async ({ taskId, title, description, status, priority, dueDate, projectId, assigneeType, assigneeId, blockedBy }: { taskId: string; title?: string; description?: string; status?: "todo" | "in_progress" | "waiting_on" | "done"; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent"; assigneeId?: string; blockedBy?: string[] }) => {
+        execute: async ({ taskId, title, description, status, priority, dueDate, projectId, assigneeType, blockedBy }: { taskId: string; title?: string; description?: string; status?: "todo" | "in_progress" | "waiting_on" | "done"; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent"; blockedBy?: string[] }) => {
           const updates: Record<string, unknown> = {};
           if (title) updates.title = title;
           if (description !== undefined) updates.description = description;
@@ -634,8 +650,11 @@ export async function POST(request: Request) {
           if (priority) updates.priority = priority;
           if (dueDate !== undefined) updates.due_date = dueDate || null;
           if (projectId !== undefined) updates.project_id = projectId || null;
-          if (assigneeType !== undefined) updates.assignee_type = assigneeType;
-          if (assigneeId !== undefined) updates.assignee_id = assigneeId;
+          if (assigneeType !== undefined) {
+            updates.assignee_type = assigneeType;
+            // Auto-resolve the assignee ID
+            updates.assignee_id = await resolveAssigneeId(assigneeType);
+          }
           if (blockedBy !== undefined) updates.blocked_by = blockedBy;
 
           // If title or description changed, regenerate embedding

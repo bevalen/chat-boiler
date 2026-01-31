@@ -4,6 +4,33 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 import { createNotification } from "@/lib/db/notifications";
 
+// Helper to resolve assignee ID from type
+async function resolveAssigneeId(
+  supabase: ReturnType<typeof getAdminClient>,
+  agentId: string,
+  assigneeType: "user" | "agent" | undefined
+): Promise<string | null> {
+  if (!assigneeType) return null;
+  
+  if (assigneeType === "agent") {
+    // Assign to the agent itself
+    return agentId;
+  }
+  
+  if (assigneeType === "user") {
+    // Look up the user_id from the agent
+    const { data: agent } = await supabase
+      .from("agents")
+      .select("user_id")
+      .eq("id", agentId)
+      .single();
+    
+    return agent?.user_id || null;
+  }
+  
+  return null;
+}
+
 export const createTaskTool = tool({
   description: "Create a new task, optionally linked to a project and assigned to a user or agent",
   inputSchema: z.object({
@@ -24,19 +51,18 @@ export const createTaskTool = tool({
     assigneeType: z
       .enum(["user", "agent"])
       .optional()
-      .describe("Who should work on this task: 'user' (Ben) or 'agent' (the AI assistant)"),
-    assigneeId: z
-      .string()
-      .optional()
-      .describe("The ID of the user or agent to assign to"),
+      .describe("Who should work on this task: 'user' (the human owner) or 'agent' (the AI assistant). The ID is resolved automatically."),
   }),
   execute: async (
-    { title, description, projectId, priority, dueDate, assigneeType, assigneeId },
+    { title, description, projectId, priority, dueDate, assigneeType },
     options
   ) => {
     const agentId = (options as { agentId?: string }).agentId;
     if (!agentId) throw new Error("Agent ID is required");
     const supabase = getAdminClient();
+
+    // Auto-resolve assignee ID from type
+    const assigneeId = await resolveAssigneeId(supabase, agentId, assigneeType);
 
     // Generate embedding for task (title + description)
     const textToEmbed = description ? `${title}\n\n${description}` : title;
@@ -58,7 +84,7 @@ export const createTaskTool = tool({
         status: "todo",
         due_date: dueDate || null,
         assignee_type: assigneeType || null,
-        assignee_id: assigneeId || null,
+        assignee_id: assigneeId,
         embedding,
       })
       .select()
@@ -78,7 +104,6 @@ export const createTaskTool = tool({
         status: data.status,
         dueDate: data.due_date,
         assigneeType: data.assignee_type,
-        assigneeId: data.assignee_id,
       },
     };
   },
@@ -200,18 +225,14 @@ export const updateTaskTool = tool({
     assigneeType: z
       .enum(["user", "agent"])
       .optional()
-      .describe("Reassign to 'user' or 'agent'"),
-    assigneeId: z
-      .string()
-      .optional()
-      .describe("ID of the new assignee"),
+      .describe("Reassign to 'user' (the human owner) or 'agent' (the AI assistant). The ID is resolved automatically."),
     blockedBy: z
       .array(z.string())
       .optional()
       .describe("Array of task IDs that block this task"),
   }),
   execute: async (
-    { taskId, title, description, status, priority, dueDate, assigneeType, assigneeId, blockedBy },
+    { taskId, title, description, status, priority, dueDate, assigneeType, blockedBy },
     options
   ) => {
     const agentId = (options as { agentId?: string }).agentId;
@@ -229,8 +250,11 @@ export const updateTaskTool = tool({
     }
     if (priority) updates.priority = priority;
     if (dueDate) updates.due_date = dueDate;
-    if (assigneeType !== undefined) updates.assignee_type = assigneeType;
-    if (assigneeId !== undefined) updates.assignee_id = assigneeId;
+    if (assigneeType !== undefined) {
+      updates.assignee_type = assigneeType;
+      // Auto-resolve the assignee ID
+      updates.assignee_id = await resolveAssigneeId(supabase, agentId, assigneeType);
+    }
     if (blockedBy !== undefined) updates.blocked_by = blockedBy;
 
     // If title or description changed, regenerate embedding
