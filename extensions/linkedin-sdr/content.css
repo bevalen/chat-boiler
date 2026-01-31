@@ -147,3 +147,44 @@
   background: #dc3545;
   color: white;
 }
+
+/* Process Unread Button */
+.maia-process-unread-btn {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  background: linear-gradient(135deg, #0077b5 0%, #005885 100%);
+  color: white;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 119, 181, 0.3);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.maia-process-unread-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 119, 181, 0.4);
+}
+
+.maia-process-unread-btn:active {
+  transform: translateY(0);
+}
+
+.maia-process-unread-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.maia-process-unread-btn svg {
+  flex-shrink: 0;
+}

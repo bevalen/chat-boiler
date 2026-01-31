@@ -18,6 +18,12 @@ const SELECTORS = {
   sendButton: '[class*="msg-form__send-button"]',
   conversationHeader: '[class*="msg-thread__link-to-profile"]',
   profileName: '[class*="msg-s-message-group__name"]',
+  // Conversation list selectors
+  conversationList: '[class*="msg-conversations-container__conversations-list"]',
+  conversationItem: '[class*="msg-conversation-listitem"]',
+  conversationLink: '[class*="msg-conversation-listitem__link"]',
+  unreadIndicator: '[class*="msg-conversation-listitem__unread-count"]',
+  unreadDot: '[class*="notification-badge"]',
 };
 
 class MAIALinkedInSDR {
@@ -25,9 +31,11 @@ class MAIALinkedInSDR {
     this.lastMessageId = null;
     this.observer = null;
     this.isProcessing = false;
+    this.isProcessingUnread = false;
     this.conversationContext = null;
     this.enabled = true;
     this.settings = {};
+    this.processedConversations = new Set();
     
     this.init();
   }
@@ -49,6 +57,9 @@ class MAIALinkedInSDR {
     
     // Add status indicator
     this.addStatusIndicator();
+    
+    // Add "Process Unread" button
+    this.addProcessUnreadButton();
     
     console.log('[MAIA SDR] Initialized successfully');
   }
@@ -297,6 +308,12 @@ class MAIALinkedInSDR {
       } else if (message.type === 'UPDATE_SETTINGS') {
         this.settings = message.settings;
         sendResponse({ success: true });
+      } else if (message.type === 'PROCESS_UNREAD') {
+        this.processAllUnread().then(() => sendResponse({ success: true }));
+        return true; // Keep channel open for async
+      } else if (message.type === 'GET_UNREAD_COUNT') {
+        const unread = this.getUnreadConversations();
+        sendResponse({ count: unread.length });
       }
       return true;
     });
@@ -346,12 +363,171 @@ class MAIALinkedInSDR {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // ============================================================================
+  // Unread Message Processing
+  // ============================================================================
+
+  /**
+   * Get all unread conversations from the sidebar
+   */
+  getUnreadConversations() {
+    const conversations = [];
+    const conversationItems = document.querySelectorAll(SELECTORS.conversationItem);
+    
+    conversationItems.forEach((item) => {
+      // Check for unread indicators (badge count or dot)
+      const unreadBadge = item.querySelector(SELECTORS.unreadIndicator);
+      const unreadDot = item.querySelector(SELECTORS.unreadDot);
+      const hasUnread = unreadBadge || unreadDot || 
+                        item.classList.toString().includes('unread') ||
+                        item.querySelector('[class*="unread"]');
+      
+      if (hasUnread) {
+        const link = item.querySelector(SELECTORS.conversationLink) || item.querySelector('a');
+        const nameEl = item.querySelector('[class*="participant__name"]') || 
+                       item.querySelector('[class*="msg-conversation-card__participant-names"]');
+        
+        if (link) {
+          const href = link.getAttribute('href');
+          const threadId = href ? this.extractThreadIdFromHref(href) : null;
+          
+          conversations.push({
+            element: item,
+            linkElement: link,
+            name: nameEl?.textContent?.trim() || 'Unknown',
+            threadId,
+            href,
+          });
+        }
+      }
+    });
+    
+    console.log(`[MAIA SDR] Found ${conversations.length} unread conversations`);
+    return conversations;
+  }
+
+  extractThreadIdFromHref(href) {
+    const match = href.match(/\/messaging\/thread\/([^/]+)/);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Process all unread conversations
+   */
+  async processAllUnread() {
+    if (this.isProcessingUnread) {
+      console.log('[MAIA SDR] Already processing unread messages');
+      return;
+    }
+
+    this.isProcessingUnread = true;
+    const unreadConversations = this.getUnreadConversations();
+    
+    if (unreadConversations.length === 0) {
+      this.updateStatusIndicator('success', 'No unread messages found');
+      setTimeout(() => this.updateStatusIndicator('idle'), 3000);
+      this.isProcessingUnread = false;
+      return;
+    }
+
+    this.updateStatusIndicator('processing', `Processing ${unreadConversations.length} unread...`);
+
+    let processed = 0;
+    let errors = 0;
+
+    for (const conversation of unreadConversations) {
+      // Skip if already processed in this session
+      if (conversation.threadId && this.processedConversations.has(conversation.threadId)) {
+        continue;
+      }
+
+      try {
+        this.updateStatusIndicator('processing', `Processing ${processed + 1}/${unreadConversations.length}: ${conversation.name}`);
+        
+        // Click to open the conversation
+        conversation.linkElement.click();
+        
+        // Wait for conversation to load
+        await this.sleep(1500);
+        await this.waitForMessagingUI(5000);
+        
+        // Check if the last message is from them (not from us)
+        const latestMessage = this.getLatestMessage();
+        if (latestMessage && !latestMessage.isFromMe) {
+          // Process this message
+          await this.processNewMessage(latestMessage);
+          
+          // Wait for AI response to be drafted
+          await this.sleep(2000);
+        } else {
+          console.log(`[MAIA SDR] Skipping ${conversation.name} - last message is from us`);
+        }
+
+        // Mark as processed
+        if (conversation.threadId) {
+          this.processedConversations.add(conversation.threadId);
+        }
+        
+        processed++;
+        
+        // Small delay between conversations
+        await this.sleep(1000);
+        
+      } catch (error) {
+        console.error(`[MAIA SDR] Error processing conversation ${conversation.name}:`, error);
+        errors++;
+      }
+    }
+
+    this.isProcessingUnread = false;
+    
+    const message = errors > 0 
+      ? `Done! ${processed} processed, ${errors} errors`
+      : `Done! ${processed} conversations processed`;
+    
+    this.updateStatusIndicator('success', message);
+    setTimeout(() => this.updateStatusIndicator('idle'), 5000);
+  }
+
+  /**
+   * Add the "Process Unread" button to the UI
+   */
+  addProcessUnreadButton() {
+    // Remove existing button if any
+    const existing = document.querySelector('.maia-process-unread-btn');
+    if (existing) existing.remove();
+
+    const button = document.createElement('button');
+    button.className = 'maia-process-unread-btn';
+    button.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Process Unread
+    `;
+    button.title = 'Draft replies for all unread messages';
+    
+    button.addEventListener('click', () => {
+      if (!this.isProcessingUnread) {
+        this.processAllUnread();
+      }
+    });
+
+    document.body.appendChild(button);
+    this.processUnreadButton = button;
+  }
+
   destroy() {
     if (this.observer) {
       this.observer.disconnect();
     }
     if (this.statusIndicator) {
       this.statusIndicator.remove();
+    }
+    if (this.processUnreadButton) {
+      this.processUnreadButton.remove();
     }
   }
 }
