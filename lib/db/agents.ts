@@ -245,14 +245,30 @@ export function buildSystemPrompt(agent: Agent, user?: { id?: string; name: stri
   sections.push(`- When creating tasks, assign to "agent" for things you should handle, "user" for things they need to do`);
 
   // Scheduling capabilities
-  sections.push(`\n## Scheduling & Reminders`);
-  sections.push(`You can schedule things to happen in the future:`);
-  sections.push(`- **Create reminders** (createReminder): Set one-time reminders. When the user says "remind me to X at Y time", create a reminder.`);
-  sections.push(`- **Create follow-ups** (createFollowUp): Schedule yourself to check on something later. Use for "follow up if X doesn't happen by Y".`);
-  sections.push(`- **Create recurring jobs** (createRecurringJob): Set up recurring schedules using cron expressions (e.g., daily briefs, weekly summaries).`);
-  sections.push(`- **List scheduled jobs** (listScheduledJobs): Show all upcoming reminders and scheduled jobs.`);
-  sections.push(`- **Cancel/update jobs** (cancelScheduledJob, updateScheduledJob): Modify or cancel scheduled items.`);
-  sections.push(`\nWhen the user asks about their schedule or upcoming reminders, use listScheduledJobs. When they say "remind me" or "follow up", create the appropriate scheduled job.`);
+  sections.push(`\n## Scheduling & Jobs`);
+  sections.push(`You have TWO scheduling tools - choose based on what the user needs:\n`);
+  
+  sections.push(`### 1. scheduleReminder (Notify Only)`);
+  sections.push(`Use when the user wants to be REMINDED or NOTIFIED about something. You just send them a message at the specified time.`);
+  sections.push(`- "Remind me to call mom at 5pm" → scheduleReminder`);
+  sections.push(`- "Send me a motivational quote every morning" → scheduleReminder with cronExpression`);
+  sections.push(`- "Ping me about the meeting in 30 minutes" → scheduleReminder\n`);
+  
+  sections.push(`### 2. scheduleAgentTask (Execute Work)`);
+  sections.push(`Use when the user wants you to DO SOMETHING and send results. You will wake up, execute the instruction with full tool access, and send them the results.`);
+  sections.push(`- "Tomorrow at 10am, research AI news and write me a brief" → scheduleAgentTask`);
+  sections.push(`- "Every Monday at 9am, check my email and summarize important messages" → scheduleAgentTask`);
+  sections.push(`- "In 2 hours, check if the server responded and let me know" → scheduleAgentTask`);
+  sections.push(`- "At 8am daily, give me a daily brief with tasks and calendar" → scheduleAgentTask\n`);
+  
+  sections.push(`**Key difference:** Reminders just notify. Agent tasks execute work and report results.`);
+  sections.push(`**Both support:** One-time (runAt) or recurring (cronExpression) schedules.`);
+  sections.push(`**All scheduled jobs start new conversations** so it's clear what triggered them.\n`);
+  
+  sections.push(`### Management Tools`);
+  sections.push(`- **listScheduledJobs**: Show all upcoming reminders and scheduled tasks`);
+  sections.push(`- **cancelScheduledJob**: Cancel a scheduled item`);
+  sections.push(`- **updateScheduledJob**: Modify timing or pause/resume a job`);
 
   // Email capabilities
   sections.push(`\n## Email Integration`);

@@ -811,57 +811,83 @@ export async function POST(request: Request) {
 
       // === SCHEDULING TOOLS ===
 
-      createReminder: tool({
-        description: "Create a reminder or scheduled notification. Use this when the user wants to be reminded about something at a specific time. Can optionally link to an existing task.",
+      scheduleReminder: tool({
+        description: "Schedule a simple reminder/notification. Use this when the user wants to be REMINDED or NOTIFIED about something - you will just send them a message at the specified time. Supports both one-time and recurring schedules. Examples: 'remind me to call mom at 5pm', 'send me a daily motivational quote at 9am'.",
         inputSchema: z.object({
           title: z.string().describe("What to remind the user about"),
-          runAt: z.string().describe("When to send the reminder. MUST be a UTC ISO datetime string ending in Z (e.g., '2026-01-31T20:00:00Z'). Use the ISO timestamp from your current time context and add the appropriate duration."),
-          description: z.string().optional().describe("Additional details for the reminder"),
-          message: z.string().optional().describe("The notification message to show"),
+          message: z.string().optional().describe("The notification message to show (defaults to title if not provided)"),
+          // Scheduling - one of these is required
+          runAt: z.string().optional().describe("For ONE-TIME reminders: UTC ISO datetime string ending in Z (e.g., '2026-01-31T20:00:00Z')"),
+          cronExpression: z.string().optional().describe("For RECURRING reminders: Cron expression (e.g., '0 8 * * *' for 8am daily, '0 9 * * 1' for 9am Mondays)"),
+          // Optional links
           taskId: z.string().optional().describe("Link to an existing task ID"),
           projectId: z.string().optional().describe("Link to an existing project ID"),
-          createNewConversation: z.boolean().optional().default(false).describe("If true, the reminder will create a new conversation thread instead of posting to the current one. Use this when the user wants the reminder to start a fresh conversation."),
         }),
-        execute: async ({ title, runAt, description, message, taskId, projectId, createNewConversation }: { title: string; runAt: string; description?: string; message?: string; taskId?: string; projectId?: string; createNewConversation?: boolean }) => {
+        execute: async ({ title, message, runAt, cronExpression, taskId, projectId }: { title: string; message?: string; runAt?: string; cronExpression?: string; taskId?: string; projectId?: string }) => {
           try {
             const userTimezone = profile?.timezone || "America/New_York";
-            
-            // Ensure runAt is a valid UTC ISO string
-            let utcRunAt = runAt;
-            if (!runAt.endsWith('Z') && !runAt.includes('+') && !runAt.includes('-', 10)) {
-              // If no timezone info, assume it's meant to be UTC and add Z
-              utcRunAt = runAt + 'Z';
-            }
-            
-            // Validate the date
-            const runAtDate = new Date(utcRunAt);
-            if (isNaN(runAtDate.getTime())) {
-              return { success: false, error: `Invalid datetime format: ${runAt}. Please use UTC ISO format like '2026-01-31T20:00:00Z'` };
-            }
-            
-            // Build action payload with preferred channel
             const preferredChannel = profile?.preferred_notification_channel || "app";
-            const actionPayload: Record<string, unknown> = { 
+
+            // Validate that exactly one scheduling option is provided
+            if (!runAt && !cronExpression) {
+              return { success: false, error: "Must provide either 'runAt' for one-time or 'cronExpression' for recurring reminders" };
+            }
+            if (runAt && cronExpression) {
+              return { success: false, error: "Provide only one: 'runAt' for one-time OR 'cronExpression' for recurring" };
+            }
+
+            let nextRunAt: string;
+            let scheduleType: "once" | "cron";
+            let jobType: "reminder" | "recurring";
+            let cronExpr: string | null = null;
+            let runAtValue: string | null = null;
+
+            if (runAt) {
+              // One-time reminder
+              let utcRunAt = runAt;
+              if (!runAt.endsWith('Z') && !runAt.includes('+') && !runAt.includes('-', 10)) {
+                utcRunAt = runAt + 'Z';
+              }
+              const runAtDate = new Date(utcRunAt);
+              if (isNaN(runAtDate.getTime())) {
+                return { success: false, error: `Invalid datetime format: ${runAt}. Use UTC ISO format like '2026-01-31T20:00:00Z'` };
+              }
+              nextRunAt = runAtDate.toISOString();
+              runAtValue = nextRunAt;
+              scheduleType = "once";
+              jobType = "reminder";
+            } else {
+              // Recurring reminder
+              const { calculateNextRunFromCron } = await import("@/lib/db/scheduled-jobs");
+              const nextRun = calculateNextRunFromCron(cronExpression!, userTimezone);
+              nextRunAt = nextRun.toISOString();
+              cronExpr = cronExpression!;
+              scheduleType = "cron";
+              jobType = "recurring";
+            }
+
+            const actionPayload: Record<string, unknown> = {
               message: message || title,
               preferred_channel: preferredChannel,
             };
-            
+
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
               .insert({
                 agent_id: agentId,
-                job_type: "reminder",
+                job_type: jobType,
                 title,
-                description: description || null,
-                schedule_type: "once",
-                run_at: runAtDate.toISOString(),
-                next_run_at: runAtDate.toISOString(),
+                description: message || null,
+                schedule_type: scheduleType,
+                run_at: runAtValue,
+                cron_expression: cronExpr,
+                next_run_at: nextRunAt,
                 timezone: userTimezone,
                 action_type: "notify",
                 action_payload: actionPayload,
                 task_id: taskId || null,
                 project_id: projectId || null,
-                conversation_id: createNewConversation ? null : conversation.id,
+                conversation_id: null, // Reminders always create new conversations for clarity
                 status: "active",
               })
               .select()
@@ -869,87 +895,6 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
-            // Format the time in the user's timezone for display
-            const formatter = new Intl.DateTimeFormat("en-US", {
-              timeZone: userTimezone,
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: true,
-            });
-            const reminderTimeFormatted = formatter.format(runAtDate);
-            
-            return {
-              success: true,
-              reminder: {
-                id: data.id,
-                title: data.title,
-                scheduledFor: reminderTimeFormatted,
-                timezone: userTimezone,
-                willCreateNewConversation: createNewConversation || false,
-              },
-              message: `Reminder set for ${reminderTimeFormatted} (${userTimezone}): "${title}"${createNewConversation ? " [will start new conversation]" : ""}`,
-            };
-          } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
-          }
-        },
-      }),
-
-      createRecurringJob: tool({
-        description: "Create a recurring scheduled job that runs on a cron schedule. Use this for things like daily briefs, weekly summaries, or regular check-ins.",
-        inputSchema: z.object({
-          title: z.string().describe("Name of the recurring job"),
-          cronExpression: z.string().describe("Cron expression (e.g., '0 8 * * *' for 8am daily, '0 8 * * 1' for 8am Mondays)"),
-          description: z.string().optional().describe("What this job does"),
-          instruction: z.string().optional().describe("Instructions for the agent when this job runs"),
-          actionType: z.enum(["notify", "agent_task"]).optional().default("notify").describe("Type of action: 'notify' for simple message, 'agent_task' for agent execution"),
-          createNewConversation: z.boolean().optional().default(true).describe("If true (default for recurring), each run creates a new conversation. If false, posts to the current conversation."),
-        }),
-        execute: async ({ title, cronExpression, description, instruction, actionType, createNewConversation }: { title: string; cronExpression: string; description?: string; instruction?: string; actionType?: "notify" | "agent_task"; createNewConversation?: boolean }) => {
-          try {
-            const userTimezone = profile?.timezone || "America/New_York";
-            
-            // Calculate next run time from cron expression
-            const { calculateNextRunFromCron } = await import("@/lib/db/scheduled-jobs");
-            const nextRun = calculateNextRunFromCron(cronExpression, userTimezone);
-
-            // For recurring jobs, default to creating new conversations (makes more sense for daily briefs, etc.)
-            const shouldCreateNewConversation = createNewConversation !== false;
-
-            // Build action payload with preferred channel
-            const preferredChannel = profile?.preferred_notification_channel || "app";
-            const recurringActionPayload: Record<string, unknown> = {
-              message: title,
-              preferred_channel: preferredChannel,
-              ...(instruction ? { instruction } : {}),
-            };
-
-            const { data, error } = await adminSupabase
-              .from("scheduled_jobs")
-              .insert({
-                agent_id: agentId,
-                job_type: "recurring",
-                title,
-                description: description || null,
-                schedule_type: "cron",
-                cron_expression: cronExpression,
-                next_run_at: nextRun.toISOString(),
-                timezone: userTimezone,
-                action_type: actionType || "notify",
-                action_payload: recurringActionPayload,
-                conversation_id: shouldCreateNewConversation ? null : conversation.id,
-                status: "active",
-              })
-              .select()
-              .single();
-
-            if (error) return { success: false, error: error.message };
-
-            // Format the time in the user's timezone for display
             const formatter = new Intl.DateTimeFormat("en-US", {
               timeZone: userTimezone,
               weekday: "short",
@@ -959,67 +904,117 @@ export async function POST(request: Request) {
               minute: "2-digit",
               hour12: true,
             });
-            const nextRunFormatted = formatter.format(nextRun);
+            const nextRunFormatted = formatter.format(new Date(nextRunAt));
 
-            return {
-              success: true,
-              job: {
-                id: data.id,
-                title: data.title,
-                schedule: cronExpression,
-                nextRun: nextRunFormatted,
-                timezone: userTimezone,
-                willCreateNewConversation: shouldCreateNewConversation,
-              },
-              message: `Recurring job created: "${title}" - next run: ${nextRunFormatted} (${userTimezone})${shouldCreateNewConversation ? " [will start new conversation each time]" : ""}`,
-            };
+            if (scheduleType === "once") {
+              return {
+                success: true,
+                reminder: {
+                  id: data.id,
+                  title: data.title,
+                  scheduledFor: nextRunFormatted,
+                  timezone: userTimezone,
+                  type: "one-time",
+                },
+                message: `Reminder set for ${nextRunFormatted} (${userTimezone}): "${title}"`,
+              };
+            } else {
+              return {
+                success: true,
+                reminder: {
+                  id: data.id,
+                  title: data.title,
+                  schedule: cronExpr,
+                  nextRun: nextRunFormatted,
+                  timezone: userTimezone,
+                  type: "recurring",
+                },
+                message: `Recurring reminder created: "${title}" - next: ${nextRunFormatted} (${userTimezone})`,
+              };
+            }
           } catch (err) {
             return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
           }
         },
       }),
 
-      createFollowUp: tool({
-        description: "Create a follow-up job that triggers the agent to check on something at a later time. Use this for 'remind me to follow up if X doesn't happen' scenarios.",
+      scheduleAgentTask: tool({
+        description: "Schedule a task for the agent to EXECUTE at a specific time. Use this when the user wants you to DO SOMETHING and send them the results - not just remind them. The agent will wake up, execute the instruction with full tool access, and send results. ALWAYS creates a new conversation. Examples: 'tomorrow at 10am, research AI news and send me a brief', 'every Monday at 9am, check my email and summarize important messages', 'in 2 hours, check if the server is responding'.",
         inputSchema: z.object({
-          title: z.string().describe("What to follow up on"),
-          runAt: z.string().describe("When to check. MUST be a UTC ISO datetime string ending in Z (e.g., '2026-01-31T20:00:00Z'). Use the ISO timestamp from your current time context and add the appropriate duration."),
-          instruction: z.string().describe("What the agent should check or do when this triggers"),
+          title: z.string().describe("Name/title of the task"),
+          instruction: z.string().describe("Detailed instructions for what the agent should do when this job runs. Be specific - this is what the agent will execute."),
+          // Scheduling - one of these is required
+          runAt: z.string().optional().describe("For ONE-TIME tasks: UTC ISO datetime string ending in Z (e.g., '2026-01-31T20:00:00Z')"),
+          cronExpression: z.string().optional().describe("For RECURRING tasks: Cron expression (e.g., '0 8 * * *' for 8am daily)"),
+          // Optional links
           taskId: z.string().optional().describe("Link to an existing task ID"),
           projectId: z.string().optional().describe("Link to an existing project ID"),
-          createNewConversation: z.boolean().optional().default(false).describe("If true, the follow-up will create a new conversation thread instead of posting to the current one."),
         }),
-        execute: async ({ title, runAt, instruction, taskId, projectId, createNewConversation }: { title: string; runAt: string; instruction: string; taskId?: string; projectId?: string; createNewConversation?: boolean }) => {
+        execute: async ({ title, instruction, runAt, cronExpression, taskId, projectId }: { title: string; instruction: string; runAt?: string; cronExpression?: string; taskId?: string; projectId?: string }) => {
           try {
             const userTimezone = profile?.timezone || "America/New_York";
-            
-            // Ensure runAt is a valid UTC ISO string
-            let utcRunAt = runAt;
-            if (!runAt.endsWith('Z') && !runAt.includes('+') && !runAt.includes('-', 10)) {
-              utcRunAt = runAt + 'Z';
+            const preferredChannel = profile?.preferred_notification_channel || "app";
+
+            // Validate that exactly one scheduling option is provided
+            if (!runAt && !cronExpression) {
+              return { success: false, error: "Must provide either 'runAt' for one-time or 'cronExpression' for recurring tasks" };
             }
-            
-            const runAtDate = new Date(utcRunAt);
-            if (isNaN(runAtDate.getTime())) {
-              return { success: false, error: `Invalid datetime format: ${runAt}. Please use UTC ISO format like '2026-01-31T20:00:00Z'` };
+            if (runAt && cronExpression) {
+              return { success: false, error: "Provide only one: 'runAt' for one-time OR 'cronExpression' for recurring" };
             }
-            
+
+            let nextRunAt: string;
+            let scheduleType: "once" | "cron";
+            let jobType: "one_time" | "recurring";
+            let cronExpr: string | null = null;
+            let runAtValue: string | null = null;
+
+            if (runAt) {
+              // One-time task
+              let utcRunAt = runAt;
+              if (!runAt.endsWith('Z') && !runAt.includes('+') && !runAt.includes('-', 10)) {
+                utcRunAt = runAt + 'Z';
+              }
+              const runAtDate = new Date(utcRunAt);
+              if (isNaN(runAtDate.getTime())) {
+                return { success: false, error: `Invalid datetime format: ${runAt}. Use UTC ISO format like '2026-01-31T20:00:00Z'` };
+              }
+              nextRunAt = runAtDate.toISOString();
+              runAtValue = nextRunAt;
+              scheduleType = "once";
+              jobType = "one_time";
+            } else {
+              // Recurring task
+              const { calculateNextRunFromCron } = await import("@/lib/db/scheduled-jobs");
+              const nextRun = calculateNextRunFromCron(cronExpression!, userTimezone);
+              nextRunAt = nextRun.toISOString();
+              cronExpr = cronExpression!;
+              scheduleType = "cron";
+              jobType = "recurring";
+            }
+
+            const actionPayload: Record<string, unknown> = {
+              instruction,
+              preferred_channel: preferredChannel,
+            };
+
             const { data, error } = await adminSupabase
               .from("scheduled_jobs")
               .insert({
                 agent_id: agentId,
-                job_type: "follow_up",
+                job_type: jobType,
                 title,
                 description: instruction,
-                schedule_type: "once",
-                run_at: runAtDate.toISOString(),
-                next_run_at: runAtDate.toISOString(),
+                schedule_type: scheduleType,
+                run_at: runAtValue,
+                cron_expression: cronExpr,
+                next_run_at: nextRunAt,
                 timezone: userTimezone,
                 action_type: "agent_task",
-                action_payload: { instruction },
+                action_payload: actionPayload,
                 task_id: taskId || null,
                 project_id: projectId || null,
-                conversation_id: createNewConversation ? null : conversation.id,
+                conversation_id: null, // Agent tasks ALWAYS create new conversations
                 status: "active",
               })
               .select()
@@ -1027,7 +1022,6 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
-            // Format the time in the user's timezone for display
             const formatter = new Intl.DateTimeFormat("en-US", {
               timeZone: userTimezone,
               weekday: "short",
@@ -1035,22 +1029,38 @@ export async function POST(request: Request) {
               day: "numeric",
               hour: "numeric",
               minute: "2-digit",
-              second: "2-digit",
               hour12: true,
             });
-            const followUpTimeFormatted = formatter.format(runAtDate);
-            
-            return {
-              success: true,
-              followUp: {
-                id: data.id,
-                title: data.title,
-                scheduledFor: followUpTimeFormatted,
-                timezone: userTimezone,
-                willCreateNewConversation: createNewConversation || false,
-              },
-              message: `Follow-up scheduled for ${followUpTimeFormatted} (${userTimezone}): "${title}"${createNewConversation ? " [will start new conversation]" : ""}`,
-            };
+            const nextRunFormatted = formatter.format(new Date(nextRunAt));
+
+            if (scheduleType === "once") {
+              return {
+                success: true,
+                job: {
+                  id: data.id,
+                  title: data.title,
+                  instruction: instruction.substring(0, 100) + (instruction.length > 100 ? "..." : ""),
+                  scheduledFor: nextRunFormatted,
+                  timezone: userTimezone,
+                  type: "one-time",
+                },
+                message: `Agent task scheduled for ${nextRunFormatted} (${userTimezone}): "${title}" - I will execute this and send you the results in a new conversation.`,
+              };
+            } else {
+              return {
+                success: true,
+                job: {
+                  id: data.id,
+                  title: data.title,
+                  instruction: instruction.substring(0, 100) + (instruction.length > 100 ? "..." : ""),
+                  schedule: cronExpr,
+                  nextRun: nextRunFormatted,
+                  timezone: userTimezone,
+                  type: "recurring",
+                },
+                message: `Recurring agent task created: "${title}" - next execution: ${nextRunFormatted} (${userTimezone}). Each run will start a new conversation with results.`,
+              };
+            }
           } catch (err) {
             return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
           }
