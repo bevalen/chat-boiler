@@ -529,15 +529,17 @@ export async function POST(request: Request) {
       }),
 
       createTask: tool({
-        description: "Create a new task",
+        description: "Create a new task, optionally assigned to user or agent",
         inputSchema: z.object({
           title: z.string().describe("Task title"),
           description: z.string().optional().describe("Task description"),
           priority: z.enum(["high", "medium", "low"]).optional().default("medium"),
           dueDate: z.string().optional().describe("Due date (ISO format)"),
           projectId: z.string().optional().describe("Project ID to link to"),
+          assigneeType: z.enum(["user", "agent"]).optional().describe("Who should work on this: 'user' (Ben) or 'agent' (AI assistant)"),
+          assigneeId: z.string().optional().describe("ID of the assignee"),
         }),
-        execute: async ({ title, description, priority, dueDate, projectId }: { title: string; description?: string; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string }) => {
+        execute: async ({ title, description, priority, dueDate, projectId, assigneeType, assigneeId }: { title: string; description?: string; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent"; assigneeId?: string }) => {
           const textToEmbed = description ? `${title}\n\n${description}` : title;
           const embedding = await generateEmbedding(textToEmbed);
           const { data, error } = await adminSupabase
@@ -547,34 +549,38 @@ export async function POST(request: Request) {
               title,
               description,
               priority: priority || "medium",
-              status: "pending",
+              status: "todo",
               due_date: dueDate || null,
               project_id: projectId || null,
+              assignee_type: assigneeType || null,
+              assignee_id: assigneeId || null,
               embedding,
             })
             .select()
             .single();
 
           if (error) return { success: false, error: error.message };
-          return { success: true, task: { id: data.id, title: data.title, status: data.status, priority: data.priority } };
+          return { success: true, task: { id: data.id, title: data.title, status: data.status, priority: data.priority, assigneeType: data.assignee_type } };
         },
       }),
 
       listTasks: tool({
-        description: "List tasks",
+        description: "List tasks, optionally filtered by status, project, or assignee",
         inputSchema: z.object({
-          status: z.enum(["pending", "in_progress", "completed", "all"]).optional().default("all"),
+          status: z.enum(["todo", "in_progress", "waiting_on", "done", "all"]).optional().default("all"),
           projectId: z.string().optional().describe("Filter by project"),
+          assigneeType: z.enum(["user", "agent"]).optional().describe("Filter by assignee type"),
         }),
-        execute: async ({ status, projectId }: { status?: "pending" | "in_progress" | "completed" | "all"; projectId?: string }) => {
+        execute: async ({ status, projectId, assigneeType }: { status?: "todo" | "in_progress" | "waiting_on" | "done" | "all"; projectId?: string; assigneeType?: "user" | "agent" }) => {
           let query = adminSupabase
             .from("tasks")
-            .select("id, title, description, status, priority, due_date, project_id, created_at")
+            .select("id, title, description, status, priority, due_date, project_id, created_at, assignee_type, assignee_id, blocked_by")
             .eq("agent_id", agentId)
             .order("created_at", { ascending: false });
 
           if (status && status !== "all") query = query.eq("status", status);
           if (projectId) query = query.eq("project_id", projectId);
+          if (assigneeType) query = query.eq("assignee_type", assigneeType);
 
           const { data, error } = await query;
           if (error) return { success: false, error: error.message };
@@ -583,14 +589,14 @@ export async function POST(request: Request) {
       }),
 
       getTask: tool({
-        description: "Get details of a specific task by ID",
+        description: "Get details of a specific task by ID, including assignee and dependencies",
         inputSchema: z.object({
           taskId: z.string().describe("The ID of the task to retrieve"),
         }),
         execute: async ({ taskId }: { taskId: string }) => {
           const { data, error } = await adminSupabase
             .from("tasks")
-            .select("id, title, description, status, priority, due_date, project_id, created_at, completed_at")
+            .select("id, title, description, status, priority, due_date, project_id, created_at, completed_at, assignee_type, assignee_id, blocked_by, agent_run_state")
             .eq("id", taskId)
             .eq("agent_id", agentId)
             .single();
@@ -602,29 +608,35 @@ export async function POST(request: Request) {
       }),
 
       updateTask: tool({
-        description: "Update an existing task's details or status",
+        description: "Update an existing task's details, status, or assignment",
         inputSchema: z.object({
           taskId: z.string().describe("The ID of the task to update"),
           title: z.string().optional().describe("New title for the task"),
           description: z.string().optional().describe("New description"),
-          status: z.enum(["pending", "in_progress", "completed"]).optional().describe("New status"),
+          status: z.enum(["todo", "in_progress", "waiting_on", "done"]).optional().describe("New status: todo, in_progress, waiting_on, or done"),
           priority: z.enum(["high", "medium", "low"]).optional().describe("New priority level"),
           dueDate: z.string().optional().describe("New due date in ISO format"),
           projectId: z.string().optional().describe("Project ID to link the task to"),
+          assigneeType: z.enum(["user", "agent"]).optional().describe("Reassign to 'user' or 'agent'"),
+          assigneeId: z.string().optional().describe("ID of the new assignee"),
+          blockedBy: z.array(z.string()).optional().describe("Array of task IDs that block this task"),
         }),
-        execute: async ({ taskId, title, description, status, priority, dueDate, projectId }: { taskId: string; title?: string; description?: string; status?: "pending" | "in_progress" | "completed"; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string }) => {
+        execute: async ({ taskId, title, description, status, priority, dueDate, projectId, assigneeType, assigneeId, blockedBy }: { taskId: string; title?: string; description?: string; status?: "todo" | "in_progress" | "waiting_on" | "done"; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent"; assigneeId?: string; blockedBy?: string[] }) => {
           const updates: Record<string, unknown> = {};
           if (title) updates.title = title;
           if (description !== undefined) updates.description = description;
           if (status) {
             updates.status = status;
-            if (status === "completed") {
+            if (status === "done") {
               updates.completed_at = new Date().toISOString();
             }
           }
           if (priority) updates.priority = priority;
           if (dueDate !== undefined) updates.due_date = dueDate || null;
           if (projectId !== undefined) updates.project_id = projectId || null;
+          if (assigneeType !== undefined) updates.assignee_type = assigneeType;
+          if (assigneeId !== undefined) updates.assignee_id = assigneeId;
+          if (blockedBy !== undefined) updates.blocked_by = blockedBy;
 
           // If title or description changed, regenerate embedding
           if (title || description !== undefined) {
@@ -655,26 +667,26 @@ export async function POST(request: Request) {
             .single();
 
           if (error) return { success: false, error: error.message };
-          return { success: true, task: { id: data.id, title: data.title, status: data.status, priority: data.priority } };
+          return { success: true, task: { id: data.id, title: data.title, status: data.status, priority: data.priority, assigneeType: data.assignee_type } };
         },
       }),
 
       completeTask: tool({
-        description: "Mark a task as completed",
+        description: "Mark a task as done (completed)",
         inputSchema: z.object({
           taskId: z.string().describe("Task ID to complete"),
         }),
         execute: async ({ taskId }: { taskId: string }) => {
           const { data, error } = await adminSupabase
             .from("tasks")
-            .update({ status: "completed", completed_at: new Date().toISOString() })
+            .update({ status: "done", completed_at: new Date().toISOString() })
             .eq("id", taskId)
             .eq("agent_id", agentId)
             .select()
             .single();
 
           if (error) return { success: false, error: error.message };
-          return { success: true, task: { id: data.id, title: data.title, status: "completed" } };
+          return { success: true, task: { id: data.id, title: data.title, status: "done" } };
         },
       }),
 
@@ -705,6 +717,69 @@ export async function POST(request: Request) {
 
           if (deleteError) return { success: false, error: deleteError.message };
           return { success: true, message: `Task "${task.title}" has been deleted`, deletedTaskId: taskId };
+        },
+      }),
+
+      // === COMMENT TOOLS ===
+
+      addComment: tool({
+        description: "Add a comment to a task or project. Use this to log progress, ask questions, or record notes.",
+        inputSchema: z.object({
+          taskId: z.string().optional().describe("The ID of the task to comment on"),
+          projectId: z.string().optional().describe("The ID of the project to comment on"),
+          content: z.string().describe("The comment content (supports markdown)"),
+          commentType: z.enum(["progress", "question", "note", "resolution", "approval_request", "approval_granted", "status_change"]).optional().default("note").describe("The type of comment"),
+        }),
+        execute: async ({ taskId, projectId, content, commentType }: { taskId?: string; projectId?: string; content: string; commentType?: "progress" | "question" | "note" | "resolution" | "approval_request" | "approval_granted" | "status_change" }) => {
+          if (!taskId && !projectId) {
+            return { success: false, error: "Either taskId or projectId is required" };
+          }
+
+          const { data, error } = await adminSupabase
+            .from("task_comments")
+            .insert({
+              task_id: taskId || null,
+              project_id: projectId || null,
+              author_type: "agent",
+              author_id: agentId,
+              content,
+              comment_type: commentType || "note",
+            })
+            .select()
+            .single();
+
+          if (error) return { success: false, error: error.message };
+          return { success: true, comment: { id: data.id, content: data.content, commentType: data.comment_type, createdAt: data.created_at } };
+        },
+      }),
+
+      listComments: tool({
+        description: "List comments on a task or project to see the activity history",
+        inputSchema: z.object({
+          taskId: z.string().optional().describe("The ID of the task to get comments for"),
+          projectId: z.string().optional().describe("The ID of the project to get comments for"),
+          limit: z.number().optional().default(20).describe("Maximum number of comments to return"),
+        }),
+        execute: async ({ taskId, projectId, limit }: { taskId?: string; projectId?: string; limit?: number }) => {
+          if (!taskId && !projectId) {
+            return { success: false, error: "Either taskId or projectId is required" };
+          }
+
+          let query = adminSupabase
+            .from("task_comments")
+            .select("id, task_id, project_id, author_type, author_id, content, comment_type, created_at")
+            .order("created_at", { ascending: false })
+            .limit(limit || 20);
+
+          if (taskId) {
+            query = query.eq("task_id", taskId);
+          } else if (projectId) {
+            query = query.eq("project_id", projectId);
+          }
+
+          const { data, error } = await query;
+          if (error) return { success: false, error: error.message };
+          return { success: true, comments: data, count: data?.length || 0 };
         },
       }),
 

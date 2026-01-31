@@ -159,7 +159,7 @@ export function ProjectDetail({
         priority: newTask.priority,
         project_id: project.id,
         due_date: newTask.due_date || null,
-        status: "pending",
+        status: "todo",
       })
       .select("*, projects(id, title)")
       .single();
@@ -173,14 +173,14 @@ export function ProjectDetail({
   };
 
   const handleToggleComplete = async (task: Task) => {
-    const newStatus = task.status === "completed" ? "pending" : "completed";
+    const newStatus = task.status === "done" ? "todo" : "done";
     const supabase = createClient();
     const { data, error } = await supabase
       .from("tasks")
       .update({
         status: newStatus,
         completed_at:
-          newStatus === "completed" ? new Date().toISOString() : null,
+          newStatus === "done" ? new Date().toISOString() : null,
       })
       .eq("id", task.id)
       .select("*, projects(id, title)")
@@ -228,8 +228,8 @@ export function ProjectDetail({
     }
   };
 
-  const pendingCount = tasks.filter((t) => t.status !== "completed").length;
-  const completedCount = tasks.filter((t) => t.status === "completed").length;
+  const activeCount = tasks.filter((t) => t.status !== "done").length;
+  const doneCount = tasks.filter((t) => t.status === "done").length;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -421,7 +421,7 @@ export function ProjectDetail({
             <ListTodo className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Tasks</h2>
             <span className="text-sm text-muted-foreground">
-              {pendingCount} pending · {completedCount} completed
+              {activeCount} active · {doneCount} done
             </span>
           </div>
           <Button size="sm" onClick={() => setIsCreateTaskOpen(true)}>
@@ -454,7 +454,7 @@ export function ProjectDetail({
                 status={task.status}
                 priority={task.priority}
                 dueDate={task.due_date}
-                isCompleted={task.status === "completed"}
+                isCompleted={task.status === "done"}
                 showCheckbox
                 onCheckboxChange={() => handleToggleComplete(task)}
                 onClick={() => {

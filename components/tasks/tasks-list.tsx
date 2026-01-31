@@ -42,7 +42,7 @@ export function TasksList({
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "done">("all");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -68,7 +68,7 @@ export function TasksList({
         priority: newTask.priority,
         project_id: newTask.project_id || null,
         due_date: newTask.due_date || null,
-        status: "pending",
+        status: "todo",
       })
       .select("*, projects(id, title)")
       .single();
@@ -88,14 +88,14 @@ export function TasksList({
   };
 
   const handleToggleComplete = async (task: Task) => {
-    const newStatus = task.status === "completed" ? "pending" : "completed";
+    const newStatus = task.status === "done" ? "todo" : "done";
     const supabase = createClient();
     const { data, error } = await supabase
       .from("tasks")
       .update({
         status: newStatus,
         completed_at:
-          newStatus === "completed" ? new Date().toISOString() : null,
+          newStatus === "done" ? new Date().toISOString() : null,
       })
       .eq("id", task.id)
       .select("*, projects(id, title)")
@@ -123,13 +123,13 @@ export function TasksList({
   };
 
   const filteredTasks = tasks.filter((task) => {
-    if (filter === "pending") return task.status !== "completed";
-    if (filter === "completed") return task.status === "completed";
+    if (filter === "active") return task.status !== "done";
+    if (filter === "done") return task.status === "done";
     return true;
   });
 
-  const pendingCount = tasks.filter((t) => t.status !== "completed").length;
-  const completedCount = tasks.filter((t) => t.status === "completed").length;
+  const activeCount = tasks.filter((t) => t.status !== "done").length;
+  const doneCount = tasks.filter((t) => t.status === "done").length;
 
   return (
     <div className="p-6">
@@ -137,7 +137,7 @@ export function TasksList({
         <div>
           <h1 className="text-2xl font-bold">Tasks</h1>
           <p className="text-muted-foreground">
-            {pendingCount} pending · {completedCount} completed
+            {activeCount} active · {doneCount} done
           </p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -253,18 +253,18 @@ export function TasksList({
           All ({tasks.length})
         </Button>
         <Button
-          variant={filter === "pending" ? "default" : "outline"}
+          variant={filter === "active" ? "default" : "outline"}
           size="sm"
-          onClick={() => setFilter("pending")}
+          onClick={() => setFilter("active")}
         >
-          Pending ({pendingCount})
+          Active ({activeCount})
         </Button>
         <Button
-          variant={filter === "completed" ? "default" : "outline"}
+          variant={filter === "done" ? "default" : "outline"}
           size="sm"
-          onClick={() => setFilter("completed")}
+          onClick={() => setFilter("done")}
         >
-          Completed ({completedCount})
+          Done ({doneCount})
         </Button>
       </div>
 
@@ -276,7 +276,9 @@ export function TasksList({
             <p className="text-muted-foreground text-sm mb-4">
               {filter === "all"
                 ? "Create your first task to get started."
-                : `No ${filter} tasks.`}
+                : filter === "active"
+                ? "No active tasks."
+                : "No completed tasks."}
             </p>
             {filter === "all" && (
               <Button onClick={() => setIsCreateOpen(true)}>
@@ -297,7 +299,7 @@ export function TasksList({
               priority={task.priority}
               dueDate={task.due_date}
               projectName={task.projects?.title}
-              isCompleted={task.status === "completed"}
+              isCompleted={task.status === "done"}
               showCheckbox
               onCheckboxChange={() => handleToggleComplete(task)}
               onClick={() => {

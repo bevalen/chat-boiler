@@ -34,6 +34,27 @@ export interface AgentIdentityContext {
   };
 }
 
+// Safety permissions for agent actions
+export interface AgentSafetyPermissions {
+  require_confirmation: string[];
+  auto_approve: string[];
+}
+
+// Task status types
+export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
+
+// Task assignee types
+export type AssigneeType = "user" | "agent";
+
+// Agent run state for automation
+export type AgentRunState = "not_started" | "running" | "needs_input" | "failed" | "completed";
+
+// Comment types for task/project activity
+export type CommentType = "progress" | "question" | "note" | "resolution" | "approval_request" | "approval_granted" | "status_change";
+
+// Author types for comments
+export type CommentAuthorType = "user" | "agent" | "system";
+
 // Channel types
 export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp";
 
@@ -139,6 +160,7 @@ export interface Database {
           personality: Json | null;
           user_preferences: Json | null;
           identity_context: Json | null;
+          safety_permissions: Json | null;
           created_at: string | null;
         };
         Insert: {
@@ -151,6 +173,7 @@ export interface Database {
           personality?: Json | null;
           user_preferences?: Json | null;
           identity_context?: Json | null;
+          safety_permissions?: Json | null;
           created_at?: string | null;
         };
         Update: {
@@ -163,6 +186,7 @@ export interface Database {
           personality?: Json | null;
           user_preferences?: Json | null;
           identity_context?: Json | null;
+          safety_permissions?: Json | null;
           created_at?: string | null;
         };
       };
@@ -295,11 +319,22 @@ export interface Database {
           project_id: string | null;
           title: string;
           description: string | null;
-          status: "pending" | "in_progress" | "completed" | null;
+          status: TaskStatus | null;
           priority: "high" | "medium" | "low" | null;
           due_date: string | null;
           created_at: string | null;
           completed_at: string | null;
+          // Assignee fields
+          assignee_type: AssigneeType | null;
+          assignee_id: string | null;
+          // Dependency tracking
+          blocked_by: string[] | null;
+          // Agent automation fields
+          agent_run_state: AgentRunState | null;
+          last_agent_run_at: string | null;
+          lock_expires_at: string | null;
+          failure_reason: string | null;
+          retry_count: number | null;
         };
         Insert: {
           id?: string;
@@ -307,11 +342,19 @@ export interface Database {
           project_id?: string | null;
           title: string;
           description?: string | null;
-          status?: "pending" | "in_progress" | "completed" | null;
+          status?: TaskStatus | null;
           priority?: "high" | "medium" | "low" | null;
           due_date?: string | null;
           created_at?: string | null;
           completed_at?: string | null;
+          assignee_type?: AssigneeType | null;
+          assignee_id?: string | null;
+          blocked_by?: string[] | null;
+          agent_run_state?: AgentRunState | null;
+          last_agent_run_at?: string | null;
+          lock_expires_at?: string | null;
+          failure_reason?: string | null;
+          retry_count?: number | null;
         };
         Update: {
           id?: string;
@@ -319,11 +362,51 @@ export interface Database {
           project_id?: string | null;
           title?: string;
           description?: string | null;
-          status?: "pending" | "in_progress" | "completed" | null;
+          status?: TaskStatus | null;
           priority?: "high" | "medium" | "low" | null;
           due_date?: string | null;
           created_at?: string | null;
           completed_at?: string | null;
+          assignee_type?: AssigneeType | null;
+          assignee_id?: string | null;
+          blocked_by?: string[] | null;
+          agent_run_state?: AgentRunState | null;
+          last_agent_run_at?: string | null;
+          lock_expires_at?: string | null;
+          failure_reason?: string | null;
+          retry_count?: number | null;
+        };
+      };
+      task_comments: {
+        Row: {
+          id: string;
+          task_id: string | null;
+          project_id: string | null;
+          author_type: CommentAuthorType;
+          author_id: string | null;
+          content: string;
+          comment_type: CommentType | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          task_id?: string | null;
+          project_id?: string | null;
+          author_type: CommentAuthorType;
+          author_id?: string | null;
+          content: string;
+          comment_type?: CommentType | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          task_id?: string | null;
+          project_id?: string | null;
+          author_type?: CommentAuthorType;
+          author_id?: string | null;
+          content?: string;
+          comment_type?: CommentType | null;
+          created_at?: string | null;
         };
       };
       action_log: {

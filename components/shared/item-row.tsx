@@ -62,11 +62,13 @@ export function ItemRow({
       }
     } else {
       switch (status) {
-        case "pending":
+        case "todo":
           return "bg-slate-500/10 text-slate-500 border-slate-500/20";
         case "in_progress":
           return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-        case "completed":
+        case "waiting_on":
+          return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+        case "done":
           return "bg-green-500/10 text-green-500 border-green-500/20";
         default:
           return "bg-muted text-muted-foreground";
@@ -93,7 +95,7 @@ export function ItemRow({
   };
 
   const isOverdue =
-    dueDate && new Date(dueDate) < new Date() && status !== "completed";
+    dueDate && new Date(dueDate) < new Date() && status !== "done";
 
   return (
     <div

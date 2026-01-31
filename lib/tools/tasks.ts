@@ -5,7 +5,7 @@ import { generateEmbedding } from "@/lib/embeddings";
 import { createNotification } from "@/lib/db/notifications";
 
 export const createTaskTool = tool({
-  description: "Create a new task, optionally linked to a project",
+  description: "Create a new task, optionally linked to a project and assigned to a user or agent",
   inputSchema: z.object({
     title: z.string().describe("The title of the task"),
     description: z.string().optional().describe("A description of the task"),
@@ -21,9 +21,17 @@ export const createTaskTool = tool({
       .string()
       .optional()
       .describe("Due date in ISO format (e.g., 2024-01-15)"),
+    assigneeType: z
+      .enum(["user", "agent"])
+      .optional()
+      .describe("Who should work on this task: 'user' (Ben) or 'agent' (the AI assistant)"),
+    assigneeId: z
+      .string()
+      .optional()
+      .describe("The ID of the user or agent to assign to"),
   }),
   execute: async (
-    { title, description, projectId, priority, dueDate },
+    { title, description, projectId, priority, dueDate, assigneeType, assigneeId },
     options
   ) => {
     const agentId = (options as { agentId?: string }).agentId;
@@ -47,8 +55,10 @@ export const createTaskTool = tool({
         description,
         project_id: projectId || null,
         priority: priority || "medium",
-        status: "pending",
+        status: "todo",
         due_date: dueDate || null,
+        assignee_type: assigneeType || null,
+        assignee_id: assigneeId || null,
         embedding,
       })
       .select()
@@ -67,24 +77,30 @@ export const createTaskTool = tool({
         priority: data.priority,
         status: data.status,
         dueDate: data.due_date,
+        assigneeType: data.assignee_type,
+        assigneeId: data.assignee_id,
       },
     };
   },
 });
 
 export const listTasksTool = tool({
-  description: "List tasks, optionally filtered by status or project",
+  description: "List tasks, optionally filtered by status, project, or assignee",
   inputSchema: z.object({
     status: z
-      .enum(["pending", "in_progress", "completed", "all"])
+      .enum(["todo", "in_progress", "waiting_on", "done", "all"])
       .optional()
       .describe("Filter by task status"),
     projectId: z
       .string()
       .optional()
       .describe("Filter tasks by project ID"),
+    assigneeType: z
+      .enum(["user", "agent"])
+      .optional()
+      .describe("Filter by who is assigned: 'user' or 'agent'"),
   }),
-  execute: async ({ status, projectId }, options) => {
+  execute: async ({ status, projectId, assigneeType }, options) => {
     const agentId = (options as { agentId?: string }).agentId;
     if (!agentId) throw new Error("Agent ID is required");
     const supabase = getAdminClient();
@@ -92,7 +108,7 @@ export const listTasksTool = tool({
     let query = supabase
       .from("tasks")
       .select(
-        "id, title, description, status, priority, due_date, project_id, created_at, completed_at"
+        "id, title, description, status, priority, due_date, project_id, created_at, completed_at, assignee_type, assignee_id, blocked_by"
       )
       .eq("agent_id", agentId as string)
       .order("created_at", { ascending: false });
@@ -103,6 +119,10 @@ export const listTasksTool = tool({
 
     if (projectId) {
       query = query.eq("project_id", projectId);
+    }
+
+    if (assigneeType) {
+      query = query.eq("assignee_type", assigneeType);
     }
 
     const { data, error } = await query;
@@ -120,7 +140,7 @@ export const listTasksTool = tool({
 });
 
 export const completeTaskTool = tool({
-  description: "Mark a task as completed",
+  description: "Mark a task as done (completed)",
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to complete"),
   }),
@@ -132,7 +152,7 @@ export const completeTaskTool = tool({
     const { data, error } = await supabase
       .from("tasks")
       .update({
-        status: "completed",
+        status: "done",
         completed_at: new Date().toISOString(),
       })
       .eq("id", taskId)
@@ -150,7 +170,7 @@ export const completeTaskTool = tool({
       agentId as string,
       "task_update",
       `Task completed: ${data.title}`,
-      "Your task has been marked as complete.",
+      "Your task has been marked as done.",
       "task",
       taskId
     );
@@ -163,23 +183,35 @@ export const completeTaskTool = tool({
 });
 
 export const updateTaskTool = tool({
-  description: "Update an existing task's details or status",
+  description: "Update an existing task's details, status, or assignment",
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to update"),
     title: z.string().optional().describe("New title for the task"),
     description: z.string().optional().describe("New description"),
     status: z
-      .enum(["pending", "in_progress", "completed"])
+      .enum(["todo", "in_progress", "waiting_on", "done"])
       .optional()
-      .describe("New status"),
+      .describe("New status: todo, in_progress, waiting_on, or done"),
     priority: z
       .enum(["high", "medium", "low"])
       .optional()
       .describe("New priority level"),
     dueDate: z.string().optional().describe("New due date in ISO format"),
+    assigneeType: z
+      .enum(["user", "agent"])
+      .optional()
+      .describe("Reassign to 'user' or 'agent'"),
+    assigneeId: z
+      .string()
+      .optional()
+      .describe("ID of the new assignee"),
+    blockedBy: z
+      .array(z.string())
+      .optional()
+      .describe("Array of task IDs that block this task"),
   }),
   execute: async (
-    { taskId, title, description, status, priority, dueDate },
+    { taskId, title, description, status, priority, dueDate, assigneeType, assigneeId, blockedBy },
     options
   ) => {
     const agentId = (options as { agentId?: string }).agentId;
@@ -191,12 +223,15 @@ export const updateTaskTool = tool({
     if (description !== undefined) updates.description = description;
     if (status) {
       updates.status = status;
-      if (status === "completed") {
+      if (status === "done") {
         updates.completed_at = new Date().toISOString();
       }
     }
     if (priority) updates.priority = priority;
     if (dueDate) updates.due_date = dueDate;
+    if (assigneeType !== undefined) updates.assignee_type = assigneeType;
+    if (assigneeId !== undefined) updates.assignee_id = assigneeId;
+    if (blockedBy !== undefined) updates.blocked_by = blockedBy;
 
     // If title or description changed, regenerate embedding
     if (title || description !== undefined) {
@@ -235,9 +270,10 @@ export const updateTaskTool = tool({
     // Create notification for status changes
     if (status) {
       const statusMessages: Record<string, string> = {
-        pending: "Task moved back to pending",
+        todo: "Task moved to todo",
         in_progress: "Task is now in progress",
-        completed: "Task has been completed",
+        waiting_on: "Task is waiting on input/dependency",
+        done: "Task has been completed",
       };
       await createNotification(
         supabase,
@@ -258,7 +294,7 @@ export const updateTaskTool = tool({
 });
 
 export const getTaskTool = tool({
-  description: "Get details of a specific task by ID",
+  description: "Get details of a specific task by ID, including assignee and dependencies",
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to retrieve"),
   }),
@@ -270,7 +306,7 @@ export const getTaskTool = tool({
     const { data, error } = await supabase
       .from("tasks")
       .select(
-        "id, title, description, status, priority, due_date, project_id, created_at, completed_at"
+        "id, title, description, status, priority, due_date, project_id, created_at, completed_at, assignee_type, assignee_id, blocked_by, agent_run_state, last_agent_run_at"
       )
       .eq("id", taskId)
       .eq("agent_id", agentId as string)
