@@ -51,15 +51,33 @@ interface UserInfo {
 interface ChatInterfaceProps {
   agent?: AgentInfo;
   user?: UserInfo;
+  /** Custom API endpoint (default: /api/chat) */
+  apiEndpoint?: string;
+  /** Hide the conversation sidebar (for single-purpose chats like feedback) */
+  hideSidebar?: boolean;
+  /** Custom storage key for conversation ID persistence (set to null to disable persistence) */
+  storageKey?: string | null;
+  /** Welcome message to show when no messages */
+  welcomeMessage?: {
+    title: string;
+    subtitle: string;
+  };
 }
 
-const STORAGE_KEY = "maia_active_conversation_id";
+const DEFAULT_STORAGE_KEY = "maia_active_conversation_id";
 
-export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
-  // Initialize from localStorage if available
+export function ChatInterface({ 
+  agent, 
+  user: userInfo,
+  apiEndpoint = "/api/chat",
+  hideSidebar = false,
+  storageKey = DEFAULT_STORAGE_KEY,
+  welcomeMessage,
+}: ChatInterfaceProps) {
+  // Initialize from localStorage if available (and persistence is enabled)
   const [conversationId, setConversationId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(STORAGE_KEY);
+    if (typeof window !== "undefined" && storageKey) {
+      return localStorage.getItem(storageKey);
     }
     return null;
   });
@@ -88,10 +106,10 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: "/api/chat",
+        api: apiEndpoint,
         body: () => (conversationIdRef.current ? { conversationId: conversationIdRef.current } : {}),
       }),
-    []
+    [apiEndpoint]
   );
 
   const { messages, sendMessage, status, setMessages } = useChat({ transport });
@@ -152,8 +170,8 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
       setShowSidebar(false);
     }
     // Clear localStorage when explicitly starting a new conversation
-    localStorage.removeItem(STORAGE_KEY);
-  }, [setMessages]);
+    if (storageKey) localStorage.removeItem(storageKey);
+  }, [setMessages, storageKey]);
 
   // Generate title for conversation
   const generateTitle = useCallback(
@@ -213,7 +231,7 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
         if (conversationId === convId) {
           setConversationId(null);
           setMessages([]);
-          localStorage.removeItem(STORAGE_KEY);
+          if (storageKey) localStorage.removeItem(storageKey);
         }
 
         loadConversations();
@@ -238,7 +256,7 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
       await loadConversations();
       
       // After loading conversations list, restore the saved conversation if any
-      const savedId = localStorage.getItem(STORAGE_KEY);
+      const savedId = storageKey ? localStorage.getItem(storageKey) : null;
       if (savedId) {
         // Verify the conversation still exists before loading
         try {
@@ -247,11 +265,11 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
             loadConversation(savedId);
           } else {
             // Conversation no longer exists, clear the saved ID
-            localStorage.removeItem(STORAGE_KEY);
+            if (storageKey) localStorage.removeItem(storageKey);
             setConversationId(null);
           }
         } catch {
-          localStorage.removeItem(STORAGE_KEY);
+          if (storageKey) localStorage.removeItem(storageKey);
           setConversationId(null);
         }
       }
@@ -289,12 +307,12 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
     };
   }, [loadConversations]);
 
-  // Persist conversationId to localStorage when it changes
+  // Persist conversationId to localStorage when it changes (if storage is enabled)
   useEffect(() => {
-    if (conversationId) {
-      localStorage.setItem(STORAGE_KEY, conversationId);
+    if (conversationId && storageKey) {
+      localStorage.setItem(storageKey, conversationId);
     }
-  }, [conversationId]);
+  }, [conversationId, storageKey]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -474,7 +492,8 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
 
   return (
     <div className="flex h-full bg-background/50 relative overflow-hidden">
-      {/* Conversation Sidebar */}
+      {/* Conversation Sidebar - hidden when hideSidebar prop is true */}
+      {!hideSidebar && (
       <div
         className={`absolute md:relative z-30 h-full bg-background/95 backdrop-blur-md border-r border-white/5 transition-all duration-300 ${
           showSidebar ? "w-72 opacity-100" : "w-0 opacity-0 md:w-0"
@@ -599,14 +618,17 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
           </ScrollArea>
         </div>
       </div>
+      )}
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
         <div className="h-14 border-b border-white/5 bg-background/80 backdrop-blur-md px-4 flex items-center gap-3 z-20 shrink-0">
-          <Button variant="ghost" size="icon" onClick={() => setShowSidebar(!showSidebar)} className="shrink-0">
-            <MessageSquare className="h-4 w-4" />
-          </Button>
+          {!hideSidebar && (
+            <Button variant="ghost" size="icon" onClick={() => setShowSidebar(!showSidebar)} className="shrink-0">
+              <MessageSquare className="h-4 w-4" />
+            </Button>
+          )}
           <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
             {agent?.avatarUrl ? (
               <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
@@ -636,9 +658,11 @@ export function ChatInterface({ agent, user: userInfo }: ChatInterfaceProps) {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-2xl font-bold tracking-tight">How can I help you today?</h2>
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    {welcomeMessage?.title || "How can I help you today?"}
+                  </h2>
                   <p className="text-muted-foreground text-lg max-w-md mx-auto">
-                    I&apos;m {agentName}, your {agentTitle}. I can help with tasks, scheduling, and project management.
+                    {welcomeMessage?.subtitle || `I'm ${agentName}, your ${agentTitle}. I can help with tasks, scheduling, and project management.`}
                   </p>
                 </div>
 

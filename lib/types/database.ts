@@ -49,11 +49,17 @@ export type AssigneeType = "user" | "agent";
 // Agent run state for automation
 export type AgentRunState = "not_started" | "running" | "needs_input" | "failed" | "completed";
 
-// Comment types for task/project activity
+// Comment types for task/project/feedback activity
 export type CommentType = "progress" | "question" | "note" | "resolution" | "approval_request" | "approval_granted" | "status_change";
 
 // Author types for comments
 export type CommentAuthorType = "user" | "agent" | "system";
+
+// Feedback types
+export type FeedbackType = "feature_request" | "bug_report";
+export type FeedbackStatus = "new" | "under_review" | "planned" | "in_progress" | "done" | "wont_fix";
+export type FeedbackSource = "manual" | "automatic" | "agent_error";
+export type FeedbackPriority = "critical" | "high" | "medium" | "low";
 
 // Channel types
 export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp";
@@ -377,11 +383,13 @@ export interface Database {
           retry_count?: number | null;
         };
       };
-      task_comments: {
+      // Renamed from task_comments - now supports tasks, projects, and feedback
+      comments: {
         Row: {
           id: string;
           task_id: string | null;
           project_id: string | null;
+          feedback_id: string | null;
           author_type: CommentAuthorType;
           author_id: string | null;
           content: string;
@@ -392,6 +400,7 @@ export interface Database {
           id?: string;
           task_id?: string | null;
           project_id?: string | null;
+          feedback_id?: string | null;
           author_type: CommentAuthorType;
           author_id?: string | null;
           content: string;
@@ -402,11 +411,98 @@ export interface Database {
           id?: string;
           task_id?: string | null;
           project_id?: string | null;
+          feedback_id?: string | null;
           author_type?: CommentAuthorType;
           author_id?: string | null;
           content?: string;
           comment_type?: CommentType | null;
           created_at?: string | null;
+        };
+      };
+      // Backward-compatible view pointing to comments table
+      task_comments: {
+        Row: {
+          id: string;
+          task_id: string | null;
+          project_id: string | null;
+          feedback_id: string | null;
+          author_type: CommentAuthorType;
+          author_id: string | null;
+          content: string;
+          comment_type: CommentType | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          task_id?: string | null;
+          project_id?: string | null;
+          feedback_id?: string | null;
+          author_type: CommentAuthorType;
+          author_id?: string | null;
+          content: string;
+          comment_type?: CommentType | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          task_id?: string | null;
+          project_id?: string | null;
+          feedback_id?: string | null;
+          author_type?: CommentAuthorType;
+          author_id?: string | null;
+          content?: string;
+          comment_type?: CommentType | null;
+          created_at?: string | null;
+        };
+      };
+      feedback_items: {
+        Row: {
+          id: string;
+          agent_id: string;
+          type: FeedbackType;
+          title: string;
+          description: string | null;
+          problem: string | null;
+          proposed_solution: string | null;
+          context: Json | null;
+          priority: FeedbackPriority | null;
+          status: FeedbackStatus | null;
+          source: FeedbackSource | null;
+          conversation_id: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          type: FeedbackType;
+          title: string;
+          description?: string | null;
+          problem?: string | null;
+          proposed_solution?: string | null;
+          context?: Json | null;
+          priority?: FeedbackPriority | null;
+          status?: FeedbackStatus | null;
+          source?: FeedbackSource | null;
+          conversation_id?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          type?: FeedbackType;
+          title?: string;
+          description?: string | null;
+          problem?: string | null;
+          proposed_solution?: string | null;
+          context?: Json | null;
+          priority?: FeedbackPriority | null;
+          status?: FeedbackStatus | null;
+          source?: FeedbackSource | null;
+          conversation_id?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
         };
       };
       action_log: {

@@ -13,6 +13,9 @@ import {
   LogOut,
   ChevronUp,
   Bot,
+  MessageSquarePlus,
+  Lightbulb,
+  Bug,
 } from "lucide-react";
 import {
   Sidebar,
@@ -70,6 +73,24 @@ const navItems = [
   },
 ];
 
+const feedbackItems = [
+  {
+    title: "Submit Feedback",
+    url: "/feedback",
+    icon: MessageSquarePlus,
+  },
+  {
+    title: "Feature Requests",
+    url: "/feedback/features",
+    icon: Lightbulb,
+  },
+  {
+    title: "Bug Reports",
+    url: "/feedback/bugs",
+    icon: Bug,
+  },
+];
+
 
 interface AppSidebarProps {
   user: {
@@ -82,9 +103,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const pathname = usePathname();
   const { setOpen } = useSidebar();
 
-  // Auto-collapse sidebar on chat page, expand on others
+  // Auto-collapse sidebar on chat pages (main chat and feedback chat), expand on others
   useEffect(() => {
-    if (pathname === "/") {
+    if (pathname === "/" || pathname === "/feedback") {
       setOpen(false);
     } else {
       setOpen(true);
@@ -119,6 +140,32 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url}
+                    tooltip={item.title}
+                    className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-white/5 transition-all duration-200"
+                  >
+                    <Link href={item.url} className="flex items-center gap-3">
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Feedback Section */}
+        <SidebarGroup className="mt-4">
+          <div className="px-3 py-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Feedback</span>
+          </div>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {feedbackItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

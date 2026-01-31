@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const addCommentTool = tool({
-  description: "Add a comment to a task or project. Use this to log progress, ask questions, or record notes.",
+  description: "Add a comment to a task, project, or feedback item. Use this to log progress, ask questions, or record notes.",
   inputSchema: z.object({
     taskId: z
       .string()
@@ -13,6 +13,10 @@ export const addCommentTool = tool({
       .string()
       .optional()
       .describe("The ID of the project to comment on"),
+    feedbackId: z
+      .string()
+      .optional()
+      .describe("The ID of the feedback item to comment on"),
     content: z.string().describe("The comment content (supports markdown)"),
     commentType: z
       .enum(["progress", "question", "note", "resolution", "approval_request", "approval_granted", "status_change"])
@@ -20,20 +24,22 @@ export const addCommentTool = tool({
       .default("note")
       .describe("The type of comment: progress update, question, note, resolution, or approval-related"),
   }),
-  execute: async ({ taskId, projectId, content, commentType }, options) => {
+  execute: async ({ taskId, projectId, feedbackId, content, commentType }, options) => {
     const agentId = (options as { agentId?: string }).agentId;
     if (!agentId) throw new Error("Agent ID is required");
-    if (!taskId && !projectId) {
-      return { success: false, error: "Either taskId or projectId is required" };
+    if (!taskId && !projectId && !feedbackId) {
+      return { success: false, error: "Either taskId, projectId, or feedbackId is required" };
     }
     
     const supabase = getAdminClient();
 
+    // Use the new 'comments' table (renamed from task_comments)
     const { data, error } = await supabase
-      .from("task_comments")
+      .from("comments")
       .insert({
         task_id: taskId || null,
         project_id: projectId || null,
+        feedback_id: feedbackId || null,
         author_type: "agent",
         author_id: agentId,
         content,
@@ -52,6 +58,7 @@ export const addCommentTool = tool({
         id: data.id,
         taskId: data.task_id,
         projectId: data.project_id,
+        feedbackId: data.feedback_id,
         content: data.content,
         commentType: data.comment_type,
         createdAt: data.created_at,
@@ -61,7 +68,7 @@ export const addCommentTool = tool({
 });
 
 export const listCommentsTool = tool({
-  description: "List comments on a task or project to see the activity history",
+  description: "List comments on a task, project, or feedback item to see the activity history",
   inputSchema: z.object({
     taskId: z
       .string()
@@ -71,24 +78,29 @@ export const listCommentsTool = tool({
       .string()
       .optional()
       .describe("The ID of the project to get comments for"),
+    feedbackId: z
+      .string()
+      .optional()
+      .describe("The ID of the feedback item to get comments for"),
     limit: z
       .number()
       .optional()
       .default(20)
       .describe("Maximum number of comments to return"),
   }),
-  execute: async ({ taskId, projectId, limit }, options) => {
+  execute: async ({ taskId, projectId, feedbackId, limit }, options) => {
     const agentId = (options as { agentId?: string }).agentId;
     if (!agentId) throw new Error("Agent ID is required");
-    if (!taskId && !projectId) {
-      return { success: false, error: "Either taskId or projectId is required" };
+    if (!taskId && !projectId && !feedbackId) {
+      return { success: false, error: "Either taskId, projectId, or feedbackId is required" };
     }
     
     const supabase = getAdminClient();
 
+    // Use the new 'comments' table (renamed from task_comments)
     let query = supabase
-      .from("task_comments")
-      .select("id, task_id, project_id, author_type, author_id, content, comment_type, created_at")
+      .from("comments")
+      .select("id, task_id, project_id, feedback_id, author_type, author_id, content, comment_type, created_at")
       .order("created_at", { ascending: false })
       .limit(limit || 20);
 
@@ -96,6 +108,8 @@ export const listCommentsTool = tool({
       query = query.eq("task_id", taskId);
     } else if (projectId) {
       query = query.eq("project_id", projectId);
+    } else if (feedbackId) {
+      query = query.eq("feedback_id", feedbackId);
     }
 
     const { data, error } = await query;

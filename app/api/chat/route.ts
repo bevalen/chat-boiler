@@ -10,9 +10,10 @@ import {
 } from "@/lib/db/conversations";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
-import { ChannelType, MessageMetadata } from "@/lib/types/database";
+import { ChannelType, MessageMetadata, FeedbackType, FeedbackPriority } from "@/lib/types/database";
 import { createCheckEmailTool, createSendEmailTool, createForwardEmailToUserTool } from "@/lib/tools/email";
 import { createResearchTool } from "@/lib/tools/research";
+import { createFeedback, createAutomaticBugReport } from "@/lib/db/feedback";
 
 export const maxDuration = 60;
 
@@ -1191,6 +1192,45 @@ export async function POST(request: Request) {
         },
       }),
 
+      // Feedback submission tool
+      submitFeedback: tool({
+        description: "Submit a bug report or feature request. Use when the user wants to report an issue, suggest a feature, or provide feedback about the app.",
+        inputSchema: z.object({
+          type: z.enum(["feature_request", "bug_report"]).describe("Type of feedback"),
+          title: z.string().describe("A clear, concise title summarizing the feedback"),
+          problem: z.string().describe("Description of the problem or pain point"),
+          proposedSolution: z.string().optional().describe("Suggested solution or how the feature might work"),
+          priority: z.enum(["critical", "high", "medium", "low"]).optional().default("medium").describe("Priority level based on impact"),
+        }),
+        execute: async ({ type, title, problem, proposedSolution, priority }: { type: "feature_request" | "bug_report"; title: string; problem: string; proposedSolution?: string; priority?: "critical" | "high" | "medium" | "low" }) => {
+          try {
+            const { feedback, error } = await createFeedback(adminSupabase, agentId, {
+              type: type as FeedbackType,
+              title,
+              problem,
+              proposedSolution,
+              priority: (priority || "medium") as FeedbackPriority,
+              source: "manual",
+              conversationId: conversation.id,
+            });
+
+            if (error) {
+              return { success: false, error };
+            }
+
+            return {
+              success: true,
+              feedbackId: feedback?.id,
+              type: feedback?.type,
+              title: feedback?.title,
+              message: `Successfully submitted ${type === "feature_request" ? "feature request" : "bug report"}: "${title}"`,
+            };
+          } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+          }
+        },
+      }),
+
       // Email tools (Zapier MCP integration)
       checkEmail: createCheckEmailTool(agentId),
       sendEmail: createSendEmailTool(agentId),
@@ -1212,16 +1252,40 @@ export async function POST(request: Request) {
       tools,
       toolChoice: "auto",
       stopWhen: stepCountIs(5), // Allow multiple tool calls in sequence
-      onStepFinish: ({ toolCalls, toolResults }) => {
+      onStepFinish: async ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
-          toolCalls.forEach((tc, i) => {
-            if (!tc) return;
+          for (let i = 0; i < toolCalls.length; i++) {
+            const tc = toolCalls[i];
+            if (!tc) continue;
             console.log(`[chat/route] 🔧 Tool "${tc.toolName}" called`);
             const toolResult = toolResults?.[i];
             if (toolResult) {
-              console.log(`[chat/route] ✅ Tool "${tc.toolName}" completed`);
+              // Check if the tool result indicates an error
+              // Access 'output' property which contains the tool's return value
+              const output = (toolResult as { output?: unknown }).output as Record<string, unknown> | undefined;
+              if (output && output.success === false && output.error) {
+                console.log(`[chat/route] ⚠️ Tool "${tc.toolName}" failed:`, output.error);
+                // Automatically create a bug report for tool errors
+                try {
+                  // Access 'input' property for tool arguments
+                  const toolInput = (tc as { input?: unknown }).input as Record<string, unknown> | undefined;
+                  const { skipped } = await createAutomaticBugReport(adminSupabase, agentId, {
+                    toolName: tc.toolName,
+                    toolInput: toolInput || {},
+                    errorMessage: String(output.error),
+                    conversationId: conversation.id,
+                  });
+                  if (!skipped) {
+                    console.log(`[chat/route] 🐛 Auto-created bug report for tool error`);
+                  }
+                } catch (bugReportErr) {
+                  console.error(`[chat/route] Failed to create auto bug report:`, bugReportErr);
+                }
+              } else {
+                console.log(`[chat/route] ✅ Tool "${tc.toolName}" completed`);
+              }
             }
-          });
+          }
         }
       },
       onFinish: async ({ text, steps }) => {

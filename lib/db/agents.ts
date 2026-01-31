@@ -269,6 +269,12 @@ export function buildSystemPrompt(agent: Agent, user?: { id?: string; name: stri
   }
   sections.push(`- Be professional but personable in your email drafts.`);
 
+  // Feedback submission
+  sections.push(`\n## Feedback & Bug Reports`);
+  sections.push(`You can help users submit feedback about the app:`);
+  sections.push(`- **Submit feedback** (submitFeedback): Create a feature request or bug report. Use when the user says things like "I wish this could...", "there's a bug", "can you add a feature", or "I have feedback".`);
+  sections.push(`\nWhen the user wants to submit feedback, gather the key details (what's the problem, what would they like) and use the submitFeedback tool. For more detailed feedback collection, you can suggest they use the dedicated Feedback page.`);
+
   sections.push(`\nIMPORTANT: When the user asks about past conversations or if you remember something, USE the searchMemory tool to actually search. Don't say you can't remember - search your memory first!`);
 
   return sections.join("\n");
