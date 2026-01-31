@@ -167,42 +167,90 @@ async function sendToMAIA(messageData) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullResponse = '';
+    let rawChunks = [];
+
+    console.log('[MAIA BG] Starting to read stream...');
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        console.log('[MAIA BG] Stream complete');
+        break;
+      }
 
       const chunk = decoder.decode(value);
+      rawChunks.push(chunk);
+      console.log('[MAIA BG] Raw chunk:', chunk.substring(0, 200));
+      
       const lines = chunk.split('\n');
 
       for (const line of lines) {
-        // Handle SSE format (AI SDK v6)
+        if (!line.trim()) continue;
+        
+        // Handle SSE format (AI SDK uses various formats)
         if (line.startsWith('data: ')) {
           try {
             const jsonStr = line.slice(6);
-            if (jsonStr.trim()) {
+            if (jsonStr.trim() && jsonStr !== '[DONE]') {
               const data = JSON.parse(jsonStr);
-              if (data.type === 'text-delta' && data.delta) {
+              console.log('[MAIA BG] Parsed data:', data.type || 'no type');
+              
+              // Handle text-delta format
+              if (data.type === 'text-delta' && data.textDelta) {
+                fullResponse += data.textDelta;
+              } else if (data.type === 'text-delta' && data.delta) {
                 fullResponse += data.delta;
+              }
+              // Handle content format
+              else if (data.type === 'content' && data.content) {
+                fullResponse += data.content;
+              }
+              // Handle text format
+              else if (data.text) {
+                fullResponse += data.text;
               }
             }
           } catch (e) {
-            // Ignore parse errors
+            console.log('[MAIA BG] Parse error for line:', line.substring(0, 100));
           }
         }
-        // Handle older format with 0: prefix
-        else if (line.startsWith('0:')) {
+        // Handle format with prefixed numbers (0:, 1:, 2:, etc.)
+        else if (/^\d+:/.test(line)) {
           try {
-            const textContent = JSON.parse(line.slice(2));
-            fullResponse += textContent;
+            const colonIndex = line.indexOf(':');
+            const content = line.slice(colonIndex + 1);
+            const parsed = JSON.parse(content);
+            if (typeof parsed === 'string') {
+              fullResponse += parsed;
+            } else if (parsed.text) {
+              fullResponse += parsed.text;
+            } else if (parsed.textDelta) {
+              fullResponse += parsed.textDelta;
+            }
           } catch (e) {
-            fullResponse += line.slice(2);
+            // Try to extract text directly
+            const colonIndex = line.indexOf(':');
+            if (colonIndex > -1) {
+              const content = line.slice(colonIndex + 1).trim();
+              if (content.startsWith('"') && content.endsWith('"')) {
+                try {
+                  fullResponse += JSON.parse(content);
+                } catch (e2) {
+                  // ignore
+                }
+              }
+            }
           }
         }
       }
     }
 
-    console.log('[MAIA BG] Response received:', fullResponse.substring(0, 100) + '...');
+    console.log('[MAIA BG] Full response length:', fullResponse.length);
+    console.log('[MAIA BG] Response preview:', fullResponse.substring(0, 200) + '...');
+    
+    if (!fullResponse && rawChunks.length > 0) {
+      console.log('[MAIA BG] WARNING: Got chunks but no parsed response. Raw data:', rawChunks.join('').substring(0, 500));
+    }
     
     return {
       success: true,
