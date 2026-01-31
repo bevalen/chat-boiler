@@ -1383,9 +1383,28 @@ export async function POST(request: Request) {
       research: createResearchTool(agentId),
     };
 
+    // Select model based on channel - use Claude Sonnet 4.5 for LinkedIn SDR (better writing)
+    const selectedModel = channelSource === "linkedin" 
+      ? gateway("anthropic/claude-sonnet-4-5-20250514")
+      : gateway("openai/gpt-5.2");
+
+    // Log conversation context for LinkedIn debugging
+    if (channelSource === "linkedin") {
+      console.log(`[chat/route] 🔗 LinkedIn SDR Mode - Using Claude Sonnet 4.5`);
+      console.log(`[chat/route] 📝 Conversation history count: ${messagesWithHistory.length}`);
+      messagesWithHistory.forEach((msg, i) => {
+        // UIMessage uses 'parts' array, not 'content' directly
+        const textPart = msg.parts?.find(p => p.type === 'text');
+        const preview = textPart && 'text' in textPart 
+          ? textPart.text.substring(0, 50) 
+          : '[no text content]';
+        console.log(`[chat/route]   ${i + 1}. [${msg.role}] ${preview}...`);
+      });
+    }
+
     // Stream the response with tools
     const result = streamText({
-      model: gateway("openai/gpt-5.2"),
+      model: selectedModel,
       system: systemPrompt,
       messages: await convertToModelMessages(messagesWithHistory),
       tools,
