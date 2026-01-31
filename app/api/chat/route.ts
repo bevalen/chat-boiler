@@ -64,13 +64,61 @@ export async function POST(request: Request) {
     const isInternalCall = authHeader === expectedAuth;
     
     let user: { id: string } | null = null;
-    let supabase;
+    let supabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof getAdminClient>;
+    let isExtensionAuth = false;
     
     if (isInternalCall && externalUserId) {
       // Internal API call with service role key - use admin client
       console.log("[chat/route] Internal API call for user:", externalUserId);
       supabase = getAdminClient();
       user = { id: externalUserId };
+    } else if (authHeader && authHeader.startsWith("Bearer ") && channelSource === "linkedin") {
+      // LinkedIn extension token authentication
+      const token = authHeader.substring(7);
+      console.log("[chat/route] LinkedIn extension auth attempt");
+      
+      // Look up the token in the database
+      const adminClient = getAdminClient();
+      supabase = adminClient; // Assign now, will return early if auth fails
+      
+      const { data: credentials } = await adminClient
+        .from("user_channel_credentials")
+        .select("user_id, credentials, is_active")
+        .eq("channel_type", "linkedin")
+        .eq("is_active", true);
+      
+      if (credentials) {
+        // Find matching token
+        const matchingCred = credentials.find((cred) => {
+          const linkedInCreds = cred.credentials as { extension_token?: string; token_expires_at?: string };
+          if (linkedInCreds.extension_token === token) {
+            // Check if not expired
+            if (linkedInCreds.token_expires_at) {
+              const expiresAt = new Date(linkedInCreds.token_expires_at);
+              if (expiresAt < new Date()) {
+                console.log("[chat/route] LinkedIn extension token expired");
+                return false;
+              }
+            }
+            return true;
+          }
+          return false;
+        });
+        
+        if (matchingCred) {
+          console.log("[chat/route] LinkedIn extension auth successful for user:", matchingCred.user_id);
+          user = { id: matchingCred.user_id };
+          isExtensionAuth = true;
+        }
+      }
+      
+      if (!user) {
+        console.log("[chat/route] LinkedIn extension auth failed - invalid token");
+        return new Response(JSON.stringify({ error: "Invalid or expired extension token" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     } else {
       // Regular browser-based authentication
       supabase = await createClient();
@@ -83,6 +131,11 @@ export async function POST(request: Request) {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
+    }
+    
+    // Log successful auth for debugging
+    if (isExtensionAuth) {
+      console.log("[chat/route] ✅ Authenticated via LinkedIn extension token");
     }
 
     // Get user profile for context (including notification preferences and email)
