@@ -26,28 +26,49 @@ const SELECTORS = {
   unreadDot: '[class*="notification-badge"]',
 };
 
+// Debug mode - always on for development
+const DEBUG = true;
+
+function log(...args) {
+  if (DEBUG) console.log('[MAIA SDR]', ...args);
+}
+
+function logError(...args) {
+  console.error('[MAIA SDR ERROR]', ...args);
+}
+
+function logWarn(...args) {
+  console.warn('[MAIA SDR WARN]', ...args);
+}
+
 class MAIALinkedInSDR {
   constructor() {
-    this.lastMessageId = null;
+    this.lastProcessedMessageHash = null;
+    this.lastProcessedThreadId = null;
     this.observer = null;
     this.isProcessing = false;
     this.isProcessingUnread = false;
+    this.stopRequested = false;
     this.conversationContext = null;
     this.enabled = true;
     this.settings = {};
+    this.processedMessages = new Set(); // Track processed message hashes
     this.processedConversations = new Set();
     
+    log('Constructor called');
     this.init();
   }
 
   async init() {
-    console.log('[MAIA SDR] Initializing...');
+    log('Initializing...');
     
     // Load settings
     await this.loadSettings();
+    log('Settings loaded:', this.settings);
     
     // Wait for the messaging page to fully load
     await this.waitForMessagingUI();
+    log('Messaging UI ready');
     
     // Start monitoring for new messages
     this.startMonitoring();
@@ -55,13 +76,11 @@ class MAIALinkedInSDR {
     // Listen for messages from background worker
     this.setupMessageListener();
     
-    // Add status indicator
+    // Add status indicator and controls
     this.addStatusIndicator();
+    this.addControlPanel();
     
-    // Add "Process Unread" button
-    this.addProcessUnreadButton();
-    
-    console.log('[MAIA SDR] Initialized successfully');
+    log('Initialized successfully');
   }
 
   async loadSettings() {
@@ -121,19 +140,70 @@ class MAIALinkedInSDR {
     console.log('[MAIA SDR] Message monitoring started');
   }
 
+  /**
+   * Generate a hash for a message to track if we've processed it
+   */
+  hashMessage(text, threadId) {
+    // Simple hash: combine thread ID + first 100 chars of message
+    const content = `${threadId || 'unknown'}-${(text || '').substring(0, 100)}`;
+    let hash = 0;
+    for (let i = 0; i < content.length; i++) {
+      const char = content.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
+  }
+
   handlePotentialNewMessage() {
-    const latestMessage = this.getLatestMessage();
+    if (this.isProcessing) {
+      log('Already processing, skipping');
+      return;
+    }
     
-    if (!latestMessage) return;
-    if (latestMessage.id === this.lastMessageId) return;
-    if (latestMessage.isFromMe) {
-      this.lastMessageId = latestMessage.id;
+    if (this.stopRequested) {
+      log('Stop requested, skipping');
       return;
     }
 
-    // New incoming message detected
-    this.lastMessageId = latestMessage.id;
-    console.log('[MAIA SDR] New message detected:', latestMessage.text.substring(0, 50) + '...');
+    const currentThreadId = this.extractThreadId();
+    const latestMessage = this.getLatestMessage();
+    
+    if (!latestMessage) {
+      log('No latest message found');
+      return;
+    }
+    
+    if (!latestMessage.text) {
+      log('Latest message has no text');
+      return;
+    }
+
+    // Generate unique hash for this message
+    const messageHash = this.hashMessage(latestMessage.text, currentThreadId);
+    
+    // Check if we've already processed this exact message
+    if (this.processedMessages.has(messageHash)) {
+      log('Message already processed, hash:', messageHash);
+      return;
+    }
+    
+    // Skip if from me
+    if (latestMessage.isFromMe) {
+      log('Latest message is from me, skipping');
+      this.processedMessages.add(messageHash);
+      return;
+    }
+
+    // Mark as processed BEFORE we start processing to prevent duplicates
+    this.processedMessages.add(messageHash);
+    
+    log('New message detected:', {
+      text: latestMessage.text.substring(0, 50) + '...',
+      hash: messageHash,
+      threadId: currentThreadId,
+      isFromMe: latestMessage.isFromMe,
+    });
     
     this.processNewMessage(latestMessage);
   }
@@ -150,8 +220,13 @@ class MAIALinkedInSDR {
     const text = bodyEl.textContent?.trim();
     const isOutbound = lastEl.classList.toString().includes('outbound');
 
+    log('getLatestMessage:', {
+      text: text?.substring(0, 30),
+      isOutbound,
+      classList: lastEl.classList.toString().substring(0, 100),
+    });
+
     return {
-      id: `${Date.now()}-${messageElements.length}`,
       text,
       isFromMe: isOutbound,
       element: lastEl,
@@ -159,7 +234,15 @@ class MAIALinkedInSDR {
   }
 
   async processNewMessage(message) {
-    if (this.isProcessing) return;
+    if (this.isProcessing) {
+      log('processNewMessage: Already processing, returning');
+      return;
+    }
+    
+    if (this.stopRequested) {
+      log('processNewMessage: Stop requested, returning');
+      return;
+    }
     
     this.isProcessing = true;
     this.updateStatusIndicator('processing', 'AI is thinking...');
@@ -167,6 +250,13 @@ class MAIALinkedInSDR {
     try {
       // Get conversation context
       const context = this.getConversationContext();
+      const allMessages = this.getAllMessages();
+      
+      log('Processing message:', {
+        messageText: message.text?.substring(0, 50),
+        context,
+        messageCount: allMessages.length,
+      });
       
       // Send to background worker
       const response = await chrome.runtime.sendMessage({
@@ -174,21 +264,34 @@ class MAIALinkedInSDR {
         data: {
           message: message.text,
           conversationContext: context,
-          allMessages: this.getAllMessages(),
+          allMessages: allMessages,
         },
       });
+
+      log('Background response:', {
+        success: response?.success,
+        hasResponse: !!response?.response,
+        error: response?.error,
+        responsePreview: response?.response?.substring(0, 50),
+      });
+
+      if (this.stopRequested) {
+        log('Stop requested after API call, not injecting response');
+        return;
+      }
 
       if (response.success && response.response) {
         await this.handleAIResponse(response.response);
       } else if (response.error) {
-        console.error('[MAIA SDR] AI processing error:', response.error);
+        logError('AI processing error:', response.error);
         this.updateStatusIndicator('error', 'Error: ' + response.error);
       }
     } catch (error) {
-      console.error('[MAIA SDR] Error processing message:', error);
+      logError('Error processing message:', error);
       this.updateStatusIndicator('error', 'Failed to process message');
     } finally {
       this.isProcessing = false;
+      log('Processing complete, isProcessing set to false');
     }
   }
 
@@ -232,20 +335,58 @@ class MAIALinkedInSDR {
   }
 
   async handleAIResponse(responseText) {
+    log('handleAIResponse called with:', responseText?.substring(0, 100));
+    
+    if (!responseText || responseText.trim() === '') {
+      logWarn('Empty response received, skipping injection');
+      this.updateStatusIndicator('error', 'Empty response');
+      return;
+    }
+    
+    // Clean the response - remove any potential prompt leakage
+    let cleanedResponse = responseText.trim();
+    
+    // Remove common AI response prefixes that might leak
+    const prefixesToRemove = [
+      /^Here's a draft:?\s*/i,
+      /^Here is a draft:?\s*/i,
+      /^Draft:?\s*/i,
+      /^Response:?\s*/i,
+      /^Message:?\s*/i,
+      /^Here's my response:?\s*/i,
+      /^I would respond:?\s*/i,
+    ];
+    
+    for (const prefix of prefixesToRemove) {
+      cleanedResponse = cleanedResponse.replace(prefix, '');
+    }
+    
+    log('Cleaned response:', cleanedResponse.substring(0, 100));
+    
     const draftMode = this.settings.draftMode !== false; // Default to draft mode
     
     if (draftMode) {
       // Inject response but don't send
-      this.injectResponse(responseText);
+      this.injectResponse(cleanedResponse);
       this.updateStatusIndicator('success', 'Draft ready - review before sending');
     } else {
+      if (this.stopRequested) {
+        log('Stop requested, not auto-sending');
+        return;
+      }
+      
       // Auto-send after delay
       const delay = (this.settings.responseDelaySeconds || 3) * 1000;
       this.updateStatusIndicator('processing', `Sending in ${delay/1000}s...`);
       
       await this.sleep(delay);
       
-      this.injectResponse(responseText);
+      if (this.stopRequested) {
+        log('Stop requested during delay, not sending');
+        return;
+      }
+      
+      this.injectResponse(cleanedResponse);
       await this.sleep(500);
       
       if (this.clickSendButton()) {
@@ -262,25 +403,33 @@ class MAIALinkedInSDR {
   }
 
   injectResponse(text) {
+    log('injectResponse called with:', text?.substring(0, 50));
+    
     const input = document.querySelector(SELECTORS.messageInput) ||
                   document.querySelector(SELECTORS.messageInputAlt);
     
     if (!input) {
-      console.error('[MAIA SDR] Message input not found');
+      logError('Message input not found');
       return false;
     }
+
+    log('Found input element:', input.className);
 
     // Clear and set content
     input.innerHTML = '';
     input.textContent = text;
     input.innerText = text;
 
-    // Trigger events
+    // Trigger events to notify LinkedIn's React
     const inputEvent = new Event('input', { bubbles: true, cancelable: true });
     input.dispatchEvent(inputEvent);
+    
+    const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+    input.dispatchEvent(changeEvent);
+    
     input.focus();
 
-    console.log('[MAIA SDR] Response injected');
+    log('Response injected successfully');
     return true;
   }
 
@@ -416,33 +565,47 @@ class MAIALinkedInSDR {
    */
   async processAllUnread() {
     if (this.isProcessingUnread) {
-      console.log('[MAIA SDR] Already processing unread messages');
+      log('Already processing unread messages');
       return;
     }
 
     this.isProcessingUnread = true;
+    this.stopRequested = false;
+    
     const unreadConversations = this.getUnreadConversations();
     
     if (unreadConversations.length === 0) {
       this.updateStatusIndicator('success', 'No unread messages found');
       setTimeout(() => this.updateStatusIndicator('idle'), 3000);
       this.isProcessingUnread = false;
+      this.showStopButton(false);
       return;
     }
 
+    log(`Found ${unreadConversations.length} unread conversations`);
     this.updateStatusIndicator('processing', `Processing ${unreadConversations.length} unread...`);
 
     let processed = 0;
+    let skipped = 0;
     let errors = 0;
 
     for (const conversation of unreadConversations) {
+      // Check if stop was requested
+      if (this.stopRequested) {
+        log('Stop requested, breaking out of loop');
+        break;
+      }
+      
       // Skip if already processed in this session
       if (conversation.threadId && this.processedConversations.has(conversation.threadId)) {
+        log(`Skipping already processed conversation: ${conversation.name}`);
+        skipped++;
         continue;
       }
 
       try {
         this.updateStatusIndicator('processing', `Processing ${processed + 1}/${unreadConversations.length}: ${conversation.name}`);
+        log(`Opening conversation: ${conversation.name}`);
         
         // Click to open the conversation
         conversation.linkElement.click();
@@ -451,16 +614,25 @@ class MAIALinkedInSDR {
         await this.sleep(1500);
         await this.waitForMessagingUI(5000);
         
+        if (this.stopRequested) break;
+        
         // Check if the last message is from them (not from us)
         const latestMessage = this.getLatestMessage();
-        if (latestMessage && !latestMessage.isFromMe) {
+        log(`Latest message in ${conversation.name}:`, {
+          hasMessage: !!latestMessage,
+          isFromMe: latestMessage?.isFromMe,
+          text: latestMessage?.text?.substring(0, 30),
+        });
+        
+        if (latestMessage && !latestMessage.isFromMe && latestMessage.text) {
           // Process this message
           await this.processNewMessage(latestMessage);
           
           // Wait for AI response to be drafted
           await this.sleep(2000);
         } else {
-          console.log(`[MAIA SDR] Skipping ${conversation.name} - last message is from us`);
+          log(`Skipping ${conversation.name} - last message is from us or empty`);
+          skipped++;
         }
 
         // Mark as processed
@@ -474,60 +646,159 @@ class MAIALinkedInSDR {
         await this.sleep(1000);
         
       } catch (error) {
-        console.error(`[MAIA SDR] Error processing conversation ${conversation.name}:`, error);
+        logError(`Error processing conversation ${conversation.name}:`, error);
         errors++;
       }
     }
 
     this.isProcessingUnread = false;
+    this.showStopButton(false);
     
-    const message = errors > 0 
-      ? `Done! ${processed} processed, ${errors} errors`
-      : `Done! ${processed} conversations processed`;
+    const message = this.stopRequested 
+      ? `Stopped. ${processed} processed`
+      : errors > 0 
+        ? `Done! ${processed} processed, ${skipped} skipped, ${errors} errors`
+        : `Done! ${processed} processed, ${skipped} skipped`;
     
-    this.updateStatusIndicator('success', message);
+    log(message);
+    this.updateStatusIndicator(this.stopRequested ? 'idle' : 'success', message);
     setTimeout(() => this.updateStatusIndicator('idle'), 5000);
   }
 
   /**
-   * Add the "Process Unread" button to the UI
+   * Add control panel with stop button and mode controls
    */
-  addProcessUnreadButton() {
-    // Remove existing button if any
-    const existing = document.querySelector('.maia-process-unread-btn');
+  addControlPanel() {
+    // Remove existing panel if any
+    const existing = document.querySelector('.maia-control-panel');
     if (existing) existing.remove();
 
-    const button = document.createElement('button');
-    button.className = 'maia-process-unread-btn';
-    button.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/>
-        <line x1="12" y1="3" x2="12" y2="15"/>
-      </svg>
-      Process Unread
+    const panel = document.createElement('div');
+    panel.className = 'maia-control-panel';
+    panel.innerHTML = `
+      <div class="maia-control-header">
+        <span class="maia-control-title">MAIA SDR</span>
+        <button class="maia-control-close" title="Minimize">−</button>
+      </div>
+      <div class="maia-control-body">
+        <button class="maia-ctrl-btn maia-btn-unread" title="Process all unread conversations">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          Process Unread
+        </button>
+        <button class="maia-ctrl-btn maia-btn-current" title="Generate reply for current conversation">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          This Chat
+        </button>
+        <button class="maia-ctrl-btn maia-btn-stop" title="Stop all processing" style="display: none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          </svg>
+          STOP
+        </button>
+        <button class="maia-ctrl-btn maia-btn-clear" title="Clear processed message cache">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          Reset
+        </button>
+      </div>
     `;
-    button.title = 'Draft replies for all unread messages';
+
+    document.body.appendChild(panel);
+    this.controlPanel = panel;
     
-    button.addEventListener('click', () => {
-      if (!this.isProcessingUnread) {
+    // Set up event listeners
+    panel.querySelector('.maia-control-close').addEventListener('click', () => {
+      panel.classList.toggle('minimized');
+    });
+    
+    panel.querySelector('.maia-btn-unread').addEventListener('click', () => {
+      if (!this.isProcessingUnread && !this.isProcessing) {
+        this.stopRequested = false;
+        this.showStopButton(true);
         this.processAllUnread();
       }
     });
-
-    document.body.appendChild(button);
-    this.processUnreadButton = button;
+    
+    panel.querySelector('.maia-btn-current').addEventListener('click', () => {
+      if (!this.isProcessing) {
+        this.stopRequested = false;
+        this.processCurrentConversation();
+      }
+    });
+    
+    panel.querySelector('.maia-btn-stop').addEventListener('click', () => {
+      log('STOP button clicked');
+      this.stopRequested = true;
+      this.isProcessing = false;
+      this.isProcessingUnread = false;
+      this.showStopButton(false);
+      this.updateStatusIndicator('idle', 'Stopped');
+    });
+    
+    panel.querySelector('.maia-btn-clear').addEventListener('click', () => {
+      this.processedMessages.clear();
+      this.processedConversations.clear();
+      log('Cleared processed message cache');
+      this.updateStatusIndicator('success', 'Cache cleared');
+      setTimeout(() => this.updateStatusIndicator('idle'), 2000);
+    });
+  }
+  
+  showStopButton(show) {
+    const stopBtn = this.controlPanel?.querySelector('.maia-btn-stop');
+    if (stopBtn) {
+      stopBtn.style.display = show ? 'flex' : 'none';
+    }
+  }
+  
+  /**
+   * Process just the current conversation
+   */
+  async processCurrentConversation() {
+    if (this.isProcessing) {
+      log('Already processing');
+      return;
+    }
+    
+    log('Processing current conversation');
+    
+    const latestMessage = this.getLatestMessage();
+    if (!latestMessage) {
+      this.updateStatusIndicator('error', 'No messages found');
+      return;
+    }
+    
+    if (latestMessage.isFromMe) {
+      this.updateStatusIndicator('error', 'Last message is yours');
+      setTimeout(() => this.updateStatusIndicator('idle'), 3000);
+      return;
+    }
+    
+    // Clear the hash for this message so we can reprocess it
+    const threadId = this.extractThreadId();
+    const messageHash = this.hashMessage(latestMessage.text, threadId);
+    this.processedMessages.delete(messageHash);
+    
+    await this.processNewMessage(latestMessage);
   }
 
   destroy() {
+    log('Destroying MAIA SDR instance');
+    this.stopRequested = true;
+    
     if (this.observer) {
       this.observer.disconnect();
     }
     if (this.statusIndicator) {
       this.statusIndicator.remove();
     }
-    if (this.processUnreadButton) {
-      this.processUnreadButton.remove();
+    if (this.controlPanel) {
+      this.controlPanel.remove();
     }
   }
 }
