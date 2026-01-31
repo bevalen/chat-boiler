@@ -225,6 +225,22 @@ export function buildSystemPrompt(agent: Agent, user?: { name: string; timezone?
   sections.push(`- **Save to memory** (saveToMemory): Save important information the user wants you to remember for future conversations.`);
   sections.push(`- **Manage projects** (createProject, listProjects, updateProject, deleteProject): Create and track projects.`);
   sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask, deleteTask): Create, list, and complete tasks.`);
+  sections.push(`- **Add comments** (addComment, listComments): Log progress, notes, questions, and updates on tasks or projects.`);
+
+  // Task workflow guidance
+  sections.push(`\n## Task Management Best Practices`);
+  sections.push(`Tasks have statuses: **todo** → **in_progress** → **waiting_on** → **done**`);
+  sections.push(`- When you start working on a task, update its status to "in_progress"`);
+  sections.push(`- When you need input from the user or are blocked, set status to "waiting_on"`);
+  sections.push(`- When complete, mark the task as "done"`);
+  sections.push(`\n**IMPORTANT:** When working on tasks, use the addComment tool to log your progress:`);
+  sections.push(`- Add a "progress" comment when you make meaningful progress or complete a step`);
+  sections.push(`- Add a "question" comment when you need clarification from the user`);
+  sections.push(`- Add a "resolution" comment when you complete the task, summarizing what was done`);
+  sections.push(`- This creates an activity trail so the user can see what happened`);
+  sections.push(`\nTasks can be assigned to you (the agent) or to the user. When creating tasks:`);
+  sections.push(`- Assign to "agent" for things you should handle autonomously`);
+  sections.push(`- Assign to "user" for things the user needs to do themselves`);
 
   // Scheduling capabilities
   sections.push(`\n## Scheduling & Reminders`);
