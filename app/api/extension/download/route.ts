@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as fs from "fs";
 import * as path from "path";
 import archiver from "archiver";
+import { PassThrough } from "stream";
 
 /**
  * GET /api/extension/download
@@ -33,32 +34,39 @@ export async function GET() {
       );
     }
 
-    // Create a zip archive
-    const archive = archiver("zip", {
-      zlib: { level: 9 }, // Maximum compression
+    // Create zip buffer using a promise-based approach
+    const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      
+      // Create a zip archive
+      const archive = archiver("zip", {
+        zlib: { level: 9 }, // Maximum compression
+      });
+
+      // Use a passthrough stream to collect data
+      const passthrough = new PassThrough();
+      
+      passthrough.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      passthrough.on("end", () => {
+        resolve(Buffer.concat(chunks));
+      });
+
+      archive.on("error", (err) => {
+        reject(err);
+      });
+
+      // Pipe archive to passthrough
+      archive.pipe(passthrough);
+
+      // Add the extension files to the archive
+      archive.directory(extensionDir, "maia-linkedin-sdr");
+
+      // Finalize the archive
+      archive.finalize();
     });
-
-    // Collect all chunks into a buffer
-    const chunks: Buffer[] = [];
-    
-    archive.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    // Add the extension files to the archive
-    archive.directory(extensionDir, "maia-linkedin-sdr");
-
-    // Finalize the archive
-    await archive.finalize();
-
-    // Wait for all data to be collected
-    await new Promise<void>((resolve, reject) => {
-      archive.on("end", resolve);
-      archive.on("error", reject);
-    });
-
-    // Combine chunks into a single buffer
-    const zipBuffer = Buffer.concat(chunks);
 
     // Return the zip file
     return new NextResponse(zipBuffer, {

@@ -55,6 +55,7 @@ interface ExtensionStatus {
 export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedInSDRSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
@@ -153,6 +154,42 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
       setMessage({ type: "success", text: "Extension token revoked" });
     } catch (error) {
       setMessage({ type: "error", text: "Failed to revoke token" });
+    }
+  }
+
+  async function downloadExtension() {
+    setDownloading(true);
+    setMessage(null);
+    
+    try {
+      const response = await fetch("/api/extension/download");
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "Download failed" }));
+        throw new Error(error.error || "Failed to download extension");
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create a download link and trigger it
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "maia-linkedin-sdr.zip";
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setMessage({ type: "success", text: "Extension downloaded! Unzip and load it in Chrome." });
+    } catch (error) {
+      console.error("Download error:", error);
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to download extension" });
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -308,11 +345,17 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
               <li>Click the extension icon and enter this URL to connect</li>
             </ol>
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
-                <a href="/api/extension/download" download="maia-linkedin-sdr.zip">
+              <Button 
+                variant="outline" 
+                onClick={downloadExtension}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
                   <Download className="h-4 w-4 mr-2" />
-                  Download Extension
-                </a>
+                )}
+                {downloading ? "Downloading..." : "Download Extension"}
               </Button>
               <Button
                 variant="ghost"
