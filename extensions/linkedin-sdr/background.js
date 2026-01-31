@@ -147,6 +147,8 @@ async function sendToMAIA(messageData) {
 
   try {
     console.log('[MAIA BG] Sending to API:', auth.apiUrl);
+    console.log('[MAIA BG] Token (first 20 chars):', auth.token?.substring(0, 20) + '...');
+    console.log('[MAIA BG] Request body:', JSON.stringify(requestBody).substring(0, 500));
     
     const response = await fetch(`${auth.apiUrl}/api/chat`, {
       method: 'POST',
@@ -157,10 +159,18 @@ async function sendToMAIA(messageData) {
       body: JSON.stringify(requestBody),
     });
 
+    console.log('[MAIA BG] Response status:', response.status, response.statusText);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[MAIA BG] API error:', response.status, errorText);
-      return { success: false, error: `API error: ${response.status}` };
+      console.error('[MAIA BG] ❌ API error:', response.status, errorText);
+      // Return the actual error message so content script can display it
+      return { 
+        success: false, 
+        error: `API error: ${response.status} - ${errorText.substring(0, 200)}`,
+        statusCode: response.status,
+        errorDetails: errorText
+      };
     }
 
     // Handle streaming response
@@ -249,12 +259,31 @@ async function sendToMAIA(messageData) {
     console.log('[MAIA BG] Response preview:', fullResponse.substring(0, 200) + '...');
     
     if (!fullResponse && rawChunks.length > 0) {
-      console.log('[MAIA BG] WARNING: Got chunks but no parsed response. Raw data:', rawChunks.join('').substring(0, 500));
+      console.log('[MAIA BG] ⚠️ WARNING: Got chunks but no parsed response. Raw data:', rawChunks.join('').substring(0, 500));
+      // Try to extract any text from raw chunks
+      const rawText = rawChunks.join('');
+      // Check if there's an error in the raw response
+      if (rawText.includes('error') || rawText.includes('Unauthorized')) {
+        return { success: false, error: 'API returned error: ' + rawText.substring(0, 200) };
+      }
     }
     
+    if (!fullResponse || fullResponse.trim() === '') {
+      console.log('[MAIA BG] ❌ No response generated - check Service Worker console for API errors');
+      return { 
+        success: false, 
+        error: 'No response generated. Check if extension is connected properly.',
+        debugInfo: {
+          chunksReceived: rawChunks.length,
+          rawPreview: rawChunks.join('').substring(0, 300)
+        }
+      };
+    }
+    
+    console.log('[MAIA BG] ✅ Successfully generated response');
     return {
       success: true,
-      response: fullResponse || 'No response generated',
+      response: fullResponse,
     };
   } catch (error) {
     console.error('[MAIA BG] Fetch error:', error);

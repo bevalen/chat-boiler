@@ -283,8 +283,20 @@ class MAIALinkedInSDR {
       if (response.success && response.response) {
         await this.handleAIResponse(response.response);
       } else if (response.error) {
-        logError('AI processing error:', response.error);
+        logError('❌ AI processing error:', response.error);
+        if (response.debugInfo) {
+          log('Debug info:', JSON.stringify(response.debugInfo));
+        }
+        if (response.statusCode) {
+          log('Status code:', response.statusCode);
+        }
+        if (response.errorDetails) {
+          log('Error details:', response.errorDetails.substring(0, 500));
+        }
         this.updateStatusIndicator('error', 'Error: ' + response.error);
+      } else {
+        logWarn('Unknown response format:', JSON.stringify(response).substring(0, 200));
+        this.updateStatusIndicator('error', 'Unknown response');
       }
     } catch (error) {
       logError('Error processing message:', error);
