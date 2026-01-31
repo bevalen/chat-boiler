@@ -578,7 +578,7 @@ export function ChatInterface({
                       <div className="flex items-center gap-1">
 <button
                                           onClick={() => loadConversation(conv.id)}
-                                          className="flex-1 flex items-center gap-2 min-w-0"
+                                          className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer"
                                         >
                                           {channelFilter === "all" && conv.channelType === "slack" ? (
                                             <Slack className="h-4 w-4 shrink-0 text-[#4A154B]" />
@@ -668,7 +668,7 @@ export function ChatInterface({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg mt-8">
                   <button
-                    className="text-sm bg-secondary/50 hover:bg-secondary/80 border border-white/5 rounded-xl p-4 text-left transition-colors"
+                    className="text-sm bg-secondary/50 hover:bg-secondary/80 border border-white/5 rounded-xl p-4 text-left transition-colors cursor-pointer"
                     onClick={() => {
                       setInput("What's on my schedule today?");
                       textareaRef.current?.focus();
@@ -678,7 +678,7 @@ export function ChatInterface({
                     <span className="text-muted-foreground text-xs">&quot;What&apos;s on my schedule today?&quot;</span>
                   </button>
                   <button
-                    className="text-sm bg-secondary/50 hover:bg-secondary/80 border border-white/5 rounded-xl p-4 text-left transition-colors"
+                    className="text-sm bg-secondary/50 hover:bg-secondary/80 border border-white/5 rounded-xl p-4 text-left transition-colors cursor-pointer"
                     onClick={() => {
                       setInput("Create a new project for Q1 Marketing");
                       textareaRef.current?.focus();
