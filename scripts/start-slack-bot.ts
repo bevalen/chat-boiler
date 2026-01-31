@@ -438,8 +438,12 @@ function setupSlackAppHandlers(app: App, userId: string) {
   });
 
   // Handle app mentions
-  app.event("app_mention", async ({ event, say }) => {
+  app.event("app_mention", async ({ event, say, client }) => {
     const text = event.text.replace(/<@[A-Z0-9]+>/g, "").trim();
+    
+    // Get bot user ID for thread history
+    const authResult = await client.auth.test();
+    const botUserId = authResult.user_id || "";
 
     const context: SlackMessageContext = {
       userId: event.user || "",
@@ -452,6 +456,18 @@ function setupSlackAppHandlers(app: App, userId: string) {
       isMention: true,
     };
 
+    // Fetch thread history if this is a reply in a thread
+    let threadHistory: Array<{ role: "user" | "assistant"; content: string }> | undefined;
+    if (event.thread_ts) {
+      threadHistory = await fetchThreadHistory(
+        client,
+        event.channel,
+        event.thread_ts,
+        event.ts,
+        botUserId
+      );
+    }
+
     const respond = async (responseText: string) => {
       const slackText = markdownToSlackMrkdwn(responseText);
       await say({
@@ -460,7 +476,7 @@ function setupSlackAppHandlers(app: App, userId: string) {
       });
     };
 
-    await handleMessage(context, respond);
+    await handleMessage(context, respond, threadHistory);
   });
 
   console.log(`[slack-bot] Handlers registered for user ${userId}`);
