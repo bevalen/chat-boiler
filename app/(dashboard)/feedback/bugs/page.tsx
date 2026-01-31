@@ -65,7 +65,7 @@ export default async function BugReportsPage() {
       </div>
 
       {/* Kanban Board */}
-      <div className="flex-1 p-6 overflow-hidden">
+      <div className="flex-1 min-h-0 p-6 overflow-hidden">
         {totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 mb-4">

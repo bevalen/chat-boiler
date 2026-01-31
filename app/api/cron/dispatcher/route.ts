@@ -583,7 +583,7 @@ async function generateDailyBrief(
 }
 
 /**
- * Trigger agent with a custom instruction
+ * Trigger agent with a custom instruction - calls the chat API to execute the agent
  */
 async function triggerAgentWithInstruction(
   supabase: ReturnType<typeof getAdminClient>,
@@ -594,82 +594,165 @@ async function triggerAgentWithInstruction(
   const preferredChannel: ChannelType = payload?.preferred_channel || "app";
   const slackChannelId = payload?.slack_channel_id;
 
-  // Get user_id from agent for Slack delivery
+  // Get user_id from agent
   const { data: agent } = await supabase
     .from("agents")
     .select("user_id")
     .eq("id", job.agent_id)
     .single();
 
-  const message = `**Scheduled Task:** ${job.title}\n\n${instruction}`;
+  if (!agent?.user_id) {
+    return { success: false, error: "Agent or user not found" };
+  }
 
-  // Try to send via Slack if preferred
-  let sentViaSlack = false;
-  if (preferredChannel === "slack" && agent?.user_id) {
-    const slackResult = await sendViaSlack(supabase, agent.user_id, message, slackChannelId);
-    sentViaSlack = slackResult.success;
-    if (sentViaSlack) {
-      console.log(`[dispatcher] Agent task sent via Slack for job ${job.id}`);
+  // Create a NEW conversation for this scheduled task
+  const { data: newConv, error: convError } = await supabase
+    .from("conversations")
+    .insert({
+      agent_id: job.agent_id,
+      channel_type: preferredChannel === "slack" ? "slack" : "app",
+      status: "active",
+      title: `Scheduled: ${job.title}`,
+    })
+    .select("id")
+    .single();
+
+  if (convError || !newConv) {
+    console.error("[dispatcher] Error creating conversation:", convError);
+    return { success: false, error: "Could not create conversation for scheduled task" };
+  }
+
+  const conversationId = newConv.id;
+  console.log(`[dispatcher] Created new conversation ${conversationId} for scheduled job ${job.id}`);
+
+  // Build the user message that will trigger the agent
+  const userMessage = `[Scheduled Task: ${job.title}]\n\n${instruction}`;
+
+  try {
+    // Get the app base URL
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!serviceRoleKey) {
+      return { success: false, error: "SUPABASE_SERVICE_ROLE_KEY not configured" };
     }
-  }
 
-  // Store in app conversation
-  let conversationId = job.conversation_id;
-
-  if (!conversationId) {
-    const { data: existingConv } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("agent_id", job.agent_id)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    conversationId = existingConv?.id || null;
-  }
-
-  if (conversationId) {
-    const { error } = await supabase.from("messages").insert({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: message,
-      metadata: {
-        type: "scheduled_agent_task",
-        job_id: job.id,
-        instruction,
-        preferred_channel: preferredChannel,
-        sent_via_slack: sentViaSlack,
+    // Call the chat API to execute the agent (similar to Slack bot pattern)
+    const response = await fetch(`${appBaseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`,
       },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: "user",
+            content: userMessage,
+            parts: [{ type: "text", text: userMessage }],
+          },
+        ],
+        conversationId,
+        userId: agent.user_id,
+        channelSource: preferredChannel === "slack" ? "slack" : "cron",
+        channelMetadata: {
+          job_id: job.id,
+          job_type: job.job_type,
+          scheduled_task: true,
+        },
+      }),
     });
 
-    if (error) {
-      console.error("[dispatcher] Error storing agent task message:", error);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[dispatcher] Chat API error:", response.status, errorText);
+      return { success: false, error: `Chat API returned ${response.status}` };
     }
 
-    // Create a notification for the scheduled task
+    // Read the streaming response to get the agent's output
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return { success: false, error: "Could not read chat API response" };
+    }
+
+    let fullResponse = "";
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n");
+
+      for (const line of lines) {
+        // Handle SSE data: prefix format (AI SDK)
+        if (line.startsWith("data: ")) {
+          try {
+            const jsonStr = line.slice(6);
+            if (jsonStr.trim()) {
+              const data = JSON.parse(jsonStr);
+              if (data.type === "text-delta" && data.delta) {
+                fullResponse += data.delta;
+              }
+            }
+          } catch {
+            // Ignore parse errors for non-JSON lines
+          }
+        }
+        // Handle older format with 0: prefix
+        else if (line.startsWith("0:")) {
+          try {
+            const textContent = JSON.parse(line.slice(2));
+            fullResponse += textContent;
+          } catch {
+            fullResponse += line.slice(2);
+          }
+        }
+      }
+    }
+
+    console.log(`[dispatcher] Agent executed for job ${job.id}, response length: ${fullResponse.length}`);
+
+    // Send the agent's response to Slack if preferred
+    let sentViaSlack = false;
+    if (preferredChannel === "slack" && agent.user_id && fullResponse) {
+      const slackMessage = `**${job.title}**\n\n${fullResponse}`;
+      const slackResult = await sendViaSlack(supabase, agent.user_id, slackMessage, slackChannelId);
+      sentViaSlack = slackResult.success;
+      if (sentViaSlack) {
+        console.log(`[dispatcher] Agent response sent via Slack for job ${job.id}`);
+      }
+    }
+
+    // Create a notification for the completed task
     await createNotification(
       supabase,
       job.agent_id,
       "reminder",
       job.title,
-      instruction.substring(0, 200),
+      fullResponse.substring(0, 200) || "Scheduled task completed",
       "conversation",
       conversationId
     );
-  } else if (!sentViaSlack) {
-    return { success: false, error: "No conversation found and Slack delivery failed" };
-  }
 
-  return {
-    success: true,
-    data: {
-      conversationId,
-      instruction,
-      sentViaSlack,
-      preferredChannel,
-    },
-  };
+    return {
+      success: true,
+      data: {
+        conversationId,
+        instruction,
+        responseLength: fullResponse.length,
+        sentViaSlack,
+        preferredChannel,
+      },
+    };
+  } catch (error) {
+    console.error("[dispatcher] Error executing agent task:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error executing agent",
+    };
+  }
 }
 
 /**

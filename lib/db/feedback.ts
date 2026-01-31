@@ -339,6 +339,56 @@ export async function createAutomaticBugReport(
 }
 
 /**
+ * Search feedback items using PostgreSQL full-text search
+ */
+export async function searchFeedback(
+  supabase: SupabaseClient,
+  agentId: string,
+  query: string,
+  options: {
+    type?: FeedbackType;
+    status?: FeedbackStatus | FeedbackStatus[];
+    limit?: number;
+  } = {}
+): Promise<{ items: FeedbackItem[]; error: string | null }> {
+  const { type, status, limit = 20 } = options;
+
+  // Build a text search query using PostgreSQL ILIKE for flexible matching
+  // Search across title, problem, description, and proposed_solution
+  let dbQuery = supabase
+    .from("feedback_items")
+    .select("*")
+    .eq("agent_id", agentId)
+    .or(`title.ilike.%${query}%,problem.ilike.%${query}%,description.ilike.%${query}%,proposed_solution.ilike.%${query}%`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (type) {
+    dbQuery = dbQuery.eq("type", type);
+  }
+
+  if (status) {
+    if (Array.isArray(status)) {
+      dbQuery = dbQuery.in("status", status);
+    } else {
+      dbQuery = dbQuery.eq("status", status);
+    }
+  }
+
+  const { data, error } = await dbQuery;
+
+  if (error) {
+    console.error("Error searching feedback:", error);
+    return { items: [], error: error.message };
+  }
+
+  return {
+    items: (data || []).map(mapFeedbackRow),
+    error: null,
+  };
+}
+
+/**
  * Get feedback items grouped by status for kanban view
  */
 export async function getFeedbackByStatus(

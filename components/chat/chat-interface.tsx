@@ -3,6 +3,7 @@
 import { useChat, UIMessage } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Hash, Slack } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Image from "next/image";
 
 interface Conversation {
@@ -74,13 +77,21 @@ export function ChatInterface({
   storageKey = DEFAULT_STORAGE_KEY,
   welcomeMessage,
 }: ChatInterfaceProps) {
-  // Initialize from localStorage if available (and persistence is enabled)
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  // Initialize from URL param first, then fall back to localStorage
   const [conversationId, setConversationId] = useState<string | null>(() => {
-    if (typeof window !== "undefined" && storageKey) {
-      return localStorage.getItem(storageKey);
+    if (typeof window !== "undefined") {
+      // Check URL param first
+      const urlConvId = new URLSearchParams(window.location.search).get("conversation");
+      if (urlConvId) return urlConvId;
+      // Fall back to localStorage
+      if (storageKey) return localStorage.getItem(storageKey);
     }
     return null;
   });
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
@@ -97,6 +108,9 @@ export function ChatInterface({
   const [pendingTitleGeneration, setPendingTitleGeneration] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+  // Optimistic message shown while creating first conversation
+  const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
 
   // Use a ref to always have the latest conversationId in the transport
   const conversationIdRef = useRef<string | null>(null);
@@ -117,6 +131,11 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Sticky scroll refs - allow user to scroll up during streaming without being forced back down
+  const isUserScrollingRef = useRef(false); // true = user has scrolled up, don't auto-scroll
+  const lastScrollTopRef = useRef(0);
+  const isAutoScrollingRef = useRef(false); // prevent scroll handler from detecting our own scrolls
 
   const isLoading = status === "submitted" || status === "streaming";
 
@@ -136,8 +155,27 @@ export function ChatInterface({
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (id: string) => {
+    // Optimistically switch to the new conversation immediately
+    // This shows the loading skeleton right away for a snappy feel
+    setIsLoadingConversation(true);
+    setConversationId(id);
+    setMessages([]); // Clear messages so skeleton shows
+    
+    if (window.innerWidth < 768) {
+      setShowSidebar(false);
+    }
+    
     try {
       const res = await fetch(`/api/conversations/${id}/messages`);
+      
+      if (!res.ok) {
+        // Conversation no longer exists, reset state
+        console.warn(`Conversation ${id} not found, clearing state`);
+        setConversationId(null);
+        if (storageKey) localStorage.removeItem(storageKey);
+        return;
+      }
+      
       const data = await res.json();
 
       if (data.messages) {
@@ -152,15 +190,15 @@ export function ChatInterface({
         );
         setMessages(uiMessages);
       }
-
-      setConversationId(id);
-      if (window.innerWidth < 768) {
-        setShowSidebar(false);
-      }
     } catch (error) {
       console.error("Failed to load conversation:", error);
+      // On error, reset to clean state
+      setConversationId(null);
+      if (storageKey) localStorage.removeItem(storageKey);
+    } finally {
+      setIsLoadingConversation(false);
     }
-  }, [setMessages]);
+  }, [setMessages, storageKey]);
 
   // Start a new conversation (just clear state, create in DB on first message)
   const startNewConversation = useCallback(() => {
@@ -255,27 +293,17 @@ export function ChatInterface({
     const init = async () => {
       await loadConversations();
       
-      // After loading conversations list, restore the saved conversation if any
-      const savedId = storageKey ? localStorage.getItem(storageKey) : null;
+      // Check for conversation ID from URL or localStorage (already set in state init)
+      const urlConvId = new URLSearchParams(window.location.search).get("conversation");
+      const savedId = urlConvId || (storageKey ? localStorage.getItem(storageKey) : null);
+      
       if (savedId) {
-        // Verify the conversation still exists before loading
-        try {
-          const res = await fetch(`/api/conversations/${savedId}/messages`);
-          if (res.ok) {
-            loadConversation(savedId);
-          } else {
-            // Conversation no longer exists, clear the saved ID
-            if (storageKey) localStorage.removeItem(storageKey);
-            setConversationId(null);
-          }
-        } catch {
-          if (storageKey) localStorage.removeItem(storageKey);
-          setConversationId(null);
-        }
+        // loadConversation handles its own loading state
+        await loadConversation(savedId);
       }
     };
     init();
-  }, [loadConversations, loadConversation]);
+  }, [loadConversations, loadConversation, storageKey]);
 
   // Reload conversations when channel filter changes
   useEffect(() => {
@@ -307,19 +335,109 @@ export function ChatInterface({
     };
   }, [loadConversations]);
 
-  // Persist conversationId to localStorage when it changes (if storage is enabled)
+  // Persist conversationId to localStorage and URL when it changes
   useEffect(() => {
-    if (conversationId && storageKey) {
-      localStorage.setItem(storageKey, conversationId);
+    if (conversationId) {
+      // Update localStorage
+      if (storageKey) {
+        localStorage.setItem(storageKey, conversationId);
+      }
+      // Update URL without triggering navigation
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("conversation") !== conversationId) {
+        url.searchParams.set("conversation", conversationId);
+        router.replace(url.pathname + url.search, { scroll: false });
+      }
+    } else {
+      // Clear URL param when no conversation
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("conversation")) {
+        url.searchParams.delete("conversation");
+        router.replace(url.pathname + url.search, { scroll: false });
+      }
     }
-  }, [conversationId, storageKey]);
+  }, [conversationId, storageKey, router]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Ref to track if initial load has completed (to avoid duplicate loads)
+  const initialLoadCompleteRef = useRef(false);
+  
+  // Watch for URL changes (e.g., from notifications, browser back/forward)
+  // Skip the first run since initial load effect handles that
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    // Skip first run - initial load effect handles the mount case
+    if (!initialLoadCompleteRef.current) {
+      initialLoadCompleteRef.current = true;
+      return;
     }
-  }, [messages]);
+    
+    const urlConvId = searchParams.get("conversation");
+    
+    // If URL has a different conversation than current, load it
+    if (urlConvId && urlConvId !== conversationId) {
+      loadConversation(urlConvId);
+    } else if (!urlConvId && conversationId) {
+      // URL param cleared (e.g., navigated away), clear the conversation
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [searchParams, conversationId, loadConversation, setMessages]);
+
+  // Track scroll position to implement "sticky scroll" - only auto-scroll if user hasn't scrolled up
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    
+    // Ignore scroll events triggered by our own auto-scrolling
+    if (isAutoScrollingRef.current) {
+      return;
+    }
+    
+    const currentScrollTop = target.scrollTop;
+    const maxScrollTop = target.scrollHeight - target.clientHeight;
+    const threshold = 50; // threshold for "at bottom" detection
+    const isAtBottom = maxScrollTop - currentScrollTop <= threshold;
+    
+    // Detect user scroll direction: if they scrolled UP, disable auto-scroll
+    if (currentScrollTop < lastScrollTopRef.current && !isAtBottom) {
+      isUserScrollingRef.current = true;
+    }
+    
+    // If user scrolled to bottom, re-enable auto-scroll
+    if (isAtBottom) {
+      isUserScrollingRef.current = false;
+    }
+    
+    lastScrollTopRef.current = currentScrollTop;
+  }, []);
+
+  // Scroll to bottom helper - uses instant scroll during streaming to avoid animation conflicts
+  const scrollToBottom = useCallback(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    
+    isAutoScrollingRef.current = true;
+    
+    // Use instant scroll (no animation) - much smoother during rapid updates
+    viewport.scrollTop = viewport.scrollHeight;
+    
+    // Reset the flag after a frame to allow user scroll detection
+    requestAnimationFrame(() => {
+      isAutoScrollingRef.current = false;
+      lastScrollTopRef.current = viewport.scrollTop;
+    });
+  }, []);
+
+  // Auto-scroll to bottom only when user hasn't scrolled up (sticky scroll behavior)
+  useEffect(() => {
+    if (!isUserScrollingRef.current) {
+      scrollToBottom();
+    }
+  }, [messages, status, scrollToBottom]);
+  
+  // Reset user scrolling when a new message is sent (user wants to see the response)
+  const resetScrollOnSend = useCallback(() => {
+    isUserScrollingRef.current = false;
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   // Realtime subscription for new messages (e.g., from cron jobs, other sessions)
   useEffect(() => {
@@ -435,13 +553,18 @@ export function ChatInterface({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || status !== "ready") return;
+    if (!input.trim() || status !== "ready" || isCreatingConversation) return;
 
     const messageText = input.trim();
     setInput("");
+    resetScrollOnSend();
 
     // If no conversation yet, create one first
     if (!conversationId) {
+      // Show optimistic message immediately while creating conversation
+      setOptimisticMessage(messageText);
+      setIsCreatingConversation(true);
+      
       try {
         const res = await fetch("/api/conversations", {
           method: "POST",
@@ -455,12 +578,16 @@ export function ChatInterface({
           setPendingTitleGeneration(true);
           // Small delay to ensure state is set before sending
           setTimeout(() => {
+            setOptimisticMessage(null); // Clear optimistic message
             sendMessage({ text: messageText });
             loadConversations();
           }, 0);
         }
       } catch (error) {
         console.error("Failed to create conversation:", error);
+        setOptimisticMessage(null);
+      } finally {
+        setIsCreatingConversation(false);
       }
     } else {
       // If this is the first message in an existing conversation, mark for title generation
@@ -646,9 +773,36 @@ export function ChatInterface({
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-primary/5 blur-[120px] opacity-20" />
 
         {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-4 z-10 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto px-4 z-10 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent" ref={scrollRef} onScroll={handleScroll}>
           <div className="max-w-3xl mx-auto py-8 space-y-8">
-            {messages.length === 0 ? (
+            {isLoadingConversation ? (
+              /* Loading skeleton for conversation */
+              <div className="space-y-6">
+                <div className="flex gap-4 justify-start">
+                  <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                  <div className="space-y-2 flex-1 max-w-[70%]">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                </div>
+                <div className="flex gap-4 justify-end">
+                  <div className="space-y-2 flex-1 max-w-[60%]">
+                    <Skeleton className="h-4 w-full ml-auto" />
+                    <Skeleton className="h-4 w-2/3 ml-auto" />
+                  </div>
+                </div>
+                <div className="flex gap-4 justify-start">
+                  <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                  <div className="space-y-2 flex-1 max-w-[70%]">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                </div>
+              </div>
+            ) : messages.length === 0 && !optimisticMessage ? (
               <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-6 opacity-0 animate-fade-in-up [animation-delay:200ms] fill-mode-forwards">
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10 overflow-hidden">
                   {agent?.avatarUrl ? (
@@ -719,9 +873,9 @@ export function ChatInterface({
                           ) : (
                             <div
                               key={index}
-                              className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10"
+                              className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-code:bg-black/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-primary/90 prose-code:before:content-none prose-code:after:content-none prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10"
                             >
-                              <ReactMarkdown>{part.text}</ReactMarkdown>
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
                             </div>
                           );
                         }
@@ -773,7 +927,23 @@ export function ChatInterface({
                     )}
                   </div>
                 ))}
-                {status === "submitted" && (
+                {/* Optimistic message shown while creating first conversation */}
+                {optimisticMessage && (
+                  <div className="flex gap-4 justify-end">
+                    <div className="relative max-w-[80%] px-5 py-3 rounded-2xl text-sm leading-relaxed bg-primary text-primary-foreground rounded-tr-sm">
+                      <p className="whitespace-pre-wrap">{optimisticMessage}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-1 overflow-hidden">
+                      {userInfo?.avatarUrl ? (
+                        <Image src={userInfo.avatarUrl} alt="You" width={32} height={32} className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Loading indicator for agent response */}
+                {(status === "submitted" || isCreatingConversation) && (
                   <div className="flex gap-4">
                     <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
                       {agent?.avatarUrl ? (
@@ -816,10 +986,10 @@ export function ChatInterface({
               <Button
                 type="submit"
                 size="icon"
-                disabled={!input.trim() || status !== "ready"}
+                disabled={!input.trim() || status !== "ready" || isCreatingConversation}
                 className="absolute right-2 bottom-2 h-10 w-10 rounded-xl transition-all hover:scale-105 active:scale-95"
               >
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                {(isLoading || isCreatingConversation) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               </Button>
             </form>
             <p className="text-[10px] text-muted-foreground/40 text-center mt-3 uppercase tracking-wider font-medium">

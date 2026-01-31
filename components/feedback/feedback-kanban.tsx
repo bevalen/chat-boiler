@@ -117,15 +117,15 @@ function KanbanColumn({
   const StatusIcon = config.icon;
 
   return (
-    <div className="flex flex-col min-w-[300px] max-w-[300px] bg-muted/30 rounded-xl border border-border/50">
-      <div className="flex items-center gap-2 p-4 border-b border-border/50">
+    <div className="flex flex-col min-w-[300px] max-w-[300px] h-full bg-muted/30 rounded-xl border border-border/50">
+      <div className="flex items-center gap-2 p-4 border-b border-border/50 shrink-0">
         <StatusIcon className={cn("h-4 w-4", config.color)} />
         <h3 className="font-semibold text-sm">{config.label}</h3>
         <Badge variant="secondary" className="ml-auto text-xs">
           {items.length}
         </Badge>
       </div>
-      <ScrollArea className="flex-1 p-3">
+      <ScrollArea className="flex-1 min-h-0 p-3">
         <div className="space-y-3">
           {items.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-8">No items</p>
@@ -166,7 +166,7 @@ export function FeedbackKanban({ items, type, onItemClick }: FeedbackKanbanProps
 
   return (
     <>
-      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[500px]">
+      <div className="flex gap-4 overflow-x-auto pb-4 h-full">
         {displayStatuses.map((status) => (
           <KanbanColumn
             key={status}

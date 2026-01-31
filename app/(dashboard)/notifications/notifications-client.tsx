@@ -58,6 +58,7 @@ export function NotificationsClient({
   const [filter, setFilter] = useState<FilterType>("all");
   const [typeFilter, setTypeFilter] = useState<NotificationType>("all");
   const [isLoading, setIsLoading] = useState(false);
+  const [clickingNotificationId, setClickingNotificationId] = useState<string | null>(null);
   const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
   const [clearMode, setClearMode] = useState<"read" | "all">("read");
 
@@ -192,6 +193,8 @@ export function NotificationsClient({
   };
 
   const handleNotificationClick = async (notification: Notification) => {
+    setClickingNotificationId(notification.id);
+    
     // Mark as read first
     if (!notification.read) {
       await handleMarkAsRead(notification.id);
@@ -201,8 +204,8 @@ export function NotificationsClient({
     if (notification.linkType && notification.linkId) {
       switch (notification.linkType) {
         case "conversation":
-          localStorage.setItem("activeConversationId", notification.linkId);
-          router.push("/");
+          // Navigate to chat with conversation ID in query param
+          router.push(`/?conversation=${notification.linkId}`);
           break;
         case "task":
           router.push("/tasks");
@@ -215,6 +218,8 @@ export function NotificationsClient({
           break;
       }
     }
+    
+    setClickingNotificationId(null);
   };
 
   const getNotificationIcon = (type: Notification["type"]) => {
@@ -424,16 +429,22 @@ export function NotificationsClient({
               key={notification.id}
               className={cn(
                 "group cursor-pointer transition-colors hover:bg-muted/50",
-                !notification.read && "bg-muted/30 border-primary/20"
+                !notification.read && "bg-muted/30 border-primary/20",
+                clickingNotificationId === notification.id && "opacity-70"
               )}
             >
               <CardContent className="flex items-start gap-4 p-4">
                 <button
                   onClick={() => handleNotificationClick(notification)}
-                  className="flex items-start gap-4 flex-1 text-left"
+                  disabled={clickingNotificationId === notification.id}
+                  className="flex items-start gap-4 flex-1 text-left cursor-pointer"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                    {getNotificationIcon(notification.type)}
+                    {clickingNotificationId === notification.id ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    ) : (
+                      getNotificationIcon(notification.type)
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">

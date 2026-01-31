@@ -30,6 +30,7 @@ interface NotificationCenterProps {
 
 export function NotificationCenter({ agentId }: NotificationCenterProps) {
   const [open, setOpen] = useState(false);
+  const [clickingNotificationId, setClickingNotificationId] = useState<string | null>(null);
   const router = useRouter();
   const {
     notifications,
@@ -40,6 +41,8 @@ export function NotificationCenter({ agentId }: NotificationCenterProps) {
   } = useNotifications({ agentId });
 
   const handleNotificationClick = async (notification: Notification) => {
+    setClickingNotificationId(notification.id);
+    
     // Mark as read
     if (!notification.read) {
       await markAsRead(notification.id);
@@ -49,9 +52,8 @@ export function NotificationCenter({ agentId }: NotificationCenterProps) {
     if (notification.linkType && notification.linkId) {
       switch (notification.linkType) {
         case "conversation":
-          // Store conversation ID and navigate to chat
-          localStorage.setItem("activeConversationId", notification.linkId);
-          router.push("/");
+          // Navigate to chat with conversation ID in query param
+          router.push(`/?conversation=${notification.linkId}`);
           break;
         case "task":
           router.push("/tasks");
@@ -66,6 +68,7 @@ export function NotificationCenter({ agentId }: NotificationCenterProps) {
     }
 
     setOpen(false);
+    setClickingNotificationId(null);
   };
 
   const getNotificationIcon = (type: Notification["type"]) => {
@@ -148,13 +151,19 @@ export function NotificationCenter({ agentId }: NotificationCenterProps) {
                 <button
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
+                  disabled={clickingNotificationId === notification.id}
                   className={cn(
-                    "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
-                    !notification.read && "bg-muted/30"
+                    "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 cursor-pointer",
+                    !notification.read && "bg-muted/30",
+                    clickingNotificationId === notification.id && "opacity-70"
                   )}
                 >
                   <div className="mt-0.5 flex-shrink-0">
-                    {getNotificationIcon(notification.type)}
+                    {clickingNotificationId === notification.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      getNotificationIcon(notification.type)
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">

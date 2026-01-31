@@ -269,6 +269,20 @@ export function buildSystemPrompt(agent: Agent, user?: { id?: string; name: stri
   }
   sections.push(`- Be professional but personable in your email drafts.`);
 
+  // Research capabilities
+  sections.push(`\n## Web Research`);
+  sections.push(`You can search the web for real-time information:`);
+  sections.push(`- **Research** (research): Search the web for current information, facts, news, or to answer questions requiring up-to-date knowledge.`);
+  sections.push(`\n**When to use research:**`);
+  sections.push(`- When the user asks about current events, recent news, or real-time data`);
+  sections.push(`- When you need to verify facts or look up specific information`);
+  sections.push(`- When answering questions that require knowledge beyond your training data`);
+  sections.push(`- When the user asks you to "look up", "search for", "find out about", or "research" something`);
+  sections.push(`\n**Research parameters:**`);
+  sections.push(`- query: The search query or question to research`);
+  sections.push(`- searchMode: "web" for general search (default), "academic" for scholarly sources`);
+  sections.push(`\nDon't hesitate to use the research tool when you're unsure about current information. It's better to search and provide accurate, up-to-date answers than to guess.`);
+
   // Feedback submission
   sections.push(`\n## Feedback & Bug Reports`);
   sections.push(`You can help users submit feedback about the app:`);

@@ -124,11 +124,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar/50 backdrop-blur-xl">
       <SidebarHeader className="h-14 flex items-center justify-center border-b border-sidebar-border p-0">
-        <div className="flex w-full items-center gap-3 px-4">
+        <div className="flex w-full items-center gap-3 px-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
           <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shrink-0">
             <Bot className="h-5 w-5" />
           </div>
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-base tracking-tight truncate">MAIA</span>
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium truncate">Executive Assistant</span>
           </div>
@@ -160,7 +160,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
         {/* Feedback Section */}
         <SidebarGroup className="mt-4">
-          <div className="px-3 py-2">
+          <div className="px-3 py-2 group-data-[collapsible=icon]:hidden">
             <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Feedback</span>
           </div>
           <SidebarGroupContent>
@@ -192,6 +192,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
+                  tooltip={user.name || user.email}
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   <Avatar className="h-8 w-8 rounded-lg border border-white/10">
@@ -199,7 +200,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight ml-1">
+                  <div className="grid flex-1 text-left text-sm leading-tight ml-1 group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-semibold text-foreground">
                       {user.name || "User"}
                     </span>
@@ -207,7 +208,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       {user.email}
                     </span>
                   </div>
-                  <ChevronUp className="ml-auto size-4 text-muted-foreground" />
+                  <ChevronUp className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
