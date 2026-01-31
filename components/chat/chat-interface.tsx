@@ -115,6 +115,9 @@ export function ChatInterface({
   // Use a ref to always have the latest conversationId in the transport
   const conversationIdRef = useRef<string | null>(null);
   conversationIdRef.current = conversationId;
+  
+  // Track which conversation is currently being loaded to prevent race conditions
+  const loadingConversationIdRef = useRef<string | null>(null);
 
   // Memoize transport to avoid unnecessary recreations but use ref for latest ID
   const transport = useMemo(
@@ -155,6 +158,14 @@ export function ChatInterface({
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (id: string) => {
+    // Skip if already loading this conversation
+    if (loadingConversationIdRef.current === id) {
+      return;
+    }
+    
+    // Track which conversation we're loading to prevent race conditions
+    loadingConversationIdRef.current = id;
+    
     // Optimistically switch to the new conversation immediately
     // This shows the loading skeleton right away for a snappy feel
     setIsLoadingConversation(true);
@@ -168,6 +179,11 @@ export function ChatInterface({
     try {
       const res = await fetch(`/api/conversations/${id}/messages`);
       
+      // Check if we're still loading this conversation (user might have switched)
+      if (loadingConversationIdRef.current !== id) {
+        return; // Abort - user switched to a different conversation
+      }
+      
       if (!res.ok) {
         // Conversation no longer exists, reset state
         console.warn(`Conversation ${id} not found, clearing state`);
@@ -177,6 +193,11 @@ export function ChatInterface({
       }
       
       const data = await res.json();
+      
+      // Double-check we're still on this conversation before updating messages
+      if (loadingConversationIdRef.current !== id) {
+        return; // Abort - user switched to a different conversation
+      }
 
       if (data.messages) {
         // Convert database messages to UIMessage format
@@ -192,11 +213,17 @@ export function ChatInterface({
       }
     } catch (error) {
       console.error("Failed to load conversation:", error);
-      // On error, reset to clean state
-      setConversationId(null);
-      if (storageKey) localStorage.removeItem(storageKey);
+      // Only reset if we're still trying to load this conversation
+      if (loadingConversationIdRef.current === id) {
+        setConversationId(null);
+        if (storageKey) localStorage.removeItem(storageKey);
+      }
     } finally {
-      setIsLoadingConversation(false);
+      // Only clear loading state if this is still the active load
+      if (loadingConversationIdRef.current === id) {
+        loadingConversationIdRef.current = null;
+        setIsLoadingConversation(false);
+      }
     }
   }, [setMessages, storageKey]);
 
@@ -288,8 +315,18 @@ export function ChatInterface({
     setDeleteDialogOpen(true);
   };
 
+  // Ref to track if initial load has run (prevents double load on navigation)
+  const hasInitialLoadRunRef = useRef(false);
+  
   // Initial load - load conversations list and restore active conversation
+  // Only runs once on mount
   useEffect(() => {
+    // Prevent double load (React Strict Mode or navigation edge cases)
+    if (hasInitialLoadRunRef.current) {
+      return;
+    }
+    hasInitialLoadRunRef.current = true;
+    
     const init = async () => {
       await loadConversations();
       
@@ -303,10 +340,18 @@ export function ChatInterface({
       }
     };
     init();
-  }, [loadConversations, loadConversation, storageKey]);
+    // Empty deps - only run on mount. Use refs for values needed inside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Reload conversations when channel filter changes
+  // Reload conversations when channel filter changes (skip initial mount)
+  const isFirstChannelFilterRun = useRef(true);
   useEffect(() => {
+    // Skip first run - initial load effect handles that
+    if (isFirstChannelFilterRun.current) {
+      isFirstChannelFilterRun.current = false;
+      return;
+    }
     loadConversations();
   }, [channelFilter, loadConversations]);
 
@@ -363,6 +408,7 @@ export function ChatInterface({
   
   // Watch for URL changes (e.g., from notifications, browser back/forward)
   // Skip the first run since initial load effect handles that
+  // Only react to searchParams changes - not conversationId changes
   useEffect(() => {
     // Skip first run - initial load effect handles the mount case
     if (!initialLoadCompleteRef.current) {
@@ -372,15 +418,27 @@ export function ChatInterface({
     
     const urlConvId = searchParams.get("conversation");
     
+    // Skip if we're already loading this conversation (prevents race conditions)
+    if (loadingConversationIdRef.current === urlConvId) {
+      return;
+    }
+    
+    // Skip if the current conversation already matches (our own URL update)
+    if (urlConvId === conversationIdRef.current) {
+      return;
+    }
+    
     // If URL has a different conversation than current, load it
-    if (urlConvId && urlConvId !== conversationId) {
+    if (urlConvId) {
       loadConversation(urlConvId);
-    } else if (!urlConvId && conversationId) {
+    } else if (conversationIdRef.current) {
       // URL param cleared (e.g., navigated away), clear the conversation
+      loadingConversationIdRef.current = null;
       setConversationId(null);
       setMessages([]);
     }
-  }, [searchParams, conversationId, loadConversation, setMessages]);
+    // Only depend on searchParams and stable function refs - use refs for state values to avoid loops
+  }, [searchParams, loadConversation, setMessages]);
 
   // Track scroll position to implement "sticky scroll" - only auto-scroll if user hasn't scrolled up
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -668,7 +726,14 @@ export function ChatInterface({
           </div>
           <ScrollArea className="flex-1 px-2">
             {loadingConversations ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">Loading...</div>
+              <div className="space-y-1 py-2">
+                {/* Skeleton items for loading state */}
+                {[85, 70, 95, 60, 75].map((width, i) => (
+                  <div key={i} className="px-3 py-2">
+                    <Skeleton className="h-4" style={{ width: `${width}%` }} />
+                  </div>
+                ))}
+              </div>
             ) : conversations.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground text-sm">No conversations yet</div>
             ) : (
@@ -703,39 +768,40 @@ export function ChatInterface({
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
-<button
-                                          onClick={() => loadConversation(conv.id)}
-                                          className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer"
-                                        >
-                                          {channelFilter === "all" && conv.channelType === "slack" ? (
-                                            <Slack className="h-4 w-4 shrink-0 text-[#4A154B]" />
-                                          ) : (
-                                            <MessageSquare className="h-4 w-4 shrink-0" />
-                                          )}
-                                          <span className="truncate">{conv.title || "New conversation"}</span>
-                                        </button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEditingTitle(conv);
-                          }}
+                        <button
+                          onClick={() => loadConversation(conv.id)}
+                          className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer overflow-hidden"
                         >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmDelete(conv);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                          {/* Only show Slack icon when filtering all channels */}
+                          {channelFilter === "all" && conv.channelType === "slack" && (
+                            <Slack className="h-4 w-4 shrink-0 text-[#4A154B]" />
+                          )}
+                          <span className="truncate">{conv.title || "New conversation"}</span>
+                        </button>
+                        <div className="flex items-center shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditingTitle(conv);
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmDelete(conv);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
