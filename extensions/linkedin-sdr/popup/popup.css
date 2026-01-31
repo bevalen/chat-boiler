@@ -279,3 +279,24 @@ input:checked + .slider:before {
   text-align: center;
   margin-top: 12px;
 }
+
+.help-text a {
+  color: #0077b5;
+  text-decoration: none;
+}
+
+.help-text a:hover {
+  text-decoration: underline;
+}
+
+.field-help {
+  font-size: 10px;
+  color: #888;
+  margin-top: 4px;
+}
+
+/* Button disabled state */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

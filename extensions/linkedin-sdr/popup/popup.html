@@ -28,13 +28,19 @@
         <label for="api-url">MAIA Server URL</label>
         <input type="text" id="api-url" placeholder="https://your-maia-domain.com">
       </div>
+
+      <div class="form-group">
+        <label for="auth-token">Connection Token</label>
+        <input type="password" id="auth-token" placeholder="Paste token from MAIA settings">
+        <p class="field-help">Get your token from MAIA Settings → LinkedIn SDR</p>
+      </div>
       
       <button id="connect-btn" class="btn btn-primary">
         Connect to MAIA
       </button>
       
       <p class="help-text">
-        You'll be redirected to login to your MAIA account.
+        <a href="#" id="open-settings-link">Open MAIA Settings</a> to get your token.
       </p>
     </div>
 

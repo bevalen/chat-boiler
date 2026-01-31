@@ -9,7 +9,9 @@ class PopupController {
       notConnected: document.getElementById('not-connected'),
       connected: document.getElementById('connected'),
       apiUrl: document.getElementById('api-url'),
+      authToken: document.getElementById('auth-token'),
       connectBtn: document.getElementById('connect-btn'),
+      openSettingsLink: document.getElementById('open-settings-link'),
       enabledToggle: document.getElementById('enabled-toggle'),
       draftModeToggle: document.getElementById('draft-mode-toggle'),
       settingsBtn: document.getElementById('settings-btn'),
@@ -76,6 +78,13 @@ class PopupController {
       await this.handleConnect();
     });
 
+    // Open settings link
+    this.elements.openSettingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const apiUrl = this.elements.apiUrl.value.trim() || 'https://madewell-maia.vercel.app';
+      chrome.tabs.create({ url: `${apiUrl}/settings` });
+    });
+
     // Enabled toggle
     this.elements.enabledToggle.addEventListener('change', async (e) => {
       await this.updateSetting('enabled', e.target.checked);
@@ -114,9 +123,15 @@ class PopupController {
 
   async handleConnect() {
     const apiUrl = this.elements.apiUrl.value.trim();
+    const token = this.elements.authToken.value.trim();
     
     if (!apiUrl) {
       alert('Please enter your MAIA server URL');
+      return;
+    }
+
+    if (!token) {
+      alert('Please enter your connection token from MAIA settings');
       return;
     }
 
@@ -128,53 +143,25 @@ class PopupController {
       return;
     }
 
-    // Save API URL
-    await this.sendMessage({ type: 'SET_API_URL', apiUrl });
+    // Validate token with the server
+    this.elements.connectBtn.disabled = true;
+    this.elements.connectBtn.textContent = 'Connecting...';
 
-    // Open login page
-    const loginUrl = `${apiUrl}/login?extension=true&redirect=${encodeURIComponent('/settings/channels')}`;
-    
-    // Open in new tab
-    chrome.tabs.create({ url: loginUrl }, (tab) => {
-      // Listen for the tab to navigate to the success page
-      const checkInterval = setInterval(async () => {
-        try {
-          const currentTab = await chrome.tabs.get(tab.id);
-          
-          // Check if we're on the channels settings page (indicating successful auth)
-          if (currentTab.url && currentTab.url.includes('/settings/channels')) {
-            clearInterval(checkInterval);
-            
-            // Try to generate token
-            await this.generateToken(apiUrl);
-          }
-        } catch (e) {
-          // Tab closed
-          clearInterval(checkInterval);
-        }
-      }, 1000);
-
-      // Stop checking after 5 minutes
-      setTimeout(() => clearInterval(checkInterval), 300000);
-    });
-  }
-
-  async generateToken(apiUrl) {
     try {
-      const response = await fetch(`${apiUrl}/api/auth/extension`, {
+      const response = await fetch(`${apiUrl}/api/auth/extension/validate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        credentials: 'include',
         body: JSON.stringify({
           extensionId: chrome.runtime.id,
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate token');
+        const error = await response.json().catch(() => ({ error: 'Invalid token' }));
+        throw new Error(error.error || 'Failed to validate token');
       }
 
       const data = await response.json();
@@ -182,7 +169,7 @@ class PopupController {
       // Save auth data
       await this.sendMessage({
         type: 'SAVE_AUTH',
-        token: data.token,
+        token: token,
         userId: data.userId,
         agentId: data.agentId,
         apiUrl: apiUrl,
@@ -198,6 +185,9 @@ class PopupController {
     } catch (error) {
       console.error('Auth error:', error);
       alert(`Failed to connect: ${error.message}`);
+    } finally {
+      this.elements.connectBtn.disabled = false;
+      this.elements.connectBtn.textContent = 'Connect to MAIA';
     }
   }
 

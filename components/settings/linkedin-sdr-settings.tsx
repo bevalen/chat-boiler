@@ -59,6 +59,8 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
+  const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+  const [showToken, setShowToken] = useState(false);
 
   // SDR Config state
   const [companyName, setCompanyName] = useState(initialConfig?.companyName || "");
@@ -138,8 +140,11 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
         throw new Error(error.error || "Failed to generate token");
       }
 
+      const data = await response.json();
+      setGeneratedToken(data.token);
+      setShowToken(true);
       await fetchExtensionStatus();
-      setMessage({ type: "success", text: "Extension token generated! You can now connect the Chrome extension." });
+      setMessage({ type: "success", text: "Token generated! Copy it to the Chrome extension to connect." });
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to generate token" });
     } finally {
@@ -330,6 +335,43 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
             </p>
           )}
 
+          {/* Token Display */}
+          {generatedToken && showToken && (
+            <div className="p-4 bg-muted rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Your Connection Token</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowToken(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={generatedToken}
+                  readOnly
+                  className="font-mono text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedToken);
+                    setMessage({ type: "success", text: "Token copied to clipboard!" });
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Paste this token in the Chrome extension popup to connect.
+              </p>
+            </div>
+          )}
+
           <Separator />
 
           <div className="space-y-3">
@@ -338,11 +380,12 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
               Install Extension
             </h4>
             <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              <li>Download the extension folder from the link below</li>
+              <li>Download and unzip the extension folder</li>
               <li>Open Chrome and go to <code className="bg-muted px-1.5 py-0.5 rounded">chrome://extensions</code></li>
               <li>Enable &quot;Developer mode&quot; in the top right</li>
-              <li>Click &quot;Load unpacked&quot; and select the downloaded folder</li>
-              <li>Click the extension icon and enter this URL to connect</li>
+              <li>Click &quot;Load unpacked&quot; and select the unzipped folder</li>
+              <li>Click &quot;Generate Connection Token&quot; above and copy the token</li>
+              <li>Click the extension icon, enter this URL and paste the token</li>
             </ol>
             <div className="flex gap-2">
               <Button 
