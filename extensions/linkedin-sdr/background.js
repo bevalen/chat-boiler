@@ -18,8 +18,8 @@ const STORAGE_KEYS = {
   TOKEN_EXPIRES_AT: 'maia_token_expires_at',
 };
 
-// Default API URL - change this to your MAIA deployment
-const DEFAULT_API_URL = 'http://localhost:3000';
+// Default API URL
+const DEFAULT_API_URL = 'https://madewell-maia.vercel.app';
 
 /**
  * Get settings from storage

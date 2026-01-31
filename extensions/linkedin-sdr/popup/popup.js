@@ -82,7 +82,7 @@ class PopupController {
     this.elements.openSettingsLink.addEventListener('click', (e) => {
       e.preventDefault();
       const apiUrl = this.elements.apiUrl.value.trim() || 'https://madewell-maia.vercel.app';
-      chrome.tabs.create({ url: `${apiUrl}/settings` });
+      chrome.tabs.create({ url: `${apiUrl}/settings?section=linkedin` });
     });
 
     // Enabled toggle
