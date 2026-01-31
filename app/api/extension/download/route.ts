@@ -68,8 +68,11 @@ export async function GET() {
       archive.finalize();
     });
 
+    // Convert Buffer to Uint8Array for NextResponse compatibility
+    const uint8Array = new Uint8Array(zipBuffer);
+
     // Return the zip file
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(uint8Array, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
