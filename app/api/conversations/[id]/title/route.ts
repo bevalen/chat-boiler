@@ -1,5 +1,4 @@
-import { generateText, Output } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { generateText, Output, gateway } from "ai";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser } from "@/lib/db/agents";
@@ -49,7 +48,7 @@ export async function POST(
       .join("\n");
 
     const { output } = await generateText({
-      model: openai("gpt-4o-mini"),
+      model: gateway("openai/gpt-4o-mini"),
       output: Output.object({ schema: titleSchema }),
       prompt: `Generate a short 2-5 word title for this conversation. Be concise and descriptive.
 

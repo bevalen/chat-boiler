@@ -7,7 +7,7 @@
 
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import OpenAI from "openai";
+import { embed, embedMany } from "ai";
 
 // Load environment variables from .env.local
 config({ path: ".env.local" });
@@ -18,25 +18,21 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 async function generateEmbedding(text: string): Promise<number[]> {
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
+  const { embedding } = await embed({
+    model: "openai/text-embedding-3-small",
+    value: text,
   });
-  return response.data[0].embedding;
+  return embedding;
 }
 
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: texts,
+  const { embeddings } = await embedMany({
+    model: "openai/text-embedding-3-small",
+    values: texts,
   });
-  return response.data.map((item) => item.embedding);
+  return embeddings;
 }
 
 async function backfillMessages() {
@@ -269,8 +265,8 @@ async function main() {
     console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
     process.exit(1);
   }
-  if (!process.env.OPENAI_API_KEY) {
-    console.error("Missing OPENAI_API_KEY");
+  if (!process.env.AI_GATEWAY_API_KEY) {
+    console.error("Missing AI_GATEWAY_API_KEY");
     process.exit(1);
   }
 

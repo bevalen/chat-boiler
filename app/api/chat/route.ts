@@ -1,5 +1,4 @@
-import { streamText, convertToModelMessages, UIMessage, tool, stepCountIs } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { streamText, convertToModelMessages, UIMessage, tool, stepCountIs, gateway } from "ai";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser, buildSystemPrompt } from "@/lib/db/agents";
@@ -1246,7 +1245,7 @@ export async function POST(request: Request) {
 
     // Stream the response with tools
     const result = streamText({
-      model: openai("gpt-5.2"),
+      model: gateway("openai/gpt-5.2"),
       system: systemPrompt,
       messages: await convertToModelMessages(messagesWithHistory),
       tools,
