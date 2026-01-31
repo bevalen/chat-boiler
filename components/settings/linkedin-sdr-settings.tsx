@@ -95,6 +95,13 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
     "VP Operations",
   ]);
 
+  // Personal Background
+  const [militaryService, setMilitaryService] = useState(initialConfig?.personalBackground?.militaryService || "");
+  const [education, setEducation] = useState(initialConfig?.personalBackground?.education || "");
+  const [hometown, setHometown] = useState(initialConfig?.personalBackground?.hometown || "");
+  const [interests, setInterests] = useState(initialConfig?.personalBackground?.interests || "");
+  const [personalOther, setPersonalOther] = useState(initialConfig?.personalBackground?.other || "");
+
   // New item inputs
   const [newCriteria, setNewCriteria] = useState("");
   const [newPositive, setNewPositive] = useState("");
@@ -215,6 +222,13 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
       quickIntroTemplate: quickIntroTemplate || undefined,
       minimumRevenue: minimumRevenue || undefined,
       targetTitles: targetTitles.length > 0 ? targetTitles : undefined,
+      personalBackground: (militaryService || education || hometown || interests || personalOther) ? {
+        militaryService: militaryService || undefined,
+        education: education || undefined,
+        hometown: hometown || undefined,
+        interests: interests || undefined,
+        other: personalOther || undefined,
+      } : undefined,
     };
 
     try {
@@ -490,6 +504,74 @@ export function LinkedInSDRSettings({ agentId, initialConfig, onSave }: LinkedIn
               value={videoOverviewUrl}
               onChange={(e) => setVideoOverviewUrl(e.target.value)}
               placeholder="https://youtu.be/yourVideo"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Personal Background */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Settings2 className="h-5 w-5 text-muted-foreground" />
+            <CardTitle>Personal Background</CardTitle>
+          </div>
+          <CardDescription>
+            Personal details the SDR can use for rapport building. Only share what you&apos;re comfortable with.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="militaryService">Military Service</Label>
+            <Input
+              id="militaryService"
+              value={militaryService}
+              onChange={(e) => setMilitaryService(e.target.value)}
+              placeholder="e.g., USMC Reservist, Lima 3/23, 0311 Infantry, 2015-2021"
+            />
+            <p className="text-xs text-muted-foreground">
+              Include unit, MOS, years, etc. if you want to build rapport with veteran leads
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="education">Education</Label>
+            <Input
+              id="education"
+              value={education}
+              onChange={(e) => setEducation(e.target.value)}
+              placeholder="e.g., University of Texas, Business Administration"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="hometown">Hometown/Location</Label>
+            <Input
+              id="hometown"
+              value={hometown}
+              onChange={(e) => setHometown(e.target.value)}
+              placeholder="e.g., Originally from Houston, now based in Austin"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="interests">Interests/Hobbies</Label>
+            <Input
+              id="interests"
+              value={interests}
+              onChange={(e) => setInterests(e.target.value)}
+              placeholder="e.g., golf, travel, fitness"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="personalOther">Other Personal Details</Label>
+            <Textarea
+              id="personalOther"
+              value={personalOther}
+              onChange={(e) => setPersonalOther(e.target.value)}
+              placeholder="Any other details you want the SDR to know (family, background, etc.)"
+              rows={2}
             />
           </div>
         </CardContent>

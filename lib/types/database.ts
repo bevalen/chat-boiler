@@ -33,6 +33,15 @@ export interface SDRConfig {
   founderStory?: string;
   videoOverviewUrl?: string;
   
+  // Personal background (for rapport building)
+  personalBackground?: {
+    militaryService?: string; // e.g., "USMC Reservist, Lima 3/23, 0311 Infantry, 2015-2021"
+    education?: string;
+    hometown?: string;
+    interests?: string; // e.g., "golf, travel, reading"
+    other?: string; // any other personal details to share when relevant
+  };
+  
   // ICP criteria
   icpCriteria?: string[];
   icpPositiveSignals?: string[];

@@ -355,6 +355,31 @@ export function buildSystemPrompt(
       sections.push(`\n**Video overview:** ${sdrConfig.videoOverviewUrl}`);
     }
 
+    // Personal Background (for rapport building)
+    const personalBg = sdrConfig.personalBackground;
+    if (personalBg && (personalBg.militaryService || personalBg.education || personalBg.hometown || personalBg.interests || personalBg.other)) {
+      sections.push(`\n### ${ownerName.toUpperCase()}'S PERSONAL BACKGROUND\n`);
+      sections.push(`**Use these ONLY when relevant to build rapport. These are the ONLY personal facts you know:**\n`);
+      
+      if (personalBg.militaryService) {
+        sections.push(`- **Military Service:** ${personalBg.militaryService}`);
+      }
+      if (personalBg.education) {
+        sections.push(`- **Education:** ${personalBg.education}`);
+      }
+      if (personalBg.hometown) {
+        sections.push(`- **Hometown/Location:** ${personalBg.hometown}`);
+      }
+      if (personalBg.interests) {
+        sections.push(`- **Interests:** ${personalBg.interests}`);
+      }
+      if (personalBg.other) {
+        sections.push(`- **Other:** ${personalBg.other}`);
+      }
+      
+      sections.push(`\n**IMPORTANT:** If someone mentions something NOT listed above (like a specific unit you weren't in), DO NOT pretend you were there. Instead, acknowledge their service and focus on them: "That's awesome, thank you for your service. What are you working on these days?"`);
+    }
+
     // ICP Definition
     sections.push(`\n### ICP (IDEAL CLIENT PROFILE)\n`);
     if (sdrConfig.icpCriteria && sdrConfig.icpCriteria.length > 0) {
