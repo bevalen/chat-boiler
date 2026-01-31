@@ -1,32 +1,6 @@
-import { tool, UIToolInvocation } from "ai";
+import { tool, UIToolInvocation, generateText, gateway } from "ai";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
-
-// Perplexity API types
-interface PerplexitySearchResult {
-  title: string;
-  url: string;
-  date?: string;
-}
-
-interface PerplexityResponse {
-  id: string;
-  model: string;
-  choices: Array<{
-    index: number;
-    finish_reason: string;
-    message: {
-      role: string;
-      content: string;
-    };
-  }>;
-  search_results?: PerplexitySearchResult[];
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
 
 // Log tool action to the action_log table
 async function logToolAction(
@@ -47,57 +21,12 @@ async function logToolAction(
 }
 
 /**
- * Call the Perplexity Sonar API for web research
- */
-async function callPerplexityAPI(
-  query: string,
-  searchMode: "web" | "academic" = "web"
-): Promise<PerplexityResponse> {
-  const apiKey = process.env.PERPLEXITY_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("PERPLEXITY_API_KEY environment variable is not set");
-  }
-
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "sonar",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a research assistant. Provide accurate, well-sourced answers based on current web information. Be concise but thorough.",
-        },
-        {
-          role: "user",
-          content: query,
-        },
-      ],
-      search_mode: searchMode,
-      temperature: 0.2,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Perplexity API error (${response.status}): ${errorText}`);
-  }
-
-  return response.json() as Promise<PerplexityResponse>;
-}
-
-/**
  * Create the research tool with agentId captured in closure
  */
 export function createResearchTool(agentId: string) {
   return tool({
     description:
-      "Search the web for real-time information using Perplexity's Sonar AI. Use this when you need to research current events, look up facts, find recent information, or answer questions that require up-to-date web knowledge. Returns an AI-synthesized answer with source citations.",
+      "Search the web for real-time information using Perplexity's Sonar AI. Use this when you need to research current events, look up facts, find recent information, or answer questions that require up-to-date web knowledge. Returns an AI-synthesized answer based on current web sources.",
     inputSchema: z.object({
       query: z
         .string()
@@ -119,39 +48,22 @@ export function createResearchTool(agentId: string) {
     }) => {
       const mode = searchMode ?? "web";
 
-      // Check if API key is configured
-      if (!process.env.PERPLEXITY_API_KEY) {
-        const result = {
-          success: false,
-          message:
-            "Research tool is not configured. Please add PERPLEXITY_API_KEY to your environment variables.",
-          answer: "",
-          sources: [] as PerplexitySearchResult[],
-          sourceCount: 0,
-        };
-
-        await logToolAction(agentId, "research", "search", { query, searchMode: mode }, result);
-
-        return result;
-      }
-
       try {
-        const response = await callPerplexityAPI(query, mode);
-
-        const answer = response.choices?.[0]?.message?.content || "";
-        const sources = response.search_results || [];
+        // Use Perplexity through AI Gateway
+        const { text } = await generateText({
+          model: gateway("perplexity/sonar"),
+          system:
+            "You are a research assistant. Provide accurate, well-sourced answers based on current web information. Be concise but thorough. Always cite your sources.",
+          prompt: query,
+          temperature: 0.2,
+        });
 
         const result = {
           success: true,
           query,
           searchMode: mode,
-          answer,
-          sources: sources.map((s) => ({
-            title: s.title,
-            url: s.url,
-            date: s.date,
-          })),
-          sourceCount: sources.length,
+          answer: text,
+          sourceCount: 0, // Gateway doesn't return structured sources
         };
 
         // Log the action
@@ -160,7 +72,7 @@ export function createResearchTool(agentId: string) {
           "research",
           "search",
           { query, searchMode: mode },
-          { success: true, sourceCount: result.sourceCount }
+          { success: true }
         );
 
         return result;
@@ -173,7 +85,6 @@ export function createResearchTool(agentId: string) {
           message: `Research failed: ${errorMessage}`,
           query,
           answer: "",
-          sources: [] as PerplexitySearchResult[],
           sourceCount: 0,
           error: errorMessage,
         };
