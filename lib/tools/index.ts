@@ -16,7 +16,14 @@ export {
   deleteTaskTool,
 } from "./tasks";
 
-export { createCheckEmailTool, createSendEmailTool } from "./email";
+export { 
+  createCheckEmailTool, 
+  createSendEmailTool, 
+  createForwardEmailToUserTool,
+  createReplyToEmailTool,
+  createArchiveEmailTool,
+  createEmailDraftTool,
+} from "./email";
 
 export { checkCalendarTool } from "./calendar";
 
@@ -42,7 +49,20 @@ export type {
   DeleteTaskToolInvocation,
 } from "./tasks";
 
-export type { CheckEmailTool, SendEmailTool, CheckEmailToolInvocation, SendEmailToolInvocation } from "./email";
+export type { 
+  CheckEmailTool, 
+  SendEmailTool, 
+  ForwardEmailToUserTool,
+  ReplyToEmailTool,
+  ArchiveEmailTool,
+  CreateEmailDraftTool,
+  CheckEmailToolInvocation, 
+  SendEmailToolInvocation,
+  ForwardEmailToUserToolInvocation,
+  ReplyToEmailToolInvocation,
+  ArchiveEmailToolInvocation,
+  CreateEmailDraftToolInvocation,
+} from "./email";
 
 export type { CheckCalendarToolInvocation } from "./calendar";
 

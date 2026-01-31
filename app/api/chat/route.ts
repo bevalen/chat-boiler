@@ -10,7 +10,14 @@ import {
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 import { ChannelType, MessageMetadata, FeedbackType, FeedbackPriority } from "@/lib/types/database";
-import { createCheckEmailTool, createSendEmailTool, createForwardEmailToUserTool } from "@/lib/tools/email";
+import { 
+  createCheckEmailTool, 
+  createSendEmailTool, 
+  createForwardEmailToUserTool,
+  createReplyToEmailTool,
+  createArchiveEmailTool,
+  createEmailDraftTool,
+} from "@/lib/tools/email";
 import { createResearchTool } from "@/lib/tools/research";
 import { createFeedback, createAutomaticBugReport } from "@/lib/db/feedback";
 
@@ -1233,6 +1240,9 @@ export async function POST(request: Request) {
       // Email tools (Zapier MCP integration)
       checkEmail: createCheckEmailTool(agentId),
       sendEmail: createSendEmailTool(agentId),
+      replyToEmail: createReplyToEmailTool(agentId),
+      archiveEmail: createArchiveEmailTool(agentId),
+      createEmailDraft: createEmailDraftTool(agentId),
       // Forward email to user tool - available when handling incoming emails
       // so the agent can escalate to the user when uncertain
       ...(channelSource === "email" && profile?.email
