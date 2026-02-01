@@ -7,11 +7,17 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { buildSystemPrompt, getAgentById } from "@/lib/db/agents";
 import { markJobExecuted, markJobFailed, createJobExecution, updateJobExecution } from "@/lib/db/scheduled-jobs";
 import { createNotification } from "@/lib/db/notifications";
+import { logActivity } from "@/lib/db/activity-log";
 import type { Database } from "@/lib/types/database";
+import {
+  createCheckEmailTool,
+  createSendEmailTool,
+  createReplyToEmailTool,
+  createResearchTool,
+} from "@/lib/tools";
 
 // SAFETY LIMITS to prevent runaway API costs
 const MAX_TOOL_STEPS = 25; // Maximum tool calls per job
-const MAX_TOKENS_PER_JOB = 100000; // Maximum tokens per job run
 
 type ScheduledJob = Database["public"]["Tables"]["scheduled_jobs"]["Row"];
 type ActionPayload = {
@@ -178,7 +184,7 @@ async function executeAgentTaskAction(job: ScheduledJob) {
 
   const supabase = getAdminClient();
   const payload = job.action_payload as ActionPayload;
-  const instruction = payload?.instruction || "execute_scheduled_task";
+  const instruction = payload?.instruction || job.description || "Execute scheduled task";
 
   // Get agent
   const agent = await getAgentById(supabase, job.agent_id);
@@ -207,7 +213,12 @@ async function executeAgentTaskAction(job: ScheduledJob) {
   const userMessage = `[Scheduled Task: ${job.title}]\n\n${instruction}`;
 
   // Save user message
-  await supabase.from("messages").insert({ conversation_id: conversationId, role: "user", content: userMessage });
+  await supabase.from("messages").insert({ 
+    conversation_id: conversationId, 
+    role: "user", 
+    content: userMessage,
+    metadata: { type: "scheduled_agent_task", job_id: job.id },
+  });
 
   // Build system prompt
   const systemPrompt = await buildSystemPrompt(agent, {
@@ -217,30 +228,152 @@ async function executeAgentTaskAction(job: ScheduledJob) {
     email: profile?.email || undefined,
   });
 
-  // Run durable agent with SAFETY LIMITS
+  // Run durable agent with SAFETY LIMITS and full tool access
   const writable = getWritable<UIMessageChunk>();
+
+  // Create comprehensive tools for the durable agent
+  // Mix of factory tools and inline tools with agentId captured in closure
+  const tools = {
+    // Email tools from lib/tools (factory functions)
+    checkEmail: createCheckEmailTool(job.agent_id),
+    sendEmail: createSendEmailTool(job.agent_id),
+    replyToEmail: createReplyToEmailTool(job.agent_id),
+    
+    // Research tool (factory function)
+    research: createResearchTool(job.agent_id),
+    
+    // Inline tools for job-specific functionality
+    ...createJobTools(supabase, job.agent_id, payload?.taskId, conversationId),
+    
+    // Additional inline tools with proper closure
+    listProjects: tool({
+      description: "List all projects",
+      inputSchema: z.object({
+        status: z.enum(["active", "paused", "completed", "all"]).optional().default("active"),
+      }),
+      execute: async ({ status }) => {
+        "use step";
+        let query = supabase
+          .from("projects")
+          .select("id, title, description, status, priority, created_at")
+          .eq("agent_id", job.agent_id)
+          .order("created_at", { ascending: false });
+        if (status && status !== "all") query = query.eq("status", status);
+        const { data, error } = await query;
+        if (error) return { success: false, error: error.message };
+        return { success: true, projects: data, count: data?.length || 0 };
+      },
+    }),
+    
+    searchMemory: tool({
+      description: "Search your memory for relevant information from past conversations, projects, tasks, and context",
+      inputSchema: z.object({
+        query: z.string().describe("What to search for"),
+        limit: z.number().optional().default(10),
+      }),
+      execute: async ({ query, limit }) => {
+        "use step";
+        const { semanticSearchAll, formatContextForAI } = await import("@/lib/db/search");
+        const results = await semanticSearchAll(supabase, query, job.agent_id, { matchCount: limit, matchThreshold: 0.5 });
+        return { success: true, results: formatContextForAI(results), count: results.length };
+      },
+    }),
+    
+    saveToMemory: tool({
+      description: "Save important information to memory for future reference",
+      inputSchema: z.object({
+        title: z.string().describe("Title or label for this memory"),
+        content: z.string().describe("The content to remember"),
+        category: z.enum(["note", "fact", "preference", "context"]).optional().default("note"),
+      }),
+      execute: async ({ title, content, category }) => {
+        "use step";
+        const { generateEmbedding } = await import("@/lib/embeddings");
+        const embedding = await generateEmbedding(`${title}\n\n${content}`);
+        
+        const { data, error } = await supabase
+          .from("memories")
+          .insert({
+            agent_id: job.agent_id,
+            title,
+            content,
+            category,
+            embedding,
+          })
+          .select("id")
+          .single();
+        
+        if (error) return { success: false, error: error.message };
+        return { success: true, memoryId: data.id, message: `Saved: ${title}` };
+      },
+    }),
+  };
 
   const durableAgent = new DurableAgent({
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
-    tools: createJobTools(supabase, job.agent_id, payload?.taskId),
+    tools,
   });
 
+  let finalResponse = "";
+
   try {
-    await durableAgent.stream({
+    // Use generate instead of stream to capture the response
+    const result = await durableAgent.generate({
       messages: [{ role: "user", content: userMessage }],
-      writable,
       maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
     });
+
+    finalResponse = result.text || "Task completed.";
+    
+    console.log(`[execute-job] Agent completed job ${job.id} with ${result.steps?.length || 0} steps`);
   } catch (agentError) {
     const errorMsg = agentError instanceof Error ? agentError.message : "Agent execution failed";
     console.error(`[execute-job] Agent error for job ${job.id}:`, errorMsg);
+    
+    // Still save error message to conversation
+    await supabase.from("messages").insert({
+      conversation_id: conversationId,
+      role: "assistant",
+      content: `I encountered an error while executing this scheduled task: ${errorMsg}`,
+      metadata: { type: "scheduled_agent_task", job_id: job.id, error: true },
+    });
+    
     throw new Error(`Agent failed: ${errorMsg}`);
   }
 
-  await createNotification(supabase, job.agent_id, "reminder", job.title, "Scheduled task completed", "conversation", conversationId);
+  // Save the agent's response to the database
+  await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    role: "assistant",
+    content: finalResponse,
+    metadata: { type: "scheduled_agent_task", job_id: job.id },
+  });
 
-  return { success: true, data: { conversationId, instruction } };
+  // Log activity
+  await logActivity(supabase, {
+    agentId: job.agent_id,
+    activityType: "cron_execution",
+    source: "cron",
+    title: `Completed: ${job.title}`,
+    description: finalResponse.substring(0, 200),
+    conversationId,
+    jobId: job.id,
+    status: "completed",
+  });
+
+  // Create notification
+  await createNotification(
+    supabase, 
+    job.agent_id, 
+    "task_update", 
+    `Scheduled task completed: ${job.title}`, 
+    finalResponse.substring(0, 200), 
+    "conversation", 
+    conversationId
+  );
+
+  return { success: true, data: { conversationId, instruction, response: finalResponse.substring(0, 500) } };
 }
 
 async function executeWebhookAction(job: ScheduledJob) {
@@ -269,20 +402,10 @@ async function executeWebhookAction(job: ScheduledJob) {
 function createJobTools(
   supabase: ReturnType<typeof getAdminClient>,
   agentId: string,
-  taskId?: string
+  taskId?: string,
+  conversationId?: string
 ) {
   return {
-    searchMemory: tool({
-      description: "Search memory for relevant information",
-      inputSchema: z.object({ query: z.string() }),
-      execute: async ({ query }) => {
-        "use step";
-        const { semanticSearchAll, formatContextForAI } = await import("@/lib/db/search");
-        const results = await semanticSearchAll(supabase, query, agentId, { matchCount: 10, matchThreshold: 0.65 });
-        return { success: true, results: formatContextForAI(results), count: results.length };
-      },
-    }),
-
     createTask: tool({
       description: "Create a new task",
       inputSchema: z.object({
@@ -315,28 +438,52 @@ function createJobTools(
       },
     }),
 
-    listTasks: tool({
-      description: "List tasks",
-      inputSchema: z.object({ status: z.string().optional() }),
-      execute: async ({ status }) => {
+    updateTask: tool({
+      description: "Update an existing task's status, priority, or details",
+      inputSchema: z.object({
+        taskId: z.string().describe("The ID of the task to update"),
+        status: z.enum(["todo", "in_progress", "waiting_on", "done"]).optional(),
+        priority: z.enum(["high", "medium", "low"]).optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }),
+      execute: async ({ taskId: tid, status, priority, title, description }) => {
         "use step";
-        let query = supabase.from("tasks").select("id, title, status, priority, due_date").eq("agent_id", agentId).order("created_at", { ascending: false });
-        if (status && status !== "all") query = query.eq("status", status);
-        const { data, error } = await query;
+        const updates: Record<string, unknown> = {};
+        if (status) updates.status = status;
+        if (priority) updates.priority = priority;
+        if (title) updates.title = title;
+        if (description) updates.description = description;
+        if (status === "done") updates.completed_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+          .from("tasks")
+          .update(updates)
+          .eq("id", tid)
+          .eq("agent_id", agentId)
+          .select()
+          .single();
+
         if (error) return { success: false, error: error.message };
-        return { success: true, tasks: data, count: data.length };
+        return { success: true, task: data };
       },
     }),
 
     addComment: tool({
-      description: "Add a comment to the linked task",
-      inputSchema: z.object({ content: z.string(), commentType: z.string().optional() }),
-      execute: async ({ content, commentType }) => {
+      description: "Add a comment to a task to log progress or notes",
+      inputSchema: z.object({ 
+        targetTaskId: z.string().optional().describe("Task ID to comment on. If not provided, uses the linked task."),
+        content: z.string(), 
+        commentType: z.enum(["progress", "note", "question", "resolution"]).optional().default("progress"),
+      }),
+      execute: async ({ targetTaskId, content, commentType }) => {
         "use step";
-        if (!taskId) return { success: false, error: "No task linked" };
+        const tid = targetTaskId || taskId;
+        if (!tid) return { success: false, error: "No task specified" };
+        
         const { data, error } = await supabase
           .from("comments")
-          .insert({ task_id: taskId, author_type: "agent", author_id: agentId, content, comment_type: commentType || "progress" })
+          .insert({ task_id: tid, author_type: "agent", author_id: agentId, content, comment_type: commentType || "progress" })
           .select()
           .single();
         if (error) return { success: false, error: error.message };
@@ -345,12 +492,12 @@ function createJobTools(
     }),
 
     scheduleReminder: tool({
-      description: "Schedule a reminder",
+      description: "Schedule a reminder for later",
       inputSchema: z.object({
         title: z.string(),
         message: z.string(),
-        runAt: z.string().optional(),
-        cronExpression: z.string().optional(),
+        runAt: z.string().optional().describe("ISO datetime for one-time reminders"),
+        cronExpression: z.string().optional().describe("Cron expression for recurring reminders"),
       }),
       execute: async ({ title, message, runAt, cronExpression }) => {
         "use step";
@@ -368,6 +515,94 @@ function createJobTools(
         });
         if (!success || error) return { success: false, error: error || "Failed" };
         return { success: true, jobId: job?.id, nextRunAt: job?.next_run_at };
+      },
+    }),
+
+    scheduleAgentTask: tool({
+      description: "Schedule the agent to perform a task later with full tool access",
+      inputSchema: z.object({
+        title: z.string().describe("Name for the scheduled task"),
+        instruction: z.string().describe("What the agent should do when the task runs"),
+        runAt: z.string().optional().describe("ISO datetime for one-time tasks"),
+        cronExpression: z.string().optional().describe("Cron expression for recurring tasks"),
+      }),
+      execute: async ({ title, instruction, runAt, cronExpression }) => {
+        "use step";
+        if (!runAt && !cronExpression) {
+          return { success: false, error: "Must provide either 'runAt' for one-time or 'cronExpression' for recurring tasks" };
+        }
+        
+        const { createScheduledJob } = await import("@/lib/db/scheduled-jobs");
+        const { success, job, error } = await createScheduledJob(supabase, {
+          agentId,
+          jobType: cronExpression ? "recurring" : "one_time",
+          title,
+          description: instruction,
+          scheduleType: cronExpression ? "cron" : "once",
+          runAt,
+          cronExpression,
+          actionType: "agent_task",
+          actionPayload: { instruction },
+        });
+        if (!success || error) return { success: false, error: error || "Failed" };
+        return { success: true, jobId: job?.id, nextRunAt: job?.next_run_at };
+      },
+    }),
+
+    getProject: tool({
+      description: "Get details of a specific project by ID",
+      inputSchema: z.object({
+        projectId: z.string().describe("The project ID"),
+      }),
+      execute: async ({ projectId }) => {
+        "use step";
+        const { data, error } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", projectId)
+          .eq("agent_id", agentId)
+          .single();
+        if (error) return { success: false, error: error.message };
+        return { success: true, project: data };
+      },
+    }),
+
+    getTask: tool({
+      description: "Get details of a specific task by ID",
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID"),
+      }),
+      execute: async ({ taskId: tid }) => {
+        "use step";
+        const { data, error } = await supabase
+          .from("tasks")
+          .select("*")
+          .eq("id", tid)
+          .eq("agent_id", agentId)
+          .single();
+        if (error) return { success: false, error: error.message };
+        return { success: true, task: data };
+      },
+    }),
+
+    listTasks: tool({
+      description: "List tasks with optional status filter",
+      inputSchema: z.object({
+        status: z.enum(["todo", "in_progress", "waiting_on", "done", "all"]).optional().default("all"),
+        limit: z.number().optional().default(20),
+      }),
+      execute: async ({ status, limit }) => {
+        "use step";
+        let query = supabase
+          .from("tasks")
+          .select("id, title, status, priority, due_date, created_at")
+          .eq("agent_id", agentId)
+          .order("created_at", { ascending: false })
+          .limit(limit || 20);
+        if (status && status !== "all") query = query.eq("status", status);
+        const { data, error } = await query;
+        if (error) return { success: false, error: error.message };
+        return { success: true, tasks: data, count: data?.length || 0 };
       },
     }),
   };
