@@ -46,9 +46,32 @@ export async function POST(request: Request) {
     }
 
     const supabase = getAdminClient();
+    
+    // Debug mode - return raw query results
+    const debugMode = url.searchParams.get("debug") === "true";
 
     // Get all due jobs (excludes jobs that are currently locked)
     const { jobs, error: fetchError } = await getDueJobs(supabase, 50);
+    
+    if (debugMode) {
+      // Return debug info without executing jobs
+      const now = new Date().toISOString();
+      const { data: allActive } = await supabase
+        .from("scheduled_jobs")
+        .select("id, title, status, next_run_at, locked_until")
+        .eq("status", "active")
+        .order("next_run_at", { ascending: true })
+        .limit(10);
+      
+      return NextResponse.json({
+        debug: true,
+        serverTime: now,
+        activeJobs: allActive,
+        dueJobsFound: jobs?.length || 0,
+        dueJobs: jobs?.map(j => ({ id: j.id, title: j.title, next_run_at: j.next_run_at })),
+        fetchError,
+      });
+    }
 
     if (fetchError) {
       console.error("[dispatcher] Error fetching due jobs:", fetchError);

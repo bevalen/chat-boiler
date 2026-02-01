@@ -338,15 +338,19 @@ export async function getDueJobs(
   limit: number = 100
 ): Promise<{ success: boolean; jobs?: ScheduledJob[]; error?: string }> {
   const now = new Date().toISOString();
+  console.log("[getDueJobs] Checking for jobs due before:", now);
 
   // First get jobs that are due
   const { data, error } = await supabase
     .from("scheduled_jobs")
     .select("*")
     .eq("status", "active")
+    .not("next_run_at", "is", null)
     .lte("next_run_at", now)
     .order("next_run_at", { ascending: true })
     .limit(limit);
+
+  console.log("[getDueJobs] Query returned:", data?.length || 0, "jobs, error:", error?.message || "none");
 
   if (error) {
     return { success: false, error: error.message };
@@ -358,6 +362,7 @@ export async function getDueJobs(
     return new Date(job.locked_until) < new Date(now);
   });
 
+  console.log("[getDueJobs] After lock filter:", unlockedJobs.length, "jobs");
   return { success: true, jobs: unlockedJobs };
 }
 
