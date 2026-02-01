@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "@/lib/types/database";
+import { sendNotificationPush } from "@/lib/push";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 type NotificationInsert = Database["public"]["Tables"]["notifications"]["Insert"];
@@ -61,7 +62,20 @@ export async function createNotification(
     return { notification: null, error: error.message };
   }
 
-  return { notification: mapNotificationRow(data), error: null };
+  const notification = mapNotificationRow(data);
+
+  // Send push notification (async, don't block)
+  sendNotificationPush(supabase, agentId, {
+    id: notification.id,
+    title: notification.title,
+    content: notification.content,
+    linkType: notification.linkType,
+    linkId: notification.linkId,
+  }).catch((err) => {
+    console.error("Error sending push notification:", err);
+  });
+
+  return { notification, error: null };
 }
 
 /**

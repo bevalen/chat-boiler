@@ -107,7 +107,14 @@ interface AppSidebarProps {
 
 export function AppSidebar({ user }: AppSidebarProps) {
   const pathname = usePathname();
-  const { setOpen } = useSidebar();
+  const { setOpen, setOpenMobile, isMobile } = useSidebar();
+
+  // Close mobile menu when navigating
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   // Auto-collapse sidebar on chat pages (main chat and feedback chat), expand on others
   useEffect(() => {
@@ -153,7 +160,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     tooltip={item.title}
                     className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-white/5 transition-all duration-200"
                   >
-                    <Link href={item.url} className="flex items-center gap-3">
+                    <Link href={item.url} onClick={handleNavClick} className="flex items-center gap-3">
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -179,7 +186,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     tooltip={item.title}
                     className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-white/5 transition-all duration-200"
                   >
-                    <Link href={item.url} className="flex items-center gap-3">
+                    <Link href={item.url} onClick={handleNavClick} className="flex items-center gap-3">
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -224,7 +231,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                 sideOffset={4}
               >
                 <DropdownMenuItem asChild className="rounded-lg focus:bg-primary/10 focus:text-primary cursor-pointer">
-                  <Link href="/settings">
+                  <Link href="/settings" onClick={handleNavClick}>
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </Link>

@@ -16,12 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { User, Bot, Shield, Upload, X, MessageSquare, Sparkles, Radio, Menu, Linkedin } from "lucide-react";
+import { User, Bot, Shield, Upload, X, MessageSquare, Sparkles, Radio, Menu, Linkedin, Bell } from "lucide-react";
+import { PushNotificationSettings } from "./push-notification-settings";
 import Image from "next/image";
 import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 import { useEffect } from "react";
 
-type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "channels" | "linkedin" | "security";
+type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "notifications" | "channels" | "linkedin" | "security";
 
 interface SettingsFormProps {
   user: {
@@ -276,6 +277,7 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
     { id: "identity" as SettingsSection, label: "AI Identity", icon: <Bot className="h-4 w-4" />, description: "Assistant appearance" },
     { id: "personality" as SettingsSection, label: "AI Personality", icon: <Sparkles className="h-4 w-4" />, description: "Traits & style" },
     { id: "preferences" as SettingsSection, label: "Preferences", icon: <MessageSquare className="h-4 w-4" />, description: "Communication style" },
+    { id: "notifications" as SettingsSection, label: "Notifications", icon: <Bell className="h-4 w-4" />, description: "Push notifications" },
     { id: "channels" as SettingsSection, label: "Channels", icon: <Radio className="h-4 w-4" />, description: "Communication channels" },
     { id: "linkedin" as SettingsSection, label: "LinkedIn SDR", icon: <Linkedin className="h-4 w-4" />, description: "AI sales assistant" },
     { id: "security" as SettingsSection, label: "Security", icon: <Shield className="h-4 w-4" />, description: "Account security" },
@@ -716,6 +718,27 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
               </CardContent>
             </Card>
           )}
+
+        {/* Notifications Section */}
+        {activeSection === "notifications" && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-muted-foreground" />
+                <CardTitle>Notifications</CardTitle>
+              </div>
+              <CardDescription>
+                Configure how you receive notifications from MAIA
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <PushNotificationSettings />
+              <p className="text-xs text-muted-foreground">
+                On iOS, you need to add this app to your Home Screen first, then enable notifications.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Channels Section */}
         {activeSection === "channels" && channelsComponent && (

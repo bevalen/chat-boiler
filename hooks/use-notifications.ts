@@ -4,6 +4,21 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Notification } from "@/lib/db/notifications";
 
+// Update PWA app badge (if supported)
+function updateAppBadge(count: number) {
+  if (typeof navigator !== "undefined" && "setAppBadge" in navigator) {
+    if (count > 0) {
+      (navigator as Navigator & { setAppBadge: (n: number) => Promise<void> }).setAppBadge(count).catch(() => {
+        // Badge API might not be available or permission denied
+      });
+    } else {
+      (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge?.().catch(() => {
+        // Badge API might not be available
+      });
+    }
+  }
+}
+
 interface UseNotificationsOptions {
   agentId: string | null;
 }
@@ -99,6 +114,11 @@ export function useNotifications({
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // Update PWA badge when unread count changes
+  useEffect(() => {
+    updateAppBadge(unreadCount);
+  }, [unreadCount]);
 
   // Set up realtime subscription
   useEffect(() => {
