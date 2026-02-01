@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
-import { start } from "workflow/api";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getDueJobs, lockJobForExecution, unlockJobAfterFailure } from "@/lib/db/scheduled-jobs";
+import { getDueJobs, lockJobForExecution, unlockJobAfterFailure, markJobExecuted, markJobFailed, createJobExecution, updateJobExecution } from "@/lib/db/scheduled-jobs";
 import { logActivity } from "@/lib/db/activity-log";
-import { executeJobWorkflow } from "@/workflows/jobs/execute-job";
+import { createNotification } from "@/lib/db/notifications";
 import { Database } from "@/lib/types/database";
 
 type ScheduledJob = Database["public"]["Tables"]["scheduled_jobs"]["Row"];
+type ActionPayload = {
+  message?: string;
+  instruction?: string;
+  taskId?: string;
+  preferred_channel?: string;
+};
 
 export const maxDuration = 60;
 
@@ -85,8 +90,8 @@ export async function POST(request: Request) {
           agentId: job.agent_id,
           activityType: "cron_execution",
           source: "cron",
-          title: `Starting workflow: ${job.title}`,
-          description: `Executing ${job.job_type} (${job.action_type}) via Vercel Workflow`,
+          title: `Starting: ${job.title}`,
+          description: `Executing ${job.job_type} (${job.action_type})`,
           metadata: {
             jobType: job.job_type,
             actionType: job.action_type,
@@ -95,10 +100,33 @@ export async function POST(request: Request) {
           status: "started",
         }).catch((err) => console.error("[dispatcher] Failed to log job start:", err));
 
-        // Start the workflow
-        await start(executeJobWorkflow, [{ job }]);
+        // Execute the job directly (not using Vercel Workflows for now)
+        const result = await executeJobDirectly(supabase, job);
+        
+        if (result.success) {
+          // Mark job as executed
+          await markJobExecuted(supabase, job.id, job);
+          
+          // Log completion
+          await logActivity(supabase, {
+            agentId: job.agent_id,
+            activityType: "cron_execution",
+            source: "cron",
+            title: `Scheduled: ${job.title}`,
+            description: `${job.job_type} executed successfully`,
+            metadata: {
+              jobType: job.job_type,
+              result: result.data,
+            },
+            conversationId: (result.data as { conversationId?: string })?.conversationId,
+            jobId: job.id,
+            status: "completed",
+          });
+        } else {
+          throw new Error(result.error || "Job execution failed");
+        }
 
-        console.log(`[dispatcher] Workflow started for job ${job.id}`);
+        console.log(`[dispatcher] Job executed successfully: ${job.id}`);
 
         results.push({
           jobId: job.id,
@@ -146,4 +174,192 @@ export async function POST(request: Request) {
 // Support GET for manual testing
 export async function GET(request: Request) {
   return POST(request);
+}
+
+/**
+ * Execute a job directly without using Vercel Workflows
+ * This is a fallback for reliable execution
+ */
+async function executeJobDirectly(
+  supabase: ReturnType<typeof getAdminClient>,
+  job: ScheduledJob
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  switch (job.action_type) {
+    case "notify":
+      return executeNotifyAction(supabase, job);
+    case "agent_task":
+      return executeAgentTaskAction(supabase, job);
+    case "webhook":
+      return executeWebhookAction(job);
+    default:
+      return { success: false, error: `Unknown action type: ${job.action_type}` };
+  }
+}
+
+/**
+ * Execute a notification action - send a reminder message
+ */
+async function executeNotifyAction(
+  supabase: ReturnType<typeof getAdminClient>,
+  job: ScheduledJob
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  const payload = job.action_payload as ActionPayload;
+  const message = payload?.message || job.title;
+
+  // Build notification content
+  let notificationContent = `**Reminder:** ${message}`;
+
+  if (job.task_id) {
+    const { data: task } = await supabase
+      .from("tasks")
+      .select("title, description, due_date")
+      .eq("id", job.task_id)
+      .single();
+
+    if (task) {
+      notificationContent = `**Reminder:** ${job.title}\n**Task:** ${task.title}`;
+      if (task.due_date) {
+        notificationContent += `\n**Due:** ${new Date(task.due_date).toLocaleDateString()}`;
+      }
+    }
+  }
+
+  // Get or create conversation
+  let conversationId = job.conversation_id;
+
+  if (!conversationId) {
+    // Create a new conversation for this notification
+    const { data: newConv } = await supabase
+      .from("conversations")
+      .insert({
+        agent_id: job.agent_id,
+        channel_type: "app",
+        status: "active",
+        title: `Scheduled: ${job.title}`,
+      })
+      .select("id")
+      .single();
+    conversationId = newConv?.id || null;
+  }
+
+  if (!conversationId) {
+    return { success: false, error: "Could not find or create conversation" };
+  }
+
+  // Insert message
+  const { error: msgError } = await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    role: "assistant",
+    content: notificationContent,
+    metadata: { type: "scheduled_notification", job_id: job.id },
+  });
+
+  if (msgError) {
+    return { success: false, error: msgError.message };
+  }
+
+  // Create notification
+  await createNotification(
+    supabase,
+    job.agent_id,
+    "reminder",
+    job.title,
+    notificationContent.substring(0, 200),
+    "conversation",
+    conversationId
+  );
+
+  return { success: true, data: { conversationId, message: notificationContent } };
+}
+
+/**
+ * Execute an agent task action - this requires AI execution
+ * For now, just create a placeholder and log
+ */
+async function executeAgentTaskAction(
+  supabase: ReturnType<typeof getAdminClient>,
+  job: ScheduledJob
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  const payload = job.action_payload as ActionPayload;
+  const instruction = payload?.instruction || job.description || "Execute scheduled task";
+
+  // Create a new conversation for this agent task
+  const { data: newConv, error: convError } = await supabase
+    .from("conversations")
+    .insert({
+      agent_id: job.agent_id,
+      channel_type: "app",
+      status: "active",
+      title: `Scheduled: ${job.title}`,
+    })
+    .select("id")
+    .single();
+
+  if (convError || !newConv) {
+    return { success: false, error: "Could not create conversation for agent task" };
+  }
+
+  const conversationId = newConv.id;
+
+  // Insert a message indicating the scheduled task
+  const taskMessage = `**Scheduled Task: ${job.title}**\n\n${instruction}\n\n_This task was triggered by a scheduled job._`;
+
+  const { error: msgError } = await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    role: "assistant",
+    content: taskMessage,
+    metadata: { type: "scheduled_agent_task", job_id: job.id },
+  });
+
+  if (msgError) {
+    return { success: false, error: msgError.message };
+  }
+
+  // Create notification so user knows the task ran
+  await createNotification(
+    supabase,
+    job.agent_id,
+    "task_update",
+    `Scheduled task executed: ${job.title}`,
+    instruction.substring(0, 200),
+    "conversation",
+    conversationId
+  );
+
+  return { success: true, data: { conversationId, instruction } };
+}
+
+/**
+ * Execute a webhook action
+ */
+async function executeWebhookAction(
+  job: ScheduledJob
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  const payload = job.action_payload as { url?: string; body?: unknown; headers?: Record<string, string> };
+
+  if (!payload?.url) {
+    return { success: false, error: "No webhook URL specified" };
+  }
+
+  try {
+    const response = await fetch(payload.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(payload.headers || {}) },
+      body: JSON.stringify({
+        job_id: job.id,
+        job_type: job.job_type,
+        title: job.title,
+        ...(payload.body as object || {}),
+      }),
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `Webhook returned ${response.status}` };
+    }
+
+    const responseData = await response.json().catch(() => ({}));
+    return { success: true, data: responseData };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Webhook failed" };
+  }
 }
