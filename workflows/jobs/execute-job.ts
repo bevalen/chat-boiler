@@ -318,13 +318,21 @@ async function executeAgentTaskAction(job: ScheduledJob) {
   let finalResponse = "";
 
   try {
-    // Use generate instead of stream to capture the response
-    const result = await durableAgent.generate({
+    // Use stream to capture the response
+    const result = await durableAgent.stream({
       messages: [{ role: "user", content: userMessage }],
       maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
+      writable,
     });
 
-    finalResponse = result.text || "Task completed.";
+    // Extract text from the final assistant message
+    const lastMessage = result.messages[result.messages.length - 1];
+    if (lastMessage?.role === "assistant") {
+      finalResponse = typeof lastMessage.content === "string" 
+        ? lastMessage.content 
+        : lastMessage.content.map((c: any) => c.type === "text" ? c.text : "").join("");
+    }
+    finalResponse = finalResponse || "Task completed.";
     
     console.log(`[execute-job] Agent completed job ${job.id} with ${result.steps?.length || 0} steps`);
   } catch (agentError) {
