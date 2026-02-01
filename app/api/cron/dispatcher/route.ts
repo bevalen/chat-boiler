@@ -296,8 +296,7 @@ async function executeNotifyAction(
 }
 
 /**
- * Execute an agent task action - this requires AI execution
- * For now, just create a placeholder and log
+ * Execute an agent task action - calls the chat API to run the AI agent
  */
 async function executeAgentTaskAction(
   supabase: ReturnType<typeof getAdminClient>,
@@ -323,14 +322,13 @@ async function executeAgentTaskAction(
   }
 
   const conversationId = newConv.id;
+  const userMessage = `[Scheduled Task: ${job.title}]\n\n${instruction}`;
 
-  // Insert a message indicating the scheduled task
-  const taskMessage = `**Scheduled Task: ${job.title}**\n\n${instruction}\n\n_This task was triggered by a scheduled job._`;
-
+  // Insert the user message first
   const { error: msgError } = await supabase.from("messages").insert({
     conversation_id: conversationId,
-    role: "assistant",
-    content: taskMessage,
+    role: "user",
+    content: userMessage,
     metadata: { type: "scheduled_agent_task", job_id: job.id },
   });
 
@@ -338,18 +336,65 @@ async function executeAgentTaskAction(
     return { success: false, error: msgError.message };
   }
 
-  // Create notification so user knows the task ran
-  await createNotification(
-    supabase,
-    job.agent_id,
-    "task_update",
-    `Scheduled task executed: ${job.title}`,
-    instruction.substring(0, 200),
-    "conversation",
-    conversationId
-  );
+  // Call the chat API to run the actual AI agent
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}` 
+    : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  
+  console.log(`[executeAgentTaskAction] Calling chat API for job ${job.id} at ${baseUrl}`);
 
-  return { success: true, data: { conversationId, instruction } };
+  try {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Use internal service key for auth
+        "x-internal-cron": process.env.CRON_SECRET || "internal",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: userMessage }],
+        agentId: job.agent_id,
+        conversationId: conversationId,
+        isBackgroundTask: true, // Signal this is a background/cron task
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[executeAgentTaskAction] Chat API returned ${response.status}: ${errorText}`);
+      return { success: false, error: `Chat API error: ${response.status}` };
+    }
+
+    // Stream the response to ensure it completes
+    // The chat API returns a stream, so we need to consume it
+    const reader = response.body?.getReader();
+    if (reader) {
+      let fullResponse = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullResponse += new TextDecoder().decode(value);
+      }
+      console.log(`[executeAgentTaskAction] Chat API completed for job ${job.id}, response length: ${fullResponse.length}`);
+    }
+
+    // Create notification so user knows the task ran
+    await createNotification(
+      supabase,
+      job.agent_id,
+      "task_update",
+      `Scheduled task completed: ${job.title}`,
+      instruction.substring(0, 200),
+      "conversation",
+      conversationId
+    );
+
+    return { success: true, data: { conversationId, instruction } };
+  } catch (fetchError) {
+    const errorMsg = fetchError instanceof Error ? fetchError.message : "Unknown fetch error";
+    console.error(`[executeAgentTaskAction] Fetch error for job ${job.id}:`, errorMsg);
+    return { success: false, error: errorMsg };
+  }
 }
 
 /**

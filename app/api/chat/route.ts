@@ -34,6 +34,8 @@ export async function POST(request: Request) {
       channelSource,
       channelMetadata,
       userId: externalUserId, // For internal API calls (e.g., Slack bot)
+      agentId: requestAgentId, // For cron/background tasks
+      isBackgroundTask, // Flag for cron-triggered tasks
     }: {
       messages: UIMessage[];
       conversationId?: string;
@@ -54,20 +56,40 @@ export async function POST(request: Request) {
         linkedin_sender_company?: string;
       };
       userId?: string;
+      agentId?: string;
+      isBackgroundTask?: boolean;
     } = await request.json();
     console.log("[chat/route] Messages received:", messages.length);
     console.log("[chat/route] Channel source:", channelSource || "app");
 
-    // Check for internal API authentication (service role key)
+    // Check for internal API authentication (service role key or cron secret)
     const authHeader = request.headers.get("Authorization");
+    const cronHeader = request.headers.get("x-internal-cron");
     const expectedAuth = `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
     const isInternalCall = authHeader === expectedAuth;
+    const isCronCall = cronHeader === process.env.CRON_SECRET && isBackgroundTask;
     
     let user: { id: string } | null = null;
     let supabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof getAdminClient>;
     let isExtensionAuth = false;
     
-    if (isInternalCall && externalUserId) {
+    if (isCronCall && requestAgentId) {
+      // Internal cron call - get user from agent
+      console.log("[chat/route] Cron call for agent:", requestAgentId);
+      const adminClient = getAdminClient();
+      supabase = adminClient;
+      
+      const { data: agent } = await adminClient
+        .from("agents")
+        .select("user_id")
+        .eq("id", requestAgentId)
+        .single();
+      
+      if (agent) {
+        user = { id: agent.user_id };
+        console.log("[chat/route] Cron call authenticated for user:", agent.user_id);
+      }
+    } else if (isInternalCall && externalUserId) {
       // Internal API call with service role key - use admin client
       console.log("[chat/route] Internal API call for user:", externalUserId);
       supabase = getAdminClient();
