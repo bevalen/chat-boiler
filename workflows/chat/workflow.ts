@@ -37,7 +37,7 @@ export async function chatWorkflow(params: {
     .single();
 
   // Build system prompt
-  const systemPrompt = buildSystemPrompt(
+  const systemPrompt = await buildSystemPrompt(
     agent,
     {
       id: userId,
@@ -90,12 +90,14 @@ function createDurableTools(
     }),
 
     saveToMemory: tool({
-      description: "Save important information to memory",
+      description: "Save important information to memory. Set alwaysInclude=true for critical information that should be in every conversation.",
       inputSchema: z.object({
         content: z.string().describe("The content to save"),
         title: z.string().optional().describe("Optional title"),
+        alwaysInclude: z.boolean().optional().default(false).describe("If true, this memory will ALWAYS be included in every conversation's system prompt"),
+        category: z.enum(["work_preferences", "personal_background", "communication_style", "technical_preferences", "general"]).optional().default("general").describe("Category for organizing this memory"),
       }),
-      execute: async ({ content, title }) => {
+      execute: async ({ content, title, alwaysInclude, category }) => {
         "use step";
         const { generateEmbedding } = await import("@/lib/embeddings");
         const embedding = await generateEmbedding(content);
@@ -103,15 +105,18 @@ function createDurableTools(
           .from("context_blocks")
           .insert({
             agent_id: agentId,
-            type: "memory",
+            type: "user_profile",
             title: title || "Memory",
             content,
             embedding,
+            always_include: alwaysInclude || false,
+            category: category || "general",
           })
           .select()
           .single();
         if (error) return { success: false, error: error.message };
-        return { success: true, id: data.id };
+        const alwaysIncludeMsg = alwaysInclude ? " This will always be included in your context." : "";
+        return { success: true, id: data.id, message: `Saved to memory.${alwaysIncludeMsg}` };
       },
     }),
 

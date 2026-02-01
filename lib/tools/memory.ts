@@ -106,15 +106,25 @@ const saveToMemoryParameters = z.object({
     .enum(["user_profile", "preferences", "identity", "tools"])
     .default("user_profile")
     .describe("The type of context block to create"),
+  alwaysInclude: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("If true, this memory will ALWAYS be included in every conversation's system prompt. Use for critical information the user wants you to always remember."),
+  category: z
+    .enum(["work_preferences", "personal_background", "communication_style", "technical_preferences", "general"])
+    .optional()
+    .default("general")
+    .describe("Category for organizing this memory. Used when alwaysInclude is true to group similar preferences together."),
 });
 
 export const saveToMemoryTool = tool({
   description:
-    "Save an important piece of information to memory for future reference. Use this when the user tells you something important they want you to remember, like preferences, facts about themselves, or key decisions.",
+    "Save an important piece of information to memory for future reference. Use this when the user tells you something important they want you to remember, like preferences, facts about themselves, or key decisions. Set alwaysInclude=true for critical information that should be in every conversation.",
   parameters: saveToMemoryParameters as z.ZodType<any>,
   // @ts-ignore
   execute: async (args: any, options: any) => {
-    const { title, content, type } = args;
+    const { title, content, type, alwaysInclude, category } = args;
     const agentId = options?.agentId as string | undefined;
     if (!agentId) throw new Error("Agent ID is required");
 
@@ -133,6 +143,8 @@ export const saveToMemoryTool = tool({
           title,
           content,
           embedding,
+          always_include: alwaysInclude || false,
+          category: category || "general",
         })
         .select()
         .single();
@@ -141,10 +153,16 @@ export const saveToMemoryTool = tool({
         return { success: false, error: error.message };
       }
 
+      const alwaysIncludeMsg = alwaysInclude 
+        ? " This will always be included in your context."
+        : "";
+
       return {
         success: true,
-        message: `Saved "${title}" to memory.`,
+        message: `Saved "${title}" to memory.${alwaysIncludeMsg}`,
         id: data.id,
+        alwaysInclude: alwaysInclude || false,
+        category: category || "general",
       };
     } catch (err) {
       return {

@@ -74,6 +74,14 @@ export interface AgentSafetyPermissions {
   auto_approve: string[];
 }
 
+// Context block categories for organizing priority preferences
+export type ContextBlockCategory = 
+  | "work_preferences" 
+  | "personal_background" 
+  | "communication_style" 
+  | "technical_preferences"
+  | "general";
+
 // Task status types
 export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
 
@@ -228,6 +236,7 @@ export interface Database {
           user_preferences: Json | null;
           identity_context: Json | null;
           safety_permissions: Json | null;
+          custom_instructions: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -241,6 +250,7 @@ export interface Database {
           user_preferences?: Json | null;
           identity_context?: Json | null;
           safety_permissions?: Json | null;
+          custom_instructions?: string | null;
           created_at?: string | null;
         };
         Update: {
@@ -254,6 +264,7 @@ export interface Database {
           user_preferences?: Json | null;
           identity_context?: Json | null;
           safety_permissions?: Json | null;
+          custom_instructions?: string | null;
           created_at?: string | null;
         };
       };
@@ -323,6 +334,8 @@ export interface Database {
           title: string | null;
           content: string;
           embedding: number[] | null;
+          always_include: boolean;
+          category: ContextBlockCategory | null;
           created_at: string | null;
           updated_at: string | null;
         };
@@ -333,6 +346,8 @@ export interface Database {
           title?: string | null;
           content: string;
           embedding?: number[] | null;
+          always_include?: boolean;
+          category?: ContextBlockCategory | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -343,6 +358,8 @@ export interface Database {
           title?: string | null;
           content?: string;
           embedding?: number[] | null;
+          always_include?: boolean;
+          category?: ContextBlockCategory | null;
           created_at?: string | null;
           updated_at?: string | null;
         };

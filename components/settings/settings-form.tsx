@@ -18,11 +18,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { User, Bot, Shield, Upload, X, MessageSquare, Sparkles, Radio, Menu, Linkedin, Bell } from "lucide-react";
 import { PushNotificationSettings } from "./push-notification-settings";
+import { PriorityPreferences } from "./priority-preferences";
 import Image from "next/image";
 import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 import { useEffect } from "react";
 
-type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "notifications" | "channels" | "linkedin" | "security";
+type SettingsSection = "profile" | "identity" | "personality" | "preferences" | "custom-instructions" | "notifications" | "channels" | "linkedin" | "security";
 
 interface SettingsFormProps {
   user: {
@@ -40,6 +41,7 @@ interface SettingsFormProps {
     avatarUrl: string | null;
     personality: AgentPersonality | null;
     userPreferences: UserPreferences | null;
+    customInstructions: string | null;
   } | null;
   channelsComponent?: React.ReactNode;
   linkedInComponent?: React.ReactNode;
@@ -95,6 +97,11 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
   );
   const [preferredCommunication, setPreferredCommunication] = useState(
     agent?.userPreferences?.preferred_communication || "straightforward but fun"
+  );
+  
+  // Custom instructions state
+  const [customInstructions, setCustomInstructions] = useState(
+    agent?.customInstructions || ""
   );
   
   const [isSaving, setIsSaving] = useState(false);
@@ -244,6 +251,7 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
         title: agentTitle,
         personality,
         user_preferences: userPreferences,
+        custom_instructions: customInstructions || null,
       })
       .eq("id", agent.id);
 
@@ -277,6 +285,7 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
     { id: "identity" as SettingsSection, label: "AI Identity", icon: <Bot className="h-4 w-4" />, description: "Assistant appearance" },
     { id: "personality" as SettingsSection, label: "AI Personality", icon: <Sparkles className="h-4 w-4" />, description: "Traits & style" },
     { id: "preferences" as SettingsSection, label: "Preferences", icon: <MessageSquare className="h-4 w-4" />, description: "Communication style" },
+    { id: "custom-instructions" as SettingsSection, label: "Custom Instructions", icon: <Sparkles className="h-4 w-4" />, description: "About you" },
     { id: "notifications" as SettingsSection, label: "Notifications", icon: <Bell className="h-4 w-4" />, description: "Push notifications" },
     { id: "channels" as SettingsSection, label: "Channels", icon: <Radio className="h-4 w-4" />, description: "Communication channels" },
     { id: "linkedin" as SettingsSection, label: "LinkedIn SDR", icon: <Linkedin className="h-4 w-4" />, description: "AI sales assistant" },
@@ -718,6 +727,62 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
               </CardContent>
             </Card>
           )}
+
+        {/* Custom Instructions Section */}
+        {activeSection === "custom-instructions" && agent && (
+          <>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Custom Instructions</CardTitle>
+                </div>
+                <CardDescription>
+                  Tell MAIA about yourself, your preferences, and how you work. 
+                  This information is included in every conversation.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="customInstructions">Your Instructions</Label>
+                  <Textarea
+                    id="customInstructions"
+                    value={customInstructions}
+                    onChange={(e) => setCustomInstructions(e.target.value)}
+                    placeholder="Examples:&#10;- I'm a TypeScript developer working on web apps&#10;- I prefer concise, actionable responses&#10;- I live in San Francisco (PST timezone)&#10;- I'm vegan&#10;- Always use TypeScript, never JavaScript"
+                    rows={12}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This is like giving MAIA a &quot;user manual&quot; about you. Be specific!
+                  </p>
+                </div>
+
+                <Separator />
+                
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <h4 className="font-medium mb-2 text-sm">What to include:</h4>
+                  <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Your role, work, and technical preferences</li>
+                    <li>Communication style preferences</li>
+                    <li>Personal context (location, dietary, interests)</li>
+                    <li>Common tasks and workflows</li>
+                    <li>Important do&apos;s and don&apos;ts</li>
+                  </ul>
+                </div>
+
+                <Button onClick={handleSaveAgent} disabled={isSaving} className="w-full">
+                  {isSaving ? "Saving..." : "Save Custom Instructions"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Priority Preferences - structured preferences */}
+            <div className="mt-6">
+              <PriorityPreferences agentId={agent.id} />
+            </div>
+          </>
+        )}
 
         {/* Notifications Section */}
         {activeSection === "notifications" && (

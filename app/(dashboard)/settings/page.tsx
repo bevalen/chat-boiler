@@ -50,6 +50,7 @@ export default async function SettingsPage() {
                 avatarUrl: agent.avatar_url,
                 personality: agent.personality as AgentPersonality | null,
                 userPreferences: agent.user_preferences as UserPreferences | null,
+                customInstructions: agent.custom_instructions,
               }
             : null
         }

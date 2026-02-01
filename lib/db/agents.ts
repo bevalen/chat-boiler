@@ -7,7 +7,9 @@ import {
   AgentIdentityContext,
   ChannelType,
   SDRConfig,
+  ContextBlockCategory,
 } from "@/lib/types/database";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 type AgentRow = Database["public"]["Tables"]["agents"]["Row"];
 type AgentUpdate = Database["public"]["Tables"]["agents"]["Update"];
@@ -22,6 +24,7 @@ export interface Agent {
   personality: AgentPersonality | null;
   userPreferences: UserPreferences | null;
   identityContext: AgentIdentityContext | null;
+  customInstructions: string | null;
   createdAt: string | null;
 }
 
@@ -36,6 +39,7 @@ function mapAgentRow(row: AgentRow): Agent {
     personality: row.personality as AgentPersonality | null,
     userPreferences: row.user_preferences as UserPreferences | null,
     identityContext: row.identity_context as AgentIdentityContext | null,
+    customInstructions: row.custom_instructions,
     createdAt: row.created_at,
   };
 }
@@ -96,6 +100,7 @@ export async function updateAgent(
     personality?: AgentPersonality;
     userPreferences?: UserPreferences;
     identityContext?: AgentIdentityContext;
+    customInstructions?: string | null;
   }
 ): Promise<Agent | null> {
   const dbUpdates: AgentUpdate = {};
@@ -110,6 +115,8 @@ export async function updateAgent(
     dbUpdates.user_preferences = updates.userPreferences as unknown as Json;
   if (updates.identityContext !== undefined)
     dbUpdates.identity_context = updates.identityContext as unknown as Json;
+  if (updates.customInstructions !== undefined)
+    dbUpdates.custom_instructions = updates.customInstructions;
 
   const { data, error } = await supabase
     .from("agents")
@@ -132,11 +139,11 @@ export async function updateAgent(
  * @param user - The user context (name, timezone, email)
  * @param channelSource - The channel source (app, slack, linkedin, etc.) for channel-specific prompts
  */
-export function buildSystemPrompt(
+export async function buildSystemPrompt(
   agent: Agent, 
   user?: { id?: string; name: string; timezone?: string; email?: string },
   channelSource?: ChannelType
-): string {
+): Promise<string> {
   const personality = agent.personality || {};
   const preferences = agent.userPreferences || {};
   const identity = agent.identityContext || {};
@@ -225,6 +232,54 @@ export function buildSystemPrompt(
     if (preferences.preferred_communication) {
       sections.push(`- Be ${preferences.preferred_communication}`);
     }
+  }
+
+  // Custom instructions (always included)
+  if (agent.customInstructions) {
+    sections.push(`\n## Custom Instructions`);
+    sections.push(agent.customInstructions);
+  }
+
+  // Fetch and include priority context blocks
+  try {
+    const adminSupabase = getAdminClient();
+    const { data: priorityBlocks } = await adminSupabase
+      .from("context_blocks")
+      .select("category, title, content")
+      .eq("agent_id", agent.id)
+      .eq("always_include", true)
+      .order("created_at", { ascending: true });
+
+    if (priorityBlocks && priorityBlocks.length > 0) {
+      sections.push(`\n## Your Knowledge About Me`);
+      
+      // Group by category
+      const byCategory: Record<string, typeof priorityBlocks> = {};
+      priorityBlocks.forEach(block => {
+        const cat = (block.category as ContextBlockCategory) || "general";
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(block);
+      });
+      
+      // Output by category
+      Object.entries(byCategory).forEach(([category, blocks]) => {
+        const categoryTitle = category
+          .split("_")
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+        
+        sections.push(`\n### ${categoryTitle}`);
+        blocks.forEach(block => {
+          if (block.title) {
+            sections.push(`**${block.title}**: ${block.content}`);
+          } else {
+            sections.push(block.content);
+          }
+        });
+      });
+    }
+  } catch (error) {
+    console.error("Error fetching priority context blocks:", error);
   }
 
   // Tools and memory capabilities

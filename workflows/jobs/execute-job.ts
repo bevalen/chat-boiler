@@ -193,7 +193,7 @@ async function executeAgentTaskAction(job: ScheduledJob) {
   await supabase.from("messages").insert({ conversation_id: conversationId, role: "user", content: userMessage });
 
   // Build system prompt
-  const systemPrompt = buildSystemPrompt(agent, {
+  const systemPrompt = await buildSystemPrompt(agent, {
     id: agent.userId,
     name: profile?.name || "User",
     timezone: profile?.timezone || undefined,
