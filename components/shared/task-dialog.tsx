@@ -611,7 +611,7 @@ export function TaskDialog({
   );
 }
 
-function getAssigneeName(type: string | null, id: string | null, assignees: Assignee[]) {
+function getAssigneeName(type: string | null, id: string | null | undefined, assignees: Assignee[]) {
   if (!type) return "Unassigned";
   const assignee = assignees.find(a => a.id === id && a.type === type);
   return assignee?.name || (type === "agent" ? "AI Agent" : "User");
