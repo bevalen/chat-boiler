@@ -378,7 +378,23 @@ export async function lockJobForExecution(
   const now = new Date();
   const lockUntil = new Date(now.getTime() + lockDurationMinutes * 60 * 1000);
 
-  // Atomic lock: only succeeds if job is not already locked
+  // First, check if job can be locked (not currently locked)
+  const { data: currentJob } = await supabase
+    .from("scheduled_jobs")
+    .select("id, locked_until")
+    .eq("id", jobId)
+    .single();
+  
+  if (!currentJob) {
+    return { success: false, error: "Job not found" };
+  }
+  
+  // Check if already locked
+  if (currentJob.locked_until && new Date(currentJob.locked_until) > now) {
+    return { success: false, error: "Job already locked" };
+  }
+
+  // Now lock it
   const { data, error } = await supabase
     .from("scheduled_jobs")
     .update({ 
@@ -386,14 +402,14 @@ export async function lockJobForExecution(
       last_lock_at: now.toISOString(),
     })
     .eq("id", jobId)
-    .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
     .select("id")
     .single();
 
   if (error || !data) {
-    return { success: false, error: error?.message || "Job already locked" };
+    return { success: false, error: error?.message || "Failed to lock job" };
   }
 
+  console.log(`[lockJobForExecution] Locked job ${jobId} until ${lockUntil.toISOString()}`);
   return { success: true };
 }
 
