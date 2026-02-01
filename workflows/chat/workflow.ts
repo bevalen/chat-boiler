@@ -59,13 +59,13 @@ export async function chatWorkflow(params: {
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
     tools: createDurableTools(supabase, agentId),
-    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 
   // Run the agent
   await durableAgent.stream({
     messages,
     writable,
+    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 }
 

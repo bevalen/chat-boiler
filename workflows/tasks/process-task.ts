@@ -41,7 +41,6 @@ export async function processTaskWorkflow(params: {
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
     tools: createTaskTools(supabase, agentId, taskId),
-    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 
   try {
@@ -53,6 +52,7 @@ export async function processTaskWorkflow(params: {
         },
       ],
       writable,
+      maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
     });
 
     // Step 5: Get final task status

@@ -634,6 +634,9 @@ export interface Database {
           next_run_at: string | null;
           run_count: number;
           max_runs: number | null;
+          locked_until: string | null;
+          last_lock_at: string | null;
+          consecutive_failures: number;
           created_at: string | null;
           updated_at: string | null;
         };
@@ -658,6 +661,9 @@ export interface Database {
           next_run_at?: string | null;
           run_count?: number;
           max_runs?: number | null;
+          locked_until?: string | null;
+          last_lock_at?: string | null;
+          consecutive_failures?: number;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -682,6 +688,9 @@ export interface Database {
           next_run_at?: string | null;
           run_count?: number;
           max_runs?: number | null;
+          locked_until?: string | null;
+          last_lock_at?: string | null;
+          consecutive_failures?: number;
           created_at?: string | null;
           updated_at?: string | null;
         };

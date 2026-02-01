@@ -224,13 +224,13 @@ async function executeAgentTaskAction(job: ScheduledJob) {
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
     tools: createJobTools(supabase, job.agent_id, payload?.taskId),
-    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 
   try {
     await durableAgent.stream({
       messages: [{ role: "user", content: userMessage }],
       writable,
+      maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
     });
   } catch (agentError) {
     const errorMsg = agentError instanceof Error ? agentError.message : "Agent execution failed";
