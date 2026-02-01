@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { start } from "workflow/api";
+import { executeJobWorkflow } from "@/workflows/jobs/execute-job";
 import { getDueJobs, lockJobForExecution, unlockJobAfterFailure, markJobExecuted, markJobFailed } from "@/lib/db/scheduled-jobs";
 import { logActivity } from "@/lib/db/activity-log";
 import { createNotification } from "@/lib/db/notifications";
@@ -102,7 +104,8 @@ export async function POST(request: Request) {
         console.log(`[dispatcher] Locking and starting workflow for job: ${job.title} (${job.id})`);
 
         // Lock the job BEFORE starting the workflow to prevent re-picking
-        const lockResult = await lockJobForExecution(supabase, job.id);
+        const lockMinutes = job.action_type === "agent_task" ? 240 : 30;
+        const lockResult = await lockJobForExecution(supabase, job.id, lockMinutes);
         if (!lockResult.success) {
           console.log(`[dispatcher] Job ${job.id} already locked, skipping`);
           continue;
@@ -123,31 +126,42 @@ export async function POST(request: Request) {
           status: "started",
         }).catch((err) => console.error("[dispatcher] Failed to log job start:", err));
 
-        // Execute the job directly (Vercel Workflows beta is unstable)
-        const result = await executeJobDirectly(supabase, job);
-        
-        if (result.success) {
-          // Mark job as executed
-          await markJobExecuted(supabase, job.id, job);
-          
-          // Log completion
-          await logActivity(supabase, {
-            agentId: job.agent_id,
-            activityType: "cron_execution",
-            source: "cron",
-            title: `Completed: ${job.title}`,
-            description: `${job.job_type} executed successfully`,
-            metadata: {
-              jobType: job.job_type,
-              result: result.data,
-            },
-            conversationId: (result.data as { conversationId?: string })?.conversationId,
+        if (job.action_type === "agent_task") {
+          // Durable execution for long-running agent work
+          await start(executeJobWorkflow, [{ job }]);
+          results.push({
             jobId: job.id,
-            status: "completed",
+            title: job.title,
+            success: true,
           });
-        } else {
+          continue;
+        }
+
+        // Execute lightweight jobs directly
+        const result = await executeJobDirectly(supabase, job);
+
+        if (!result.success) {
           throw new Error(result.error || "Job execution failed");
         }
+
+        // Mark job as executed
+        await markJobExecuted(supabase, job.id, job);
+
+        // Log completion
+        await logActivity(supabase, {
+          agentId: job.agent_id,
+          activityType: "cron_execution",
+          source: "cron",
+          title: `Completed: ${job.title}`,
+          description: `${job.job_type} executed successfully`,
+          metadata: {
+            jobType: job.job_type,
+            result: result.data,
+          },
+          conversationId: (result.data as { conversationId?: string })?.conversationId,
+          jobId: job.id,
+          status: "completed",
+        });
 
         console.log(`[dispatcher] Job executed successfully: ${job.id}`);
 
@@ -300,6 +314,11 @@ async function executeAgentTaskAction(
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   const payload = job.action_payload as ActionPayload;
   const instruction = payload?.instruction || job.description || "Execute scheduled task";
+  const { data: agent } = await supabase
+    .from("agents")
+    .select("user_id")
+    .eq("id", job.agent_id)
+    .single();
 
   // Create a NEW conversation for this agent task
   const { data: newConv, error: convError } = await supabase
@@ -333,21 +352,24 @@ async function executeAgentTaskAction(
   }
 
   // Call the chat API to run the actual AI agent
-  const baseUrl = process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}` 
-    : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   
   console.log(`[executeAgentTaskAction] Calling chat API for job ${job.id} at ${baseUrl}`);
 
   try {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-internal-cron": process.env.CRON_SECRET || "internal",
+        ...(serviceRoleKey ? { Authorization: `Bearer ${serviceRoleKey}` } : {}),
       },
       body: JSON.stringify({
         messages: [{ role: "user", content: userMessage }],
+        channelSource: "cron",
+        userId: agent?.user_id,
         agentId: job.agent_id,
         conversationId: conversationId,
         isBackgroundTask: true,
