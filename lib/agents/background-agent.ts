@@ -555,7 +555,7 @@ export function createBackgroundAgent(
   const tools = createBackgroundAgentTools(supabase, agentId, context.task.id);
 
   return new ToolLoopAgent({
-    model: gateway("anthropic/claude-sonnet-4"),
+    model: gateway("anthropic/claude-sonnet-4.5"),
     instructions: buildBackgroundAgentPrompt(context),
     tools,
     stopWhen: [

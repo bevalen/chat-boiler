@@ -1602,7 +1602,7 @@ export async function POST(request: Request) {
     // Select model based on channel - use Claude Sonnet 4.5 for LinkedIn SDR (better writing)
     const selectedModel = channelSource === "linkedin" 
       ? gateway("anthropic/claude-sonnet-4-5-20250514")
-      : gateway("openai/gpt-5.2");
+      : gateway("anthropic/claude-sonnet-4.5");
 
     // Determine step limit based on channel source
     // Background/automated channels get more steps for autonomous operation
