@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { getAgentForUser } from "@/lib/db/agents";
+import { CommandPaletteProvider } from "@/components/command-palette-provider";
 
 export default async function DashboardLayout({
   children,
@@ -26,17 +27,19 @@ export default async function DashboardLayout({
   ]);
 
   return (
-    <SidebarProvider>
-      <AppSidebar
-        user={{
-          email: user.email || "",
-          name: profileResult.data?.name,
-        }}
-      />
-      <SidebarInset>
-        <DashboardHeader agentId={agent?.id || null} />
-        <main className="flex-1 overflow-hidden">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <CommandPaletteProvider>
+      <SidebarProvider>
+        <AppSidebar
+          user={{
+            email: user.email || "",
+            name: profileResult.data?.name,
+          }}
+        />
+        <SidebarInset>
+          <DashboardHeader agentId={agent?.id || null} />
+          <main className="flex-1 overflow-hidden">{children}</main>
+        </SidebarInset>
+      </SidebarProvider>
+    </CommandPaletteProvider>
   );
 }

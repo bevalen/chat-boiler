@@ -404,7 +404,42 @@ export async function buildSystemPrompt(
   sections.push(`\n**Research parameters:**`);
   sections.push(`- query: The search query or question to research`);
   sections.push(`- searchMode: "web" for general search (default), "academic" for scholarly sources`);
+  sections.push(`- followUpQueries: Optional array of related queries for deeper research`);
   sections.push(`\nDon't hesitate to use the research tool when you're unsure about current information. It's better to search and provide accurate, up-to-date answers than to guess.`);
+  sections.push(`\n**IMPORTANT: When presenting research findings:**`);
+  sections.push(`The research tool returns AI-synthesized answers from web sources. When sharing these findings with the user:`);
+  sections.push(`- Present the information naturally in your own words, integrating it into your response`);
+  sections.push(`- If the research answer contains URLs, extract them and format as clean hyperlinks: [descriptive text](url)`);
+  sections.push(`- For academic sources, cite them properly: "According to [Study Name](url), ..." or "Research from [Institution](url) shows..."`);
+  sections.push(`- If multiple sources are mentioned, list them cleanly at the end: "Sources: [Source 1](url1), [Source 2](url2)"`);
+  sections.push(`- NEVER paste raw URLs from research results - always convert them to markdown links`);
+  
+  // Markdown formatting guidelines
+  sections.push(`\n## Markdown Formatting & Citations`);
+  sections.push(`Your responses are rendered with markdown. Follow these formatting guidelines for clean, professional output:\n`);
+  sections.push(`**URL Links & Citations:**`);
+  sections.push(`- ALWAYS format URLs as hyperlinks using markdown syntax: [descriptive text](url)`);
+  sections.push(`- NEVER paste raw URLs like "https://example.com/long-url-path" - this looks messy`);
+  sections.push(`- For research sources, use clean citation format: "According to [NASA's latest report](url), ..."`);
+  sections.push(`- For multiple sources, format as: "Sources: [Source 1](url1), [Source 2](url2), [Source 3](url3)"`);
+  sections.push(`- Choose descriptive link text that tells the user what they're clicking on`);
+  sections.push(`- All links automatically open in new tabs, so don't mention that\n`);
+  sections.push(`**Examples of good link formatting:**`);
+  sections.push(`✅ "According to [TechCrunch's latest article](https://techcrunch.com/...), OpenAI announced..."`);
+  sections.push(`✅ "You can read more about this in the [official documentation](https://docs.example.com)"`);
+  sections.push(`✅ "Sources: [MIT Study](url1), [Nature Journal](url2)"`);
+  sections.push(`✅ "Check out [this guide](url) for more details"\n`);
+  sections.push(`**Examples of bad link formatting:**`);
+  sections.push(`❌ "Source: https://www.techcrunch.com/2024/01/15/some-long-article-url-path"`);
+  sections.push(`❌ "Here's the link: https://example.com"`);
+  sections.push(`❌ "You can find this at https://docs.example.com/path/to/page"\n`);
+  sections.push(`**Other formatting:**`);
+  sections.push(`- Use **bold** for emphasis on key terms`);
+  sections.push(`- Use bullet points for lists and structured information`);
+  sections.push(`- Use numbered lists for sequential steps`);
+  sections.push(`- Use > blockquotes for important callouts or quotes`);
+  sections.push(`- Use \`code blocks\` for technical terms, file paths, or commands`);
+  sections.push(`- Use headers (##, ###) to organize long responses into sections`);
 
   // Feedback submission
   sections.push(`\n## Feedback & Bug Reports`);
