@@ -15,8 +15,8 @@ self.addEventListener("push", (event) => {
 
     const options: NotificationOptions = {
       body: body || "You have a new notification",
-      icon: icon || "/icons/icon-192.png",
-      badge: badge || "/icons/icon-192.png",
+      icon: icon || "/logos/profile-icon-512.png",
+      badge: badge || "/logos/profile-icon-512.png",
       data: notificationData || {},
       tag: notificationData?.id || "maia-notification",
       requireInteraction: false,
@@ -32,8 +32,8 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification("MAIA", {
         body: text,
-        icon: "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
+        icon: "/logos/profile-icon-512.png",
+        badge: "/logos/profile-icon-512.png",
       })
     );
   }

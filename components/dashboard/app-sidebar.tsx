@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   MessageSquare,
@@ -12,7 +13,6 @@ import {
   Settings,
   LogOut,
   ChevronUp,
-  Bot,
   MessageSquarePlus,
   Lightbulb,
   Bug,
@@ -138,12 +138,25 @@ export function AppSidebar({ user }: AppSidebarProps) {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar/50 backdrop-blur-xl">
       <SidebarHeader className="h-14 flex items-center justify-center border-b border-sidebar-border p-0">
         <div className="flex w-full items-center gap-3 px-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shrink-0">
-            <Bot className="h-5 w-5" />
+          {/* Icon logo - shown when collapsed */}
+          <div className="flex h-6 w-6 items-center justify-center shrink-0 group-data-[collapsible=icon]:block hidden">
+            <Image
+              src="/logos/profile-icon-512.png"
+              alt="MAIA"
+              width={24}
+              height={24}
+              className="h-6 w-6"
+            />
           </div>
-          <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-base tracking-tight truncate">MAIA</span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium truncate">Executive Assistant</span>
+          {/* Full logo - shown when expanded */}
+          <div className="flex items-center overflow-hidden group-data-[collapsible=icon]:hidden">
+            <Image
+              src="/logos/blue-white-logo.svg"
+              alt="MAIA"
+              width={180}
+              height={20}
+              className="h-5 w-auto"
+            />
           </div>
         </div>
       </SidebarHeader>

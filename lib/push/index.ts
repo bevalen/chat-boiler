@@ -82,8 +82,8 @@ export async function sendPushNotification(
           JSON.stringify({
             title: payload.title,
             body: payload.body,
-            icon: payload.icon || "/icons/icon-192.png",
-            badge: payload.badge || "/icons/icon-192.png",
+            icon: payload.icon || "/logos/profile-icon-512.png",
+            badge: payload.badge || "/logos/profile-icon-512.png",
             data: payload.data || {},
           })
         );
