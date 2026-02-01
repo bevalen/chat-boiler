@@ -61,8 +61,11 @@ export const createTaskTool = tool({
     if (!agentId) throw new Error("Agent ID is required");
     const supabase = getAdminClient();
 
+    // Default to user if no assignee specified - tasks should always have an owner
+    const effectiveAssigneeType = assigneeType || "user";
+    
     // Auto-resolve assignee ID from type
-    const assigneeId = await resolveAssigneeId(supabase, agentId, assigneeType);
+    const assigneeId = await resolveAssigneeId(supabase, agentId, effectiveAssigneeType);
 
     // Generate embedding for task (title + description)
     const textToEmbed = description ? `${title}\n\n${description}` : title;
@@ -83,7 +86,7 @@ export const createTaskTool = tool({
         priority: priority || "medium",
         status: "todo",
         due_date: dueDate || null,
-        assignee_type: assigneeType || null,
+        assignee_type: effectiveAssigneeType,
         assignee_id: assigneeId,
         embedding,
       })

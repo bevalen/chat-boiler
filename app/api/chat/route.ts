@@ -633,8 +633,10 @@ export async function POST(request: Request) {
         execute: async ({ title, description, priority, dueDate, projectId, assigneeType }: { title: string; description?: string; priority?: "high" | "medium" | "low"; dueDate?: string; projectId?: string; assigneeType?: "user" | "agent" }) => {
           const textToEmbed = description ? `${title}\n\n${description}` : title;
           const embedding = await generateEmbedding(textToEmbed);
+          // Default to user if no assignee specified - tasks should always have an owner
+          const effectiveAssigneeType = assigneeType || "user";
           // Auto-resolve assignee ID from type
-          const assigneeId = await resolveAssigneeId(assigneeType);
+          const assigneeId = await resolveAssigneeId(effectiveAssigneeType);
           const { data, error } = await adminSupabase
             .from("tasks")
             .insert({
@@ -645,7 +647,7 @@ export async function POST(request: Request) {
               status: "todo",
               due_date: dueDate || null,
               project_id: projectId || null,
-              assignee_type: assigneeType || null,
+              assignee_type: effectiveAssigneeType,
               assignee_id: assigneeId,
               embedding,
             })
