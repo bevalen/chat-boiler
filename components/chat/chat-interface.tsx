@@ -19,14 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Hash, Slack } from "lucide-react";
+import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -97,7 +90,7 @@ export function ChatInterface({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
-  const [channelFilter, setChannelFilter] = useState<string>("app");
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Auto-open sidebar on desktop
   useEffect(() => {
@@ -144,11 +137,11 @@ export function ChatInterface({
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Load conversations list with channel filter
+  // Load conversations list
   const loadConversations = useCallback(async () => {
     try {
       setLoadingConversations(true);
-      const res = await fetch(`/api/conversations?channel=${channelFilter}`);
+      const res = await fetch(`/api/conversations?channel=app`);
       const data = await res.json();
       setConversations(data.conversations || []);
     } catch (error) {
@@ -156,7 +149,7 @@ export function ChatInterface({
     } finally {
       setLoadingConversations(false);
     }
-  }, [channelFilter]);
+  }, []);
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (id: string) => {
@@ -346,16 +339,6 @@ export function ChatInterface({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload conversations when channel filter changes (skip initial mount)
-  const isFirstChannelFilterRun = useRef(true);
-  useEffect(() => {
-    // Skip first run - initial load effect handles that
-    if (isFirstChannelFilterRun.current) {
-      isFirstChannelFilterRun.current = false;
-      return;
-    }
-    loadConversations();
-  }, [channelFilter, loadConversations]);
 
   // Realtime subscription for conversations list updates
   // Only listen to INSERT and DELETE events (not UPDATE) to avoid excessive refreshes
@@ -705,56 +688,49 @@ export function ChatInterface({
   const agentName = agent?.name || "Milo";
   const agentTitle = agent?.title || "AI Assistant";
 
+  // Filter conversations by search query
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return conversations;
+    }
+    const query = searchQuery.toLowerCase().trim();
+    return conversations.filter((conv) =>
+      (conv.title || "New conversation").toLowerCase().includes(query)
+    );
+  }, [conversations, searchQuery]);
+
   return (
     <div className="flex h-full bg-background/50 relative overflow-hidden">
       {/* Conversation Sidebar - hidden when hideSidebar prop is true */}
       {!hideSidebar && (
       <div
         className={`absolute md:relative z-30 h-full bg-background/95 backdrop-blur-md border-r border-white/5 transition-all duration-300 ${
-          showSidebar ? "w-72 opacity-100" : "w-0 opacity-0 md:w-0"
+          showSidebar ? "w-80 opacity-100" : "w-0 opacity-0 md:w-0"
         } overflow-hidden`}
       >
-        <div className="w-72 h-full flex flex-col">
+        <div className="w-80 h-full flex flex-col">
           <div className="h-14 border-b border-white/5 flex items-center justify-between px-4 shrink-0">
             <h3 className="font-semibold">Conversations</h3>
             <Button variant="ghost" size="icon" onClick={() => setShowSidebar(false)} className="md:hidden">
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
-          <div className="p-2 space-y-2">
-            <Select value={channelFilter} onValueChange={setChannelFilter}>
-              <SelectTrigger className="w-full h-9 text-sm">
-                <SelectValue placeholder="Filter by channel" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="app">
-                  <div className="flex items-center gap-2">
-                    <Hash className="h-3.5 w-3.5" />
-                    <span>App</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="slack">
-                  <div className="flex items-center gap-2">
-                    <Slack className="h-3.5 w-3.5" />
-                    <span>Slack</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="all">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    <span>All Channels</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {channelFilter === "app" && (
-              <Button onClick={startNewConversation} className="w-full justify-start gap-2" variant="outline">
-                <Plus className="h-4 w-4" />
-                New conversation
-              </Button>
-            )}
+          <div className="p-2 space-y-2 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search conversations..."
+                className="w-full h-9 pl-8 text-sm"
+              />
+            </div>
+            <Button onClick={startNewConversation} className="w-full justify-start gap-2" variant="outline">
+              <Plus className="h-4 w-4" />
+              New conversation
+            </Button>
           </div>
-          <ScrollArea className="flex-1 px-2">
+          <ScrollArea className="flex-1 min-h-0 px-2">
             {loadingConversations ? (
               <div className="space-y-1 py-2">
                 {/* Skeleton items for loading state */}
@@ -764,14 +740,16 @@ export function ChatInterface({
                   </div>
                 ))}
               </div>
-            ) : conversations.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">No conversations yet</div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground text-sm">
+                {searchQuery.trim() ? "No conversations match your search" : "No conversations yet"}
+              </div>
             ) : (
               <div className="space-y-1 py-2">
-                {conversations.map((conv) => (
+                {filteredConversations.map((conv) => (
                   <div
                     key={conv.id}
-                    className={`group w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    className={`group w-full text-left px-2 py-2 rounded-lg text-sm transition-colors ${
                       conversationId === conv.id
                         ? "bg-primary/10 text-primary"
                         : "hover:bg-secondary/50 text-muted-foreground"
@@ -797,22 +775,18 @@ export function ChatInterface({
                         </Button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5 min-w-0 w-full">
                         <button
                           onClick={() => loadConversation(conv.id)}
-                          className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer overflow-hidden"
+                          className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left overflow-hidden"
                         >
-                          {/* Only show Slack icon when filtering all channels */}
-                          {channelFilter === "all" && conv.channelType === "slack" && (
-                            <Slack className="h-4 w-4 shrink-0 text-[#4A154B]" />
-                          )}
-                          <span className="truncate">{conv.title || "New conversation"}</span>
+                          <span className="truncate flex-1 min-w-0">{conv.title || "New conversation"}</span>
                         </button>
-                        <div className="flex items-center shrink-0">
+                        <div className="flex items-center shrink-0 gap-1 flex-nowrap ml-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               startEditingTitle(conv);
@@ -823,7 +797,7 @@ export function ChatInterface({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive shrink-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               confirmDelete(conv);
