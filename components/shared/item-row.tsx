@@ -19,6 +19,7 @@ interface ItemRowProps {
   onClick?: () => void;
   actions?: ReactNode;
   variant?: "task" | "project";
+  className?: string;
 }
 
 export function ItemRow({
@@ -102,7 +103,8 @@ export function ItemRow({
       className={cn(
         "flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors group",
         onClick && "cursor-pointer",
-        isCompleted && "opacity-60"
+        isCompleted && "opacity-60",
+        className
       )}
       onClick={onClick}
     >

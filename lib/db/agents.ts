@@ -236,6 +236,21 @@ export function buildSystemPrompt(
   sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask, deleteTask): Create, list, and complete tasks.`);
   sections.push(`- **Add comments** (addComment, listComments): Log progress, notes, questions, and updates on tasks or projects.`);
 
+  // Project guidance
+  sections.push(`\n## Projects & Long-Running Work`);
+  sections.push(`Projects are containers for related tasks. When the user gives you a big goal or multi-step project:`);
+  sections.push(`1. **Create a project** to track it (createProject)`);
+  sections.push(`2. **Break it down into tasks** - each task should be a concrete, actionable step`);
+  sections.push(`3. **Assign tasks appropriately** - assign research/coordination tasks to yourself (agent), personal decisions to the user`);
+  sections.push(`4. **Tasks assigned to you will be executed automatically** by background workflows`);
+  sections.push(`\n**Example: User says "Plan my wedding vow renewal"**`);
+  sections.push(`→ Create project: "Wedding Vow Renewal"`);
+  sections.push(`→ Create tasks:`);
+  sections.push(`  - "Research venue options in the area" (assign to agent - you can do this)`);
+  sections.push(`  - "Get catering quotes from 3 vendors" (assign to agent - you can email vendors)`);
+  sections.push(`  - "Decide on venue" (assign to user - they need to choose)`);
+  sections.push(`  - "Finalize guest list" (assign to user - personal decision)`);
+
   // Task workflow guidance
   sections.push(`\n## Task Management Best Practices`);
   sections.push(`Tasks have statuses: **todo** → **in_progress** → **waiting_on** → **done**`);
@@ -247,18 +262,39 @@ export function buildSystemPrompt(
   sections.push(`- Add a "question" comment when you need clarification from the user`);
   sections.push(`- Add a "resolution" comment when you complete the task, summarizing what was done`);
   sections.push(`- This creates an activity trail so the user can see what happened`);
-  sections.push(`\n**Task Assignment:**`);
-  sections.push(`Tasks can be assigned to you (the agent) or to the user. Just specify assigneeType - the ID is resolved automatically.`);
-  sections.push(`- assigneeType="user" → assigns to the human owner`);
-  sections.push(`- assigneeType="agent" → assigns to yourself (the AI assistant)`);
-  sections.push(`- When creating tasks, assign to "agent" for things you should handle, "user" for things they need to do`);
+  sections.push(`\n**Task Assignment (CRITICAL):**`);
+  sections.push(`Every task MUST have an assignee. Specify assigneeType when creating tasks - the ID is resolved automatically.`);
+  sections.push(`- **assigneeType="user"** → assigns to the human owner. Use for tasks they need to do personally.`);
+  sections.push(`- **assigneeType="agent"** → assigns to yourself (AI). Use for tasks YOU should work on autonomously.`);
+  sections.push(`\n**IMPORTANT: Assignment determines WHO does the work:**`);
+  sections.push(`- Tasks assigned to "agent" are AUTOMATICALLY picked up by a background workflow system`);
+  sections.push(`- A durable workflow will execute, giving you extended processing time, tool access, and the ability to work for hours if needed`);
+  sections.push(`- Tasks assigned to "user" are NOT processed automatically - they appear on the user's to-do list`);
+  sections.push(`\n**When to assign to yourself (agent):**`);
+  sections.push(`- Research tasks: "Research venue options", "Find contact info for X"`);
+  sections.push(`- Follow-up tasks: "Check if email was replied to", "Verify status of X"`);
+  sections.push(`- Coordination tasks: "Draft email to vendor", "Prepare meeting agenda"`);
+  sections.push(`- Anything you can do autonomously with your available tools`);
+  sections.push(`\n**When to assign to user:**`);
+  sections.push(`- Personal decisions: "Decide on venue", "Choose color scheme"`);
+  sections.push(`- Physical actions: "Pick up supplies", "Attend meeting"`);
+  sections.push(`- Things requiring their personal input or approval`);
 
   sections.push(`\n**Autonomous Task Processing:**`);
-  sections.push(`Tasks assigned to you (agent) are automatically picked up by a background worker.`);
-  sections.push(`- Use **createSubtask** to break large tasks into smaller, manageable pieces`);
-  sections.push(`- Use **scheduleTaskFollowUp** when you need to wait for something (e.g., email reply) and check back later`);
+  sections.push(`When you're assigned a task, a background workflow automatically:`);
+  sections.push(`1. Gathers context (task details, project info, previous comments, related memories)`);
+  sections.push(`2. Gives you extended tool access and processing time`);
+  sections.push(`3. Lets you log progress, create subtasks, request human input, or schedule follow-ups`);
+  sections.push(`\n**Your autonomous tools:**`);
+  sections.push(`- **createSubtask**: Break large tasks into smaller pieces (subtasks also get workflow execution)`);
+  sections.push(`- **scheduleTaskFollowUp**: Schedule yourself to check back later (e.g., "check if email was replied to tomorrow")`);
+  sections.push(`- **requestHumanInput**: Pause and ask the user a question (sets status to "waiting_on")`);
+  sections.push(`- **logProgress**: Add progress comments so the user can see what you did`);
+  sections.push(`- **markTaskComplete**: Finish the task with a resolution summary`);
+  sections.push(`\n**Email → Task integration:**`);
   sections.push(`- When you send an email related to a task, schedule a follow-up to check for responses`);
-  sections.push(`- Use the status "waiting_on" when blocked on external input, and the system will resume when emails arrive`);
+  sections.push(`- When emails arrive, the system automatically links them to related tasks`);
+  sections.push(`- If a task is "waiting_on" an email reply, it resumes automatically when the reply arrives`);
 
   // Scheduling capabilities
   sections.push(`\n## Scheduling & Jobs`);
