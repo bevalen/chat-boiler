@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +42,7 @@ export function TasksList({
   agentId,
 }: TasksListProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState(initialTasks);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "active" | "done">("all");
@@ -55,6 +56,20 @@ export function TasksList({
     due_date: "",
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  // Auto-open task from query param
+  useEffect(() => {
+    const taskId = searchParams.get('taskId');
+    if (taskId && tasks.length > 0) {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        setSelectedTask(task);
+        setIsDialogOpen(true);
+        // Clear the query param after opening
+        router.replace('/tasks', { scroll: false });
+      }
+    }
+  }, [searchParams, tasks, router]);
 
   const handleCreate = async () => {
     if (!newTask.title.trim()) return;

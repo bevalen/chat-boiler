@@ -27,25 +27,6 @@ interface SearchResult {
   score: number;
 }
 
-// Escape special characters for PostgreSQL's to_tsquery
-function escapeForTsQuery(query: string): string {
-  // Remove special characters and split into words
-  const words = query
-    .replace(/[^\w\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 0);
-
-  if (words.length === 0) return "";
-
-  // Join with & for AND matching, add :* for prefix matching
-  return words.map((word) => `${word}:*`).join(" & ");
-}
-
-// Build ILIKE pattern for fuzzy matching
-function buildIlikePattern(query: string): string {
-  return `%${query.replace(/[%_]/g, "\\$&")}%`;
-}
-
 export async function POST(request: Request) {
   try {
     const { query, limit = 20 } = await request.json();
@@ -77,12 +58,13 @@ export async function POST(request: Request) {
       });
     }
 
-    const trimmedQuery = query.trim();
-    const ilikePattern = buildIlikePattern(trimmedQuery);
-    const tsQuery = escapeForTsQuery(trimmedQuery);
-
+    const searchTerm = query.trim().toLowerCase();
     const results: SearchResult[] = [];
     const perCategoryLimit = Math.min(Math.ceil(limit / 6), 10);
+
+    // Use textSearch or simple contains for better compatibility
+    // Supabase/PostgREST uses % for wildcards in ilike
+    const ilikePattern = `%${searchTerm}%`;
 
     // Parallel search across all entity types
     const [
@@ -105,74 +87,80 @@ export async function POST(request: Request) {
         .order("updated_at", { ascending: false })
         .limit(perCategoryLimit),
 
-      // Search tasks by title and description
+      // Search tasks by title (separate queries for OR logic)
       supabase
         .from("tasks")
         .select("id, title, description, status, priority, due_date, created_at")
         .eq("agent_id", agent.id)
-        .or(`title.ilike.${ilikePattern},description.ilike.${ilikePattern}`)
+        .ilike("title", ilikePattern)
         .order("created_at", { ascending: false })
         .limit(perCategoryLimit),
 
-      // Search projects by title and description
+      // Search projects by title
       supabase
         .from("projects")
         .select("id, title, description, status, priority, created_at")
         .eq("agent_id", agent.id)
-        .or(`title.ilike.${ilikePattern},description.ilike.${ilikePattern}`)
+        .ilike("title", ilikePattern)
         .order("created_at", { ascending: false })
         .limit(perCategoryLimit),
 
-      // Search feedback items by title, description, problem
+      // Search feedback items by title
       supabase
         .from("feedback_items")
         .select("id, title, description, problem, type, status, priority, created_at")
         .eq("agent_id", agent.id)
-        .or(
-          `title.ilike.${ilikePattern},description.ilike.${ilikePattern},problem.ilike.${ilikePattern}`
-        )
+        .ilike("title", ilikePattern)
         .order("created_at", { ascending: false })
         .limit(perCategoryLimit),
 
-      // Search messages by content (limited to recent messages for performance)
+      // Search messages by content - need to join with conversations for agent filtering
       supabase
         .from("messages")
-        .select("id, content, role, conversation_id, created_at")
-        .eq("role", "assistant")
+        .select("id, content, role, conversation_id, created_at, conversations!inner(agent_id)")
+        .eq("conversations.agent_id", agent.id)
         .ilike("content", ilikePattern)
         .order("created_at", { ascending: false })
         .limit(perCategoryLimit),
 
-      // Search notifications by title and content
+      // Search notifications by title
       supabase
         .from("notifications")
         .select("id, title, content, type, read, link_type, link_id, created_at")
         .eq("agent_id", agent.id)
-        .or(`title.ilike.${ilikePattern},content.ilike.${ilikePattern}`)
+        .ilike("title", ilikePattern)
         .order("created_at", { ascending: false })
         .limit(perCategoryLimit),
 
-      // Search scheduled jobs (reminders) by title and description
+      // Search scheduled jobs (reminders) by title
       supabase
         .from("scheduled_jobs")
         .select("id, title, description, job_type, status, next_run_at, created_at")
         .eq("agent_id", agent.id)
         .in("status", ["active", "paused"])
-        .or(`title.ilike.${ilikePattern},description.ilike.${ilikePattern}`)
+        .ilike("title", ilikePattern)
         .order("next_run_at", { ascending: true })
         .limit(perCategoryLimit),
 
-      // Search LinkedIn leads by name, company, title
+      // Search LinkedIn leads by name
       supabase
         .from("linkedin_leads")
         .select("id, name, company, title, status, created_at")
         .eq("agent_id", agent.id)
-        .or(
-          `name.ilike.${ilikePattern},company.ilike.${ilikePattern},title.ilike.${ilikePattern}`
-        )
+        .ilike("name", ilikePattern)
         .order("created_at", { ascending: false })
         .limit(perCategoryLimit),
     ]);
+
+    // Also search task descriptions separately
+    const taskDescResult = await supabase
+      .from("tasks")
+      .select("id, title, description, status, priority, due_date, created_at")
+      .eq("agent_id", agent.id)
+      .not("description", "is", null)
+      .ilike("description", ilikePattern)
+      .order("created_at", { ascending: false })
+      .limit(perCategoryLimit);
 
     // Process conversations
     if (conversationsResult.data) {
@@ -191,25 +179,30 @@ export async function POST(request: Request) {
       }
     }
 
-    // Process tasks
-    if (tasksResult.data) {
-      for (const task of tasksResult.data) {
-        results.push({
-          id: task.id,
-          type: "task",
-          title: task.title,
-          description: task.description
-            ? task.description.substring(0, 100)
-            : undefined,
-          metadata: {
-            status: task.status,
-            priority: task.priority,
-            date: task.due_date || task.created_at,
-          },
-          url: `/tasks?task=${task.id}`,
-          score: 1,
-        });
-      }
+    // Process tasks (combine title and description results, dedupe)
+    const taskIds = new Set<string>();
+    const allTasks = [
+      ...(tasksResult.data || []),
+      ...(taskDescResult.data || []),
+    ];
+    for (const task of allTasks) {
+      if (taskIds.has(task.id)) continue;
+      taskIds.add(task.id);
+      results.push({
+        id: task.id,
+        type: "task",
+        title: task.title,
+        description: task.description
+          ? task.description.substring(0, 100)
+          : undefined,
+        metadata: {
+          status: task.status,
+          priority: task.priority,
+          date: task.due_date || task.created_at,
+        },
+        url: `/tasks?task=${task.id}`,
+        score: 1,
+      });
     }
 
     // Process projects

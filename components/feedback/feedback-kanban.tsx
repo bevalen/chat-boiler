@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FeedbackItem } from "@/lib/db/feedback";
 import { FeedbackStatus, FeedbackPriority, FeedbackType } from "@/lib/types/database";
 import { Card, CardContent } from "@/components/ui/card";
@@ -146,11 +147,30 @@ function KanbanColumn({
 }
 
 export function FeedbackKanban({ items, type, onItemClick }: FeedbackKanbanProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [selectedItem, setSelectedItem] = useState<FeedbackItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   // Only show relevant statuses (skip wont_fix for initial view)
   const displayStatuses: FeedbackStatus[] = ["new", "under_review", "planned", "in_progress", "done"];
+
+  // Auto-open feedback item from query param
+  useEffect(() => {
+    const feedbackId = searchParams.get('feedbackId');
+    if (feedbackId && items) {
+      // Search through all status columns for the feedback item
+      const allItems = Object.values(items).flat();
+      const item = allItems.find(i => i.id === feedbackId);
+      if (item) {
+        setSelectedItem(item);
+        setDetailOpen(true);
+        // Clear the query param after opening
+        const currentPath = window.location.pathname;
+        router.replace(currentPath, { scroll: false });
+      }
+    }
+  }, [searchParams, items, router]);
 
   const handleItemClick = useCallback((item: FeedbackItem) => {
     setSelectedItem(item);

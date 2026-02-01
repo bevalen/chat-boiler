@@ -290,6 +290,12 @@ export async function buildSystemPrompt(
   sections.push(`- **Manage projects** (createProject, listProjects, updateProject, deleteProject): Create and track projects.`);
   sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask, deleteTask): Create, list, and complete tasks.`);
   sections.push(`- **Add comments** (addComment, listComments): Log progress, notes, questions, and updates on tasks or projects.`);
+  sections.push(`\n**IMPORTANT: When presenting tool results to the user:**`);
+  sections.push(`Every tool that returns items (tasks, projects, feedback) includes an 'id' field. You MUST use these IDs to create clickable links.`);
+  sections.push(`- After calling listTasks, present results with links: "[Task Title](/tasks?taskId={id})"`);
+  sections.push(`- After calling listProjects, present results with links: "[Project Title](/projects/{id})"`);
+  sections.push(`- After calling submitFeedback or searchFeedback, include links: "[Feedback Title](/feedback/features?feedbackId={id})" or "[Bug Title](/feedback/bugs?feedbackId={id})"`);
+  sections.push(`- Never just list item names without links - the user should always be able to click through to view details`);
 
   // Project guidance
   sections.push(`\n## Projects & Long-Running Work`);
@@ -440,6 +446,36 @@ export async function buildSystemPrompt(
   sections.push(`- Use > blockquotes for important callouts or quotes`);
   sections.push(`- Use \`code blocks\` for technical terms, file paths, or commands`);
   sections.push(`- Use headers (##, ###) to organize long responses into sections`);
+
+  // Internal linking guidelines
+  sections.push(`\n## Linking to Projects, Tasks, and Feedback`);
+  sections.push(`**CRITICAL: Always link when referencing items from the system.**\n`);
+  sections.push(`When you mention a task, project, or feedback item, ALWAYS create a clickable link using these URL patterns:\n`);
+  sections.push(`**Projects:**`);
+  sections.push(`- Format: [Project Title](/projects/{project_id})`);
+  sections.push(`- Example: "I've updated [Q1 Marketing Campaign](/projects/abc-123)" ✅`);
+  sections.push(`- Bad: "I've updated the Q1 Marketing Campaign project" ❌\n`);
+  sections.push(`**Tasks:**`);
+  sections.push(`- Format: [Task Title](/tasks?taskId={task_id})`);
+  sections.push(`- Example: "I completed [Research venue options](/tasks?taskId=xyz-789)" ✅`);
+  sections.push(`- Bad: "I completed the research task" ❌\n`);
+  sections.push(`**Feedback Items (Feature Requests):**`);
+  sections.push(`- Format: [Feature Title](/feedback/features?feedbackId={feedback_id})`);
+  sections.push(`- Example: "I've submitted [Add dark mode toggle](/feedback/features?feedbackId=def-456)" ✅\n`);
+  sections.push(`**Feedback Items (Bug Reports):**`);
+  sections.push(`- Format: [Bug Title](/feedback/bugs?feedbackId={feedback_id})`);
+  sections.push(`- Example: "I created [Login button not working](/feedback/bugs?feedbackId=ghi-789)" ✅\n`);
+  sections.push(`**When listing multiple items:**`);
+  sections.push(`Good example:\n`);
+  sections.push(`"Here are your active tasks:`);
+  sections.push(`- [Finish the report](/tasks?taskId=abc-123) - Due tomorrow`);
+  sections.push(`- [Review vendor proposals](/tasks?taskId=def-456) - High priority`);
+  sections.push(`- [Schedule team meeting](/tasks?taskId=ghi-789) - This week"`);
+  sections.push(`\nBad example: "You have 3 active tasks: Finish the report, Review vendor proposals, and Schedule team meeting"\n`);
+  sections.push(`**Daily briefs, summaries, and status updates:**`);
+  sections.push(`When providing daily briefs or summaries, ALWAYS include links to every task and project you mention.`);
+  sections.push(`Users should be able to click directly from your message to view the full details.`);
+  sections.push(`\n**Why this matters:** These links allow users to instantly navigate to the item with a single click, making your responses much more actionable and useful.`);
 
   // Feedback submission
   sections.push(`\n## Feedback & Bug Reports`);

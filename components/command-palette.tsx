@@ -210,9 +210,7 @@ export function CommandPalette() {
   const [query, setQuery] = React.useState("")
   const [searchResults, setSearchResults] = React.useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = React.useState(false)
-  const [hasNoCommandMatches, setHasNoCommandMatches] = React.useState(false)
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
-  const commandListRef = React.useRef<HTMLDivElement>(null)
 
   // Reset state when closing
   React.useEffect(() => {
@@ -220,37 +218,16 @@ export function CommandPalette() {
       setQuery("")
       setSearchResults([])
       setIsSearching(false)
-      setHasNoCommandMatches(false)
     }
   }, [open])
 
-  // Check if cmdk found any matches by observing the DOM
-  React.useEffect(() => {
-    if (!query || query.length < 2) {
-      setHasNoCommandMatches(false)
-      setSearchResults([])
-      return
-    }
-
-    // Small delay to let cmdk filter first
-    const checkTimeout = setTimeout(() => {
-      if (commandListRef.current) {
-        const visibleItems = commandListRef.current.querySelectorAll('[cmdk-item]:not([aria-hidden="true"])')
-        const hasMatches = visibleItems.length > 0
-        setHasNoCommandMatches(!hasMatches)
-      }
-    }, 50)
-
-    return () => clearTimeout(checkTimeout)
-  }, [query])
-
-  // Trigger database search only when no command matches found
+  // Debounced search - triggers when query is 2+ characters
   React.useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current)
     }
 
-    if (!hasNoCommandMatches || query.length < 2) {
+    if (query.length < 2) {
       setSearchResults([])
       setIsSearching(false)
       return
@@ -268,9 +245,13 @@ export function CommandPalette() {
         if (response.ok) {
           const data = await response.json()
           setSearchResults(data.results || [])
+        } else {
+          console.error("Search failed:", response.status)
+          setSearchResults([])
         }
       } catch (error) {
         console.error("Search error:", error)
+        setSearchResults([])
       } finally {
         setIsSearching(false)
       }
@@ -281,7 +262,7 @@ export function CommandPalette() {
         clearTimeout(searchTimeoutRef.current)
       }
     }
-  }, [hasNoCommandMatches, query])
+  }, [query])
 
   const handleNavigate = (url: string) => {
     setOpen(false)
@@ -321,6 +302,7 @@ export function CommandPalette() {
   }, [searchResults])
 
   const hasSearchResults = searchResults.length > 0
+  const showSearchSection = query.length >= 2
 
   return (
     <CommandDialog 
@@ -335,15 +317,17 @@ export function CommandPalette() {
         value={query}
         onValueChange={setQuery}
       />
-      <CommandList ref={commandListRef}>
+      <CommandList>
         <CommandEmpty>
           {isSearching ? (
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Searching...
             </div>
-          ) : hasSearchResults ? null : (
+          ) : query.length >= 2 ? (
             <span>No results found for &quot;{query}&quot;</span>
+          ) : (
+            <span>Type to search...</span>
           )}
         </CommandEmpty>
 
@@ -390,21 +374,32 @@ export function CommandPalette() {
           ))}
         </CommandGroup>
 
-        {/* Database Search Results (shown when no command matches) */}
-        {hasNoCommandMatches && hasSearchResults && (
+        {/* Database Search Results */}
+        {showSearchSection && (
           <>
             <CommandSeparator />
+            {/* Loading state */}
+            {isSearching && !hasSearchResults && (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                Searching your data...
+              </div>
+            )}
+            {/* No results state */}
+            {!isSearching && !hasSearchResults && query.length >= 2 && (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                No results found for &quot;{query}&quot;
+              </div>
+            )}
+            {/* Grouped results - each type gets its own CommandGroup */}
             {Object.entries(groupedResults).map(([type, results]) => (
-              <CommandGroup 
-                key={type} 
-                heading={getTypeLabel(type as SearchResult["type"]) + "s"}
-              >
+              <CommandGroup key={type} heading={getTypeLabel(type as SearchResult["type"]) + "s"}>
                 {results.map((result) => {
                   const Icon = getTypeIcon(result.type)
                   return (
                     <CommandItem
                       key={`${result.type}-${result.id}`}
-                      value={`search-${result.type}-${result.id}`}
+                      value={`search-${result.type}-${result.id}-${result.title}`}
                       onSelect={() => handleSearchResultSelect(result)}
                       className="gap-3"
                     >
