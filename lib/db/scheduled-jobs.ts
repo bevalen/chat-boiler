@@ -331,6 +331,7 @@ export async function cancelScheduledJob(
 
 /**
  * Get due jobs (for the dispatcher)
+ * Only returns jobs that are not currently locked
  */
 export async function getDueJobs(
   supabase: SupabaseClient,
@@ -343,6 +344,7 @@ export async function getDueJobs(
     .select("*")
     .eq("status", "active")
     .lte("next_run_at", now)
+    .or(`locked_until.is.null,locked_until.lt.${now}`) // Skip locked jobs
     .order("next_run_at", { ascending: true })
     .limit(limit);
 
@@ -354,7 +356,69 @@ export async function getDueJobs(
 }
 
 /**
+ * Lock a job before execution to prevent duplicate runs
+ * Uses atomic update with a condition to prevent race conditions
+ */
+export async function lockJobForExecution(
+  supabase: SupabaseClient,
+  jobId: string,
+  lockDurationMinutes: number = 30
+): Promise<{ success: boolean; error?: string }> {
+  const now = new Date();
+  const lockUntil = new Date(now.getTime() + lockDurationMinutes * 60 * 1000);
+
+  // Atomic lock: only succeeds if job is not already locked
+  const { data, error } = await supabase
+    .from("scheduled_jobs")
+    .update({ 
+      locked_until: lockUntil.toISOString(),
+      last_lock_at: now.toISOString(),
+    })
+    .eq("id", jobId)
+    .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { success: false, error: error?.message || "Job already locked" };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Unlock a job after execution failure (so it can be retried)
+ * Calculates appropriate next_run_at based on job type
+ */
+export async function unlockJobAfterFailure(
+  supabase: SupabaseClient,
+  jobId: string,
+  job: ScheduledJob
+): Promise<{ success: boolean; error?: string }> {
+  // For failed jobs, set next_run_at to 5 minutes from now to allow retry
+  // but not immediately to prevent rapid-fire failures
+  const retryAt = new Date(Date.now() + 5 * 60 * 1000);
+  
+  const updates: ScheduledJobUpdate = {
+    locked_until: null,
+    next_run_at: retryAt.toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("scheduled_jobs")
+    .update(updates)
+    .eq("id", jobId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
  * Mark a job as executed and update next_run_at
+ * Also releases the lock and resets consecutive_failures
  */
 export async function markJobExecuted(
   supabase: SupabaseClient,
@@ -364,6 +428,8 @@ export async function markJobExecuted(
   const updates: ScheduledJobUpdate = {
     last_run_at: new Date().toISOString(),
     run_count: (job.run_count || 0) + 1,
+    locked_until: null, // Release the lock
+    consecutive_failures: 0, // Reset failure count on success
   };
 
   // For one-time jobs, mark as completed
@@ -395,6 +461,53 @@ export async function markJobExecuted(
   }
 
   return { success: true };
+}
+
+/**
+ * Mark a job as failed, increment failure counter, and apply circuit breaker
+ * If a job fails 3+ times consecutively, it gets paused automatically
+ */
+export async function markJobFailed(
+  supabase: SupabaseClient,
+  jobId: string,
+  job: ScheduledJob,
+  errorMessage: string
+): Promise<{ success: boolean; paused: boolean; error?: string }> {
+  const currentFailures = ((job as ScheduledJob & { consecutive_failures?: number }).consecutive_failures || 0) + 1;
+  const MAX_CONSECUTIVE_FAILURES = 3;
+  
+  // Circuit breaker: pause job after too many failures
+  const shouldPause = currentFailures >= MAX_CONSECUTIVE_FAILURES;
+  
+  // Set next retry with exponential backoff (5min, 15min, 45min)
+  const retryDelayMinutes = Math.min(5 * Math.pow(3, currentFailures - 1), 60);
+  const nextRetry = new Date(Date.now() + retryDelayMinutes * 60 * 1000);
+  
+  const updates: ScheduledJobUpdate = {
+    locked_until: null,
+    consecutive_failures: currentFailures,
+    last_run_at: new Date().toISOString(),
+  };
+  
+  if (shouldPause) {
+    updates.status = "paused";
+    updates.next_run_at = null;
+    console.log(`[scheduled-jobs] Circuit breaker triggered for job ${jobId} after ${currentFailures} failures`);
+  } else {
+    updates.next_run_at = nextRetry.toISOString();
+    console.log(`[scheduled-jobs] Job ${jobId} failed, retry scheduled for ${nextRetry.toISOString()}`);
+  }
+
+  const { error } = await supabase
+    .from("scheduled_jobs")
+    .update(updates)
+    .eq("id", jobId);
+
+  if (error) {
+    return { success: false, paused: false, error: error.message };
+  }
+
+  return { success: true, paused: shouldPause };
 }
 
 /**

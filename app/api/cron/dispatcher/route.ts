@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getDueJobs } from "@/lib/db/scheduled-jobs";
+import { getDueJobs, lockJobForExecution, unlockJobAfterFailure } from "@/lib/db/scheduled-jobs";
 import { logActivity } from "@/lib/db/activity-log";
 import { executeJobWorkflow } from "@/workflows/jobs/execute-job";
 import { Database } from "@/lib/types/database";
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient();
 
-    // Get all due jobs
+    // Get all due jobs (excludes jobs that are currently locked)
     const { jobs, error: fetchError } = await getDueJobs(supabase, 50);
 
     if (fetchError) {
@@ -58,7 +58,14 @@ export async function POST(request: Request) {
     // Start a workflow for each job
     for (const job of jobs) {
       try {
-        console.log(`[dispatcher] Starting workflow for job: ${job.title} (${job.id})`);
+        console.log(`[dispatcher] Locking and starting workflow for job: ${job.title} (${job.id})`);
+
+        // Lock the job BEFORE starting the workflow to prevent re-picking
+        const lockResult = await lockJobForExecution(supabase, job.id);
+        if (!lockResult.success) {
+          console.log(`[dispatcher] Job ${job.id} already locked, skipping`);
+          continue;
+        }
 
         // Log job start to activity log
         logActivity(supabase, {
@@ -87,6 +94,12 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         console.error(`[dispatcher] Error starting workflow for job ${job.id}:`, error);
+        
+        // Unlock the job if workflow failed to start
+        await unlockJobAfterFailure(supabase, job.id, job).catch((err) =>
+          console.error(`[dispatcher] Failed to unlock job ${job.id}:`, err)
+        );
+        
         results.push({
           jobId: job.id,
           title: job.title,

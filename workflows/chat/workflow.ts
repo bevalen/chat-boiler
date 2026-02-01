@@ -6,6 +6,9 @@ import type { ModelMessage, UIMessageChunk } from "ai";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { buildSystemPrompt, getAgentById } from "@/lib/db/agents";
 
+// SAFETY LIMITS to prevent runaway API costs
+const MAX_TOOL_STEPS = 30; // Maximum tool calls per chat workflow
+
 /**
  * Chat workflow for durable AI agent conversations
  * Used for background channels (cron, email) where durability matters
@@ -51,11 +54,12 @@ export async function chatWorkflow(params: {
   // Get writable stream for output
   const writable = getWritable<UIMessageChunk>();
 
-  // Create durable agent with tools
+  // Create durable agent with tools and SAFETY LIMITS
   const durableAgent = new DurableAgent({
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
     tools: createDurableTools(supabase, agentId),
+    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 
   // Run the agent

@@ -6,6 +6,9 @@ import type { UIMessageChunk } from "ai";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { gatherContextForTask } from "@/lib/db/search";
 
+// SAFETY LIMITS to prevent runaway API costs
+const MAX_TOOL_STEPS = 30; // Maximum tool calls per task
+
 /**
  * Process a task assigned to the agent using a durable workflow
  */
@@ -38,6 +41,7 @@ export async function processTaskWorkflow(params: {
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
     tools: createTaskTools(supabase, agentId, taskId),
+    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 
   try {

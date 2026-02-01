@@ -5,9 +5,13 @@ import { z } from "zod";
 import type { UIMessageChunk } from "ai";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { buildSystemPrompt, getAgentById } from "@/lib/db/agents";
-import { markJobExecuted, createJobExecution, updateJobExecution } from "@/lib/db/scheduled-jobs";
+import { markJobExecuted, markJobFailed, createJobExecution, updateJobExecution } from "@/lib/db/scheduled-jobs";
 import { createNotification } from "@/lib/db/notifications";
 import type { Database } from "@/lib/types/database";
+
+// SAFETY LIMITS to prevent runaway API costs
+const MAX_TOOL_STEPS = 25; // Maximum tool calls per job
+const MAX_TOKENS_PER_JOB = 100000; // Maximum tokens per job run
 
 type ScheduledJob = Database["public"]["Tables"]["scheduled_jobs"]["Row"];
 type ActionPayload = {
@@ -62,7 +66,20 @@ export async function executeJobWorkflow(params: { job: ScheduledJob }) {
     if (execution) {
       await updateExecutionRecord(execution.id, false, undefined, errorMessage);
     }
+    
+    // Use circuit breaker pattern for failed jobs
+    await markJobAsFailed(job, errorMessage);
+    
     return { success: false, error: errorMessage };
+  }
+}
+
+async function markJobAsFailed(job: ScheduledJob, errorMessage: string) {
+  "use step";
+  const supabase = getAdminClient();
+  const result = await markJobFailed(supabase, job.id, job, errorMessage);
+  if (result.paused) {
+    console.log(`[execute-job] Job ${job.id} paused after repeated failures`);
   }
 }
 
@@ -200,19 +217,26 @@ async function executeAgentTaskAction(job: ScheduledJob) {
     email: profile?.email || undefined,
   });
 
-  // Run durable agent
+  // Run durable agent with SAFETY LIMITS
   const writable = getWritable<UIMessageChunk>();
 
   const durableAgent = new DurableAgent({
     model: "anthropic/claude-sonnet-4",
     system: systemPrompt,
     tools: createJobTools(supabase, job.agent_id, payload?.taskId),
+    maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
   });
 
-  await durableAgent.stream({
-    messages: [{ role: "user", content: userMessage }],
-    writable,
-  });
+  try {
+    await durableAgent.stream({
+      messages: [{ role: "user", content: userMessage }],
+      writable,
+    });
+  } catch (agentError) {
+    const errorMsg = agentError instanceof Error ? agentError.message : "Agent execution failed";
+    console.error(`[execute-job] Agent error for job ${job.id}:`, errorMsg);
+    throw new Error(`Agent failed: ${errorMsg}`);
+  }
 
   await createNotification(supabase, job.agent_id, "reminder", job.title, "Scheduled task completed", "conversation", conversationId);
 
