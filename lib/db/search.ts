@@ -416,3 +416,172 @@ export function formatContextForAI(results: UnifiedSearchResult[]): string {
 
   return sections.join("\n");
 }
+
+/**
+ * Context gathered for a task for background agent processing
+ */
+export interface TaskContext {
+  task: {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string | null;
+    priority: string | null;
+    due_date: string | null;
+    project_id: string | null;
+    agent_run_state: string | null;
+    blocked_by: string[] | null;
+  };
+  project: {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string | null;
+  } | null;
+  comments: Array<{
+    id: string;
+    author_type: string;
+    content: string;
+    comment_type: string | null;
+    created_at: string | null;
+  }>;
+  blockingTasks: Array<{
+    id: string;
+    title: string;
+    status: string | null;
+  }>;
+  relatedContext: string;
+  scheduledJobs: Array<{
+    id: string;
+    title: string;
+    next_run_at: string | null;
+  }>;
+}
+
+/**
+ * Gather all relevant context for a task for background agent processing
+ * This includes: task details, project, comments, blocking tasks, semantic search, and scheduled jobs
+ */
+export async function gatherContextForTask(
+  supabase: SupabaseClient,
+  agentId: string,
+  taskId: string
+): Promise<TaskContext | null> {
+  try {
+    // 1. Get task details
+    const { data: task, error: taskError } = await supabase
+      .from("tasks")
+      .select("id, title, description, status, priority, due_date, project_id, agent_run_state, blocked_by")
+      .eq("id", taskId)
+      .eq("agent_id", agentId)
+      .single();
+
+    if (taskError || !task) {
+      console.error("[search] Error fetching task:", taskError);
+      return null;
+    }
+
+    // 2. Get project if linked
+    let project: TaskContext["project"] = null;
+    if (task.project_id) {
+      const { data: projectData } = await supabase
+        .from("projects")
+        .select("id, title, description, status")
+        .eq("id", task.project_id)
+        .single();
+
+      if (projectData) {
+        project = projectData;
+      }
+    }
+
+    // 3. Get all comments on this task (oldest first for context)
+    const { data: comments } = await supabase
+      .from("comments")
+      .select("id, author_type, content, comment_type, created_at")
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    // 4. Get blocking tasks
+    const blockingTasks: TaskContext["blockingTasks"] = [];
+    if (task.blocked_by && task.blocked_by.length > 0) {
+      const { data: blockers } = await supabase
+        .from("tasks")
+        .select("id, title, status")
+        .in("id", task.blocked_by);
+
+      if (blockers) {
+        blockingTasks.push(...blockers);
+      }
+    }
+
+    // 5. Semantic search for related context
+    const searchQuery = task.description
+      ? `${task.title}\n${task.description}`
+      : task.title;
+
+    const semanticResults = await semanticSearchAll(supabase, searchQuery, agentId, {
+      matchCount: 10,
+      matchThreshold: 0.6,
+    });
+
+    // Filter out the current task from results
+    const filteredResults = semanticResults.filter(
+      (r) => !(r.sourceType === "task" && r.sourceId === taskId)
+    );
+
+    const relatedContext = formatContextForAI(filteredResults);
+
+    // 6. Get scheduled jobs related to this task
+    const { data: scheduledJobs } = await supabase
+      .from("scheduled_jobs")
+      .select("id, title, next_run_at")
+      .eq("task_id", taskId)
+      .eq("status", "active")
+      .order("next_run_at", { ascending: true })
+      .limit(5);
+
+    return {
+      task,
+      project,
+      comments: comments || [],
+      blockingTasks,
+      relatedContext,
+      scheduledJobs: scheduledJobs || [],
+    };
+  } catch (error) {
+    console.error("[search] Error gathering context for task:", error);
+    return null;
+  }
+}
+
+/**
+ * Find tasks that match an email based on semantic similarity
+ * Returns tasks that are potentially related to the email content
+ */
+export async function findTasksForEmail(
+  supabase: SupabaseClient,
+  agentId: string,
+  emailContent: string,
+  options: { matchCount?: number; matchThreshold?: number } = {}
+): Promise<Array<{ id: string; title: string; status: string | null; similarity: number }>> {
+  const { matchCount = 5, matchThreshold = 0.65 } = options;
+
+  try {
+    const results = await searchTasks(supabase, emailContent, agentId, {
+      matchCount,
+      matchThreshold,
+    });
+
+    return results.map((r) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      similarity: r.similarity,
+    }));
+  } catch (error) {
+    console.error("[search] Error finding tasks for email:", error);
+    return [];
+  }
+}

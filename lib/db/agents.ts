@@ -253,6 +253,13 @@ export function buildSystemPrompt(
   sections.push(`- assigneeType="agent" → assigns to yourself (the AI assistant)`);
   sections.push(`- When creating tasks, assign to "agent" for things you should handle, "user" for things they need to do`);
 
+  sections.push(`\n**Autonomous Task Processing:**`);
+  sections.push(`Tasks assigned to you (agent) are automatically picked up by a background worker.`);
+  sections.push(`- Use **createSubtask** to break large tasks into smaller, manageable pieces`);
+  sections.push(`- Use **scheduleTaskFollowUp** when you need to wait for something (e.g., email reply) and check back later`);
+  sections.push(`- When you send an email related to a task, schedule a follow-up to check for responses`);
+  sections.push(`- Use the status "waiting_on" when blocked on external input, and the system will resume when emails arrive`);
+
   // Scheduling capabilities
   sections.push(`\n## Scheduling & Jobs`);
   sections.push(`You have TWO scheduling tools - choose based on what the user needs:\n`);

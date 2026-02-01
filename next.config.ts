@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withPWAInit from "@ducanh2912/next-pwa";
+import { withWorkflow } from "workflow/next";
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -16,6 +17,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  turbopack: {},
   images: {
     remotePatterns: [
       {
@@ -27,4 +29,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+// Wrap with both PWA and Workflow support
+export default withWorkflow(withPWA(nextConfig));

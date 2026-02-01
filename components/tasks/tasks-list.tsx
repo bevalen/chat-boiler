@@ -26,17 +26,19 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { ItemRow } from "@/components/shared/item-row";
-import { TaskDialog, Task, Project } from "@/components/shared/task-dialog";
+import { TaskDialog, Task, Project, Assignee } from "@/components/shared/task-dialog";
 
 interface TasksListProps {
   tasks: Task[];
   projects: Project[];
+  assignees?: Assignee[];
   agentId: string;
 }
 
 export function TasksList({
   tasks: initialTasks,
   projects,
+  assignees = [],
   agentId,
 }: TasksListProps) {
   const router = useRouter();
@@ -307,6 +309,7 @@ export function TasksList({
                 setIsDialogOpen(true);
               }}
               variant="task"
+              className="hover:bg-muted/50 transition-colors"
             />
           ))}
         </div>
@@ -316,6 +319,7 @@ export function TasksList({
       <TaskDialog
         task={selectedTask}
         projects={projects}
+        assignees={assignees}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onUpdate={handleTaskUpdate}

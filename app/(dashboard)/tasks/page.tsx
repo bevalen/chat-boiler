@@ -42,10 +42,16 @@ export default async function TasksPage() {
     .eq("agent_id", agent.id)
     .eq("status", "active");
 
+  const assignees = [
+    { id: user.id, name: "You", type: "user" as const },
+    { id: agent.id, name: "AI Agent", type: "agent" as const },
+  ];
+
   return (
     <TasksList
       tasks={tasks || []}
       projects={projects || []}
+      assignees={assignees}
       agentId={agent.id}
     />
   );

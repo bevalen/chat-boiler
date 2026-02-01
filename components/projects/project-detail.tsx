@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -11,13 +11,19 @@ import {
   X,
   Clock,
   ListTodo,
+  Activity,
+  Send,
+  MoreVertical,
+  Filter,
+  User,
+  Bot
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -45,7 +51,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { ItemRow } from "@/components/shared/item-row";
-import { TaskDialog, Task, Project } from "@/components/shared/task-dialog";
+import { TaskDialog, Task, Project, Assignee } from "@/components/shared/task-dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 interface FullProject {
   id: string;
@@ -61,13 +72,25 @@ interface ProjectDetailProps {
   project: FullProject;
   tasks: Task[];
   allProjects: Project[];
+  assignees?: Assignee[];
   agentId: string;
+}
+
+interface ActivityItem {
+  type: 'comment' | 'activity';
+  id: string;
+  content: string; // or title for activity
+  description?: string;
+  author_type?: string;
+  created_at: string;
+  source?: string;
 }
 
 export function ProjectDetail({
   project: initialProject,
   tasks: initialTasks,
   allProjects,
+  assignees = [],
   agentId,
 }: ProjectDetailProps) {
   const router = useRouter();
@@ -98,6 +121,96 @@ export function ProjectDetail({
 
   // Delete confirmation
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Activity State
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Fetch Activity
+  useEffect(() => {
+    fetchProjectActivity();
+  }, [project.id]);
+
+  const fetchProjectActivity = async () => {
+    const supabase = createClient();
+    
+    // Fetch comments
+    const { data: comments } = await supabase
+      .from("comments") // Assuming there is a 'comments' table for projects, or we use a unified one. 
+      // The schema showed 'comments' table has project_id.
+      .select("*")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    // Fetch activity log
+    const { data: activity } = await supabase
+      .from("activity_log")
+      .select("*")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const items: ActivityItem[] = [
+      ...(comments?.map((c: any) => ({
+        type: 'comment' as const,
+        id: c.id,
+        content: c.content,
+        author_type: c.author_type,
+        created_at: c.created_at
+      })) || []),
+      ...(activity?.map((a: any) => ({
+        type: 'activity' as const,
+        id: a.id,
+        content: a.title,
+        description: a.description,
+        source: a.source,
+        created_at: a.created_at
+      })) || [])
+    ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    setActivityItems(items);
+    
+    setTimeout(() => {
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        }
+    }, 100);
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    const supabase = createClient();
+    
+    const { data, error } = await supabase
+      .from("comments")
+      .insert({
+        project_id: project.id,
+        content: newComment,
+        author_type: "user",
+        comment_type: "note",
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setActivityItems(prev => [...prev, {
+        type: 'comment',
+        id: data.id,
+        content: data.content,
+        author_type: data.author_type,
+        created_at: data.created_at
+      }]);
+      setNewComment("");
+      setTimeout(() => {
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        }
+    }, 100);
+    }
+  };
+
 
   const handleSave = async () => {
     setIsLoading(true);
@@ -204,27 +317,19 @@ export function ProjectDetail({
 
   const getPriorityColor = (priority: string | null) => {
     switch (priority) {
-      case "high":
-        return "bg-red-500/10 text-red-500 border-red-500/20";
-      case "medium":
-        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      case "low":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
+      case "high": return "bg-red-500/10 text-red-500 border-red-500/20";
+      case "medium": return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+      case "low": return "bg-green-500/10 text-green-500 border-green-500/20";
+      default: return "bg-muted text-muted-foreground";
     }
   };
 
   const getStatusColor = (status: string | null) => {
     switch (status) {
-      case "active":
-        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-      case "paused":
-        return "bg-orange-500/10 text-orange-500 border-orange-500/20";
-      case "completed":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
+      case "active": return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+      case "paused": return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+      case "completed": return "bg-green-500/10 text-green-500 border-green-500/20";
+      default: return "bg-muted text-muted-foreground";
     }
   };
 
@@ -232,246 +337,278 @@ export function ProjectDetail({
   const doneCount = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Header with back button */}
-      <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/projects")}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          {isEditing ? (
-            <Input
-              value={editedProject.title}
-              onChange={(e) =>
-                setEditedProject({ ...editedProject, title: e.target.value })
-              }
-              className="text-2xl font-bold h-auto py-1"
-            />
-          ) : (
-            <h1 className="text-2xl font-bold">{project.title}</h1>
-          )}
-          <div className="flex gap-2 mt-2">
-            <Badge variant="outline" className={getStatusColor(project.status)}>
-              {project.status}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={getPriorityColor(project.priority)}
-            >
-              {project.priority} priority
-            </Badge>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {isEditing ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsEditing(false);
-                  setEditedProject({
-                    title: project.title,
-                    description: project.description || "",
-                    priority: project.priority || "medium",
-                    status: project.status || "active",
-                  });
-                }}
-                disabled={isLoading}
-              >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSave} disabled={isLoading}>
-                <Check className="h-4 w-4 mr-1" />
-                {isLoading ? "Saving..." : "Save"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditing(true)}
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setIsDeleteDialogOpen(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Delete
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-5xl mx-auto space-y-8">
+                {/* Header with Navigation and Actions */}
+                <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="pl-0 text-muted-foreground hover:text-foreground mb-2"
+                            onClick={() => router.push("/projects")}
+                        >
+                            <ArrowLeft className="h-4 w-4 mr-1" />
+                            Back to Projects
+                        </Button>
+                        
+                        {isEditing ? (
+                            <div className="space-y-4 max-w-xl">
+                                <Input
+                                    value={editedProject.title}
+                                    onChange={(e) => setEditedProject({ ...editedProject, title: e.target.value })}
+                                    className="text-3xl font-bold h-auto py-2"
+                                />
+                                <div className="flex gap-4">
+                                     <Select
+                                        value={editedProject.status || "active"}
+                                        onValueChange={(value) => setEditedProject({ ...editedProject, status: value })}
+                                    >
+                                        <SelectTrigger className="w-[140px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Active</SelectItem>
+                                            <SelectItem value="paused">Paused</SelectItem>
+                                            <SelectItem value="completed">Completed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                     <Select
+                                        value={editedProject.priority || "medium"}
+                                        onValueChange={(value) => setEditedProject({ ...editedProject, priority: value })}
+                                    >
+                                        <SelectTrigger className="w-[140px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="low">Low</SelectItem>
+                                            <SelectItem value="medium">Medium</SelectItem>
+                                            <SelectItem value="high">High</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tight">{project.title}</h1>
+                                <div className="flex items-center gap-2 mt-3">
+                                    <Badge variant="outline" className={getStatusColor(project.status)}>
+                                        {project.status}
+                                    </Badge>
+                                    <Badge variant="outline" className={getPriorityColor(project.priority)}>
+                                        {project.priority} priority
+                                    </Badge>
+                                    <span className="text-sm text-muted-foreground ml-2">
+                                        Last updated {project.updated_at ? new Date(project.updated_at).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
-      {/* Project Details */}
-      <Card className="mb-8">
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            {/* Description */}
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-xs uppercase tracking-wide">
-                Description
-              </Label>
-              {isEditing ? (
-                <Textarea
-                  value={editedProject.description}
-                  onChange={(e) =>
-                    setEditedProject({
-                      ...editedProject,
-                      description: e.target.value,
-                    })
-                  }
-                  placeholder="Add a description..."
-                  rows={3}
-                />
-              ) : (
-                <p className="text-sm">
-                  {project.description || (
-                    <span className="text-muted-foreground italic">
-                      No description
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
-
-            {/* Priority & Status (edit mode) */}
-            {isEditing && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Priority
-                  </Label>
-                  <Select
-                    value={editedProject.priority}
-                    onValueChange={(value) =>
-                      setEditedProject({ ...editedProject, priority: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <div className="flex gap-2">
+                         {isEditing ? (
+                            <>
+                                <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+                                <Button onClick={handleSave}>Save Changes</Button>
+                            </>
+                         ) : (
+                             <>
+                                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                                    <Pencil className="h-4 w-4 mr-2" />
+                                    Edit Project
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive hover:bg-destructive/10">
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                             </>
+                         )}
+                    </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Status
-                  </Label>
-                  <Select
-                    value={editedProject.status}
-                    onValueChange={(value) =>
-                      setEditedProject({ ...editedProject, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="paused">Paused</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                {/* Description */}
+                <Card className="bg-muted/30 border-none shadow-sm">
+                    <CardContent className="pt-6">
+                        <Label className="text-xs uppercase font-bold text-muted-foreground mb-2 block tracking-wider">Description</Label>
+                        {isEditing ? (
+                            <Textarea
+                                value={editedProject.description || ""}
+                                onChange={(e) => setEditedProject({ ...editedProject, description: e.target.value })}
+                                className="min-h-[100px] bg-background"
+                                placeholder="Project description..."
+                            />
+                        ) : (
+                            <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                                {project.description || "No description provided."}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Separator />
+
+                {/* Tasks Section */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                                <ListTodo className="h-5 w-5 text-primary" />
+                                Tasks
+                            </h2>
+                            <Badge variant="secondary" className="ml-2">
+                                {activeCount} active
+                            </Badge>
+                        </div>
+                        <Button onClick={() => setIsCreateTaskOpen(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Task
+                        </Button>
+                    </div>
+
+                    <Card>
+                        <CardContent className="p-0">
+                            {tasks.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-16 text-center">
+                                    <div className="bg-muted/50 p-4 rounded-full mb-4">
+                                        <ListTodo className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="text-lg font-medium">No tasks yet</h3>
+                                    <p className="text-muted-foreground max-w-sm mt-2 mb-6">
+                                        Get started by adding tasks to track progress for this project.
+                                    </p>
+                                    <Button onClick={() => setIsCreateTaskOpen(true)}>
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Create First Task
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="divide-y">
+                                    {tasks.map((task) => (
+                                        <ItemRow
+                                            key={task.id}
+                                            title={task.title}
+                                            description={task.description}
+                                            status={task.status}
+                                            priority={task.priority}
+                                            dueDate={task.due_date}
+                                            isCompleted={task.status === "done"}
+                                            showCheckbox
+                                            onCheckboxChange={() => handleToggleComplete(task)}
+                                            onClick={() => {
+                                                setSelectedTask(task);
+                                                setIsTaskDialogOpen(true);
+                                            }}
+                                            variant="task"
+                                            className="hover:bg-muted/50 transition-colors"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
-              </div>
-            )}
-
-            {/* Timestamps */}
-            <div className="pt-2 border-t">
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Created{" "}
-                  {project.created_at
-                    ? new Date(project.created_at).toLocaleDateString()
-                    : "Unknown"}
-                </span>
-                {project.updated_at && (
-                  <span>
-                    Updated {new Date(project.updated_at).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tasks Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ListTodo className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Tasks</h2>
-            <span className="text-sm text-muted-foreground">
-              {activeCount} active · {doneCount} done
-            </span>
-          </div>
-          <Button size="sm" onClick={() => setIsCreateTaskOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Task
-          </Button>
         </div>
 
-        {tasks.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <ListTodo className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-1">No tasks yet</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Add tasks to track work for this project.
-              </p>
-              <Button onClick={() => setIsCreateTaskOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Task
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {tasks.map((task) => (
-              <ItemRow
-                key={task.id}
-                title={task.title}
-                description={task.description}
-                status={task.status}
-                priority={task.priority}
-                dueDate={task.due_date}
-                isCompleted={task.status === "done"}
-                showCheckbox
-                onCheckboxChange={() => handleToggleComplete(task)}
-                onClick={() => {
-                  setSelectedTask(task);
-                  setIsTaskDialogOpen(true);
-                }}
-                variant="task"
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        {/* Right Sidebar - Activity */}
+        <div className="w-[350px] border-l bg-muted/10 flex flex-col">
+            <div className="p-4 border-b bg-background/50 backdrop-blur sticky top-0 z-10">
+                <h3 className="font-semibold flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    Project Activity
+                </h3>
+            </div>
+            
+            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+                 <div className="space-y-6">
+                    {activityItems.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                            No activity recorded yet.
+                        </div>
+                    ) : (
+                         activityItems.map((item, i) => (
+                            <div key={i} className="flex gap-3">
+                                <div className="mt-0.5 shrink-0">
+                                    {item.type === 'comment' ? (
+                                        <Avatar className="h-8 w-8 border">
+                                            <AvatarFallback className={cn("text-xs", 
+                                                item.author_type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                                            )}>
+                                                {item.author_type === 'agent' ? "AI" : "U"}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    ) : (
+                                        <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center border">
+                                            <Activity className="h-4 w-4 text-slate-500" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span className="font-medium text-foreground">
+                                            {item.type === 'comment' 
+                                                ? (item.author_type === 'user' ? 'You' : 'AI Agent') 
+                                                : (item.source || 'System')}
+                                        </span>
+                                        <span>•</span>
+                                        <span>{formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}</span>
+                                    </div>
+                                    
+                                    {item.type === 'comment' ? (
+                                        <div className="text-sm bg-background border rounded-r-lg rounded-bl-lg p-3 shadow-sm">
+                                            {item.content}
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-muted-foreground">
+                                            <p>{item.content}</p>
+                                            {item.description && (
+                                                <p className="text-xs mt-1 bg-muted/50 p-1.5 rounded text-muted-foreground/80 font-mono">
+                                                    {item.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                 </div>
+            </ScrollArea>
+
+            <div className="p-4 bg-background border-t">
+               <div className="relative">
+                  <Input
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
+                    placeholder="Add a comment..."
+                    className="pr-10"
+                  />
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-primary"
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+               </div>
+            </div>
+        </div>
 
       {/* Task Dialog */}
       <TaskDialog
         task={selectedTask}
         projects={allProjects}
+        assignees={assignees}
         open={isTaskDialogOpen}
         onOpenChange={setIsTaskDialogOpen}
         onUpdate={handleTaskUpdate}
@@ -563,8 +700,6 @@ export function ProjectDetail({
             <AlertDialogTitle>Delete project?</AlertDialogTitle>
             <AlertDialogDescription>
               This will delete "{project.title}" and unlink all associated tasks.
-              The tasks will not be deleted but will no longer be associated with
-              this project.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

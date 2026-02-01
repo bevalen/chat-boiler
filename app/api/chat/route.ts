@@ -815,6 +815,156 @@ export async function POST(request: Request) {
         },
       }),
 
+      createSubtask: tool({
+        description: "Create a subtask linked to a parent task. Useful for breaking down complex work.",
+        inputSchema: z.object({
+          parentTaskId: z.string().describe("The ID of the parent task"),
+          title: z.string().describe("Title of the subtask"),
+          description: z.string().optional().describe("Description of what needs to be done"),
+          priority: z.enum(["high", "medium", "low"]).optional().describe("Priority level"),
+          assigneeType: z.enum(["user", "agent"]).optional().describe("Who should work on this subtask: 'user' or 'agent'. Defaults to agent."),
+        }),
+        execute: async ({ parentTaskId, title, description, priority, assigneeType }: { parentTaskId: string; title: string; description?: string; priority?: "high" | "medium" | "low"; assigneeType?: "user" | "agent" }) => {
+          // Get the parent task to inherit project_id
+          const { data: parentTask, error: parentError } = await adminSupabase
+            .from("tasks")
+            .select("id, title, project_id")
+            .eq("id", parentTaskId)
+            .eq("agent_id", agentId)
+            .single();
+
+          if (parentError || !parentTask) {
+            return { success: false, error: "Parent task not found" };
+          }
+
+          // Resolve assignee
+          const assignee = assigneeType || "agent";
+          let assigneeId: string | null = null;
+          if (assignee === "agent") {
+            assigneeId = agentId;
+          } else {
+            const { data: agentData } = await adminSupabase
+              .from("agents")
+              .select("user_id")
+              .eq("id", agentId)
+              .single();
+            assigneeId = agentData?.user_id || null;
+          }
+
+          // Generate embedding
+          const textToEmbed = description ? `${title}\n\n${description}` : title;
+          let embedding: number[] | null = null;
+          try {
+            const { generateEmbedding } = await import("@/lib/embeddings");
+            embedding = await generateEmbedding(textToEmbed);
+          } catch (e) {
+            console.error("Error generating subtask embedding:", e);
+          }
+
+          const { data, error } = await adminSupabase
+            .from("tasks")
+            .insert({
+              agent_id: agentId,
+              project_id: parentTask.project_id,
+              title,
+              description: description || null,
+              priority: priority || "medium",
+              status: "todo",
+              assignee_type: assignee,
+              assignee_id: assigneeId,
+              blocked_by: [parentTaskId],
+              embedding,
+            })
+            .select()
+            .single();
+
+          if (error) {
+            return { success: false, error: error.message };
+          }
+
+          // Add a comment on the parent task
+          await adminSupabase.from("comments").insert({
+            task_id: parentTaskId,
+            author_type: "agent",
+            author_id: agentId,
+            content: `Created subtask: "${title}"`,
+            comment_type: "progress",
+          });
+
+          return {
+            success: true,
+            subtask: { id: data.id, title: data.title, parentTaskId, parentTaskTitle: parentTask.title },
+            message: `Created subtask "${title}" under "${parentTask.title}"`,
+          };
+        },
+      }),
+
+      scheduleTaskFollowUp: tool({
+        description: "Schedule a follow-up reminder to check back on a task at a specific time. Use when waiting for external events like email replies.",
+        inputSchema: z.object({
+          taskId: z.string().describe("The ID of the task to follow up on"),
+          reason: z.string().describe("Why you need to follow up (e.g., 'waiting for email reply')"),
+          checkAt: z.string().describe("When to check back (ISO datetime, e.g., '2024-01-15T10:00:00Z')"),
+          instruction: z.string().optional().describe("Specific instruction for what to do when following up"),
+        }),
+        execute: async ({ taskId, reason, checkAt, instruction }: { taskId: string; reason: string; checkAt: string; instruction?: string }) => {
+          // Validate the date
+          const checkDate = new Date(checkAt);
+          if (isNaN(checkDate.getTime())) {
+            return { success: false, error: "Invalid date format. Use ISO format like '2024-01-15T10:00:00Z'" };
+          }
+
+          // Get task details
+          const { data: task, error: taskError } = await adminSupabase
+            .from("tasks")
+            .select("id, title")
+            .eq("id", taskId)
+            .eq("agent_id", agentId)
+            .single();
+
+          if (taskError || !task) {
+            return { success: false, error: "Task not found" };
+          }
+
+          // Create the scheduled job
+          const { createScheduledJob } = await import("@/lib/db/scheduled-jobs");
+          const jobInstruction = instruction || `Follow up on task "${task.title}": ${reason}`;
+          const { success, job, error } = await createScheduledJob(adminSupabase, {
+            agentId,
+            jobType: "follow_up",
+            title: `Follow-up: ${task.title}`,
+            description: reason,
+            scheduleType: "once",
+            runAt: checkAt,
+            actionType: "agent_task",
+            actionPayload: { instruction: jobInstruction, taskId },
+            taskId,
+          });
+
+          if (!success || error) {
+            return { success: false, error: error || "Failed to create scheduled job" };
+          }
+
+          // Log a comment about the follow-up
+          await adminSupabase.from("comments").insert({
+            task_id: taskId,
+            author_type: "agent",
+            author_id: agentId,
+            content: `Scheduled follow-up for ${checkDate.toLocaleString()}: ${reason}`,
+            comment_type: "note",
+          });
+
+          return {
+            success: true,
+            jobId: job?.id,
+            taskId,
+            taskTitle: task.title,
+            scheduledFor: checkAt,
+            message: `Follow-up scheduled for ${checkDate.toLocaleString()}`,
+          };
+        },
+      }),
+
       // === COMMENT TOOLS ===
 
       addComment: tool({
@@ -1441,6 +1591,16 @@ export async function POST(request: Request) {
       ? gateway("anthropic/claude-sonnet-4-5-20250514")
       : gateway("openai/gpt-5.2");
 
+    // Determine step limit based on channel source
+    // Background/automated channels get more steps for autonomous operation
+    const isBackgroundChannel = (channelSource as string) === "cron" || channelSource === "email";
+    const maxSteps = isBackgroundChannel ? 20 : 5;
+
+    // Log background mode activation
+    if (isBackgroundChannel) {
+      console.log(`[chat/route] 🤖 Background mode: ${maxSteps} steps allowed (channel: ${channelSource})`);
+    }
+
     // Log conversation context for LinkedIn debugging
     if (channelSource === "linkedin") {
       console.log(`[chat/route] 🔗 LinkedIn SDR Mode - Using Claude Sonnet 4.5`);
@@ -1462,7 +1622,7 @@ export async function POST(request: Request) {
       messages: await convertToModelMessages(messagesWithHistory),
       tools,
       toolChoice: "auto",
-      stopWhen: stepCountIs(5), // Allow multiple tool calls in sequence
+      stopWhen: stepCountIs(maxSteps), // Dynamic: 5 for interactive, 20 for background channels
       onStepFinish: async ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
           // Determine the activity source based on channel
@@ -1491,12 +1651,12 @@ export async function POST(request: Request) {
                 if (toolName === "checkEmail") return "email_received";
                 if (toolName === "research") return "research";
                 if (toolName === "saveToMemory") return "memory_saved";
-                if (toolName === "createTask") return "task_created";
+                if (toolName === "createTask" || toolName === "createSubtask") return "task_created";
                 if (toolName === "updateTask" || toolName === "completeTask") return "task_updated";
                 if (toolName === "createProject") return "project_created";
                 if (toolName === "updateProject") return "project_updated";
                 if (toolName === "scheduleReminder") return "reminder_created";
-                if (toolName === "scheduleAgentTask") return "job_scheduled";
+                if (toolName === "scheduleAgentTask" || toolName === "scheduleTaskFollowUp") return "job_scheduled";
                 if (isError) return "error";
                 return "tool_call";
               };

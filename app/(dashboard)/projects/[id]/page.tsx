@@ -61,11 +61,17 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .eq("agent_id", agent.id)
     .order("title", { ascending: true });
 
+  const assignees = [
+    { id: user.id, name: "You", type: "user" as const },
+    { id: agent.id, name: "AI Agent", type: "agent" as const },
+  ];
+
   return (
     <ProjectDetail
       project={project}
       tasks={tasks || []}
       allProjects={allProjects || []}
+      assignees={assignees}
       agentId={agent.id}
     />
   );

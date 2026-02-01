@@ -14,8 +14,9 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { gatherContextForEmail } from "@/lib/db/search";
+import { gatherContextForEmail, findTasksForEmail } from "@/lib/db/search";
 import { getAgentById } from "@/lib/db/agents";
+import { createNotification } from "@/lib/db/notifications";
 
 // Zapier webhook payload structure
 interface IncomingEmailPayload {
@@ -309,8 +310,86 @@ export async function POST(request: Request) {
     const context = await gatherContextForEmail(supabase, owner.agentId, emailContent);
     console.log("[email-webhook] Context gathered, length:", context.length);
 
+    // Find related tasks for this email
+    const relatedTasks = await findTasksForEmail(supabase, owner.agentId, emailContent, {
+      matchCount: 3,
+      matchThreshold: 0.7, // Higher threshold for more precise matching
+    });
+
+    let linkedTaskInfo = "";
+    let triggeredTaskProcessing = false;
+
+    if (relatedTasks.length > 0) {
+      console.log(`[email-webhook] Found ${relatedTasks.length} related task(s)`);
+
+      // Link email to the most relevant task
+      const primaryTask = relatedTasks[0];
+      console.log(`[email-webhook] Primary related task: ${primaryTask.title} (similarity: ${primaryTask.similarity.toFixed(2)})`);
+
+      // Add email as a comment on the task
+      const emailComment = `**Email received from ${payload.from}**\n\n**Subject:** ${payload.subject}\n\n${payload.body_plain.substring(0, 500)}${payload.body_plain.length > 500 ? "..." : ""}`;
+
+      await supabase.from("comments").insert({
+        task_id: primaryTask.id,
+        author_type: "system",
+        content: emailComment,
+        comment_type: "note",
+      });
+
+      console.log(`[email-webhook] Added email as comment on task ${primaryTask.id}`);
+
+      // Check if the task was waiting_on (potentially waiting for this email)
+      const { data: taskDetails } = await supabase
+        .from("tasks")
+        .select("id, title, status, agent_run_state, assignee_type")
+        .eq("id", primaryTask.id)
+        .single();
+
+      if (taskDetails?.status === "waiting_on") {
+        console.log("[email-webhook] Task was waiting_on - updating status to in_progress");
+
+        // Update task status back to in_progress
+        await supabase.from("tasks").update({
+          status: "in_progress",
+          agent_run_state: "not_started", // Ready for the task worker to pick up
+        }).eq("id", primaryTask.id);
+
+        // Add a status change comment
+        await supabase.from("comments").insert({
+          task_id: primaryTask.id,
+          author_type: "system",
+          content: `Task resumed: Email reply received from ${payload.from}`,
+          comment_type: "status_change",
+        });
+
+        triggeredTaskProcessing = true;
+
+        // Create notification
+        await createNotification(
+          supabase,
+          owner.agentId,
+          "task_update",
+          `Email received for: ${taskDetails.title}`,
+          `Reply from ${payload.from}. Task has been resumed.`,
+          "task",
+          primaryTask.id
+        );
+      }
+
+      // Add linked task info for the AI context
+      linkedTaskInfo = `\n\n=== LINKED TASK ===\nThis email appears to be related to task: "${primaryTask.title}" (ID: ${primaryTask.id})\nTask Status: ${primaryTask.status}\nSimilarity: ${(primaryTask.similarity * 100).toFixed(0)}%`;
+
+      if (relatedTasks.length > 1) {
+        linkedTaskInfo += "\n\nOther potentially related tasks:";
+        relatedTasks.slice(1).forEach((t) => {
+          linkedTaskInfo += `\n- "${t.title}" (${t.status}, ${(t.similarity * 100).toFixed(0)}% match)`;
+        });
+      }
+      linkedTaskInfo += "\n=== END LINKED TASK ===";
+    }
+
     // Format the email with context for the AI
-    const formattedMessage = formatEmailForAI(payload, context);
+    const formattedMessage = formatEmailForAI(payload, context + linkedTaskInfo);
 
     // Send to chat API for processing
     const response = await sendToChatAPI(
@@ -329,6 +408,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: "Email processed",
+      linkedTasks: relatedTasks.map((t) => ({ id: t.id, title: t.title, similarity: t.similarity })),
+      triggeredTaskProcessing,
       response: response.substring(0, 200) + (response.length > 200 ? "..." : ""),
     });
   } catch (error) {
