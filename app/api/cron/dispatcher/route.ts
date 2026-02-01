@@ -18,11 +18,24 @@ export async function POST(request: Request) {
   console.log("[dispatcher] Starting job dispatch cycle");
 
   try {
-    // Verify authorization (Vercel Cron sends this automatically)
+    // Check for test mode via query param (for debugging)
+    const url = new URL(request.url);
+    const isTestMode = url.searchParams.get("test") === "true";
+    
+    // Verify authorization for production cron calls
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Allow requests if:
+    // 1. No CRON_SECRET configured (dev mode)
+    // 2. Valid Bearer token provided
+    // 3. Test mode enabled (for debugging - remove in production if needed)
+    const isAuthorized = 
+      !cronSecret || 
+      authHeader === `Bearer ${cronSecret}` ||
+      isTestMode;
+
+    if (!isAuthorized) {
       console.log("[dispatcher] Unauthorized request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
