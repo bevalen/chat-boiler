@@ -35,6 +35,7 @@ export function ItemRow({
   onClick,
   actions,
   variant = "task",
+  className,
 }: ItemRowProps) {
   const getPriorityColor = (priority: string | null) => {
     switch (priority) {
