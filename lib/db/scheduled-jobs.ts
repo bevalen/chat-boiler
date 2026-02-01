@@ -339,12 +339,12 @@ export async function getDueJobs(
 ): Promise<{ success: boolean; jobs?: ScheduledJob[]; error?: string }> {
   const now = new Date().toISOString();
 
+  // First get jobs that are due
   const { data, error } = await supabase
     .from("scheduled_jobs")
     .select("*")
     .eq("status", "active")
     .lte("next_run_at", now)
-    .or(`locked_until.is.null,locked_until.lt.${now}`) // Skip locked jobs
     .order("next_run_at", { ascending: true })
     .limit(limit);
 
@@ -352,7 +352,13 @@ export async function getDueJobs(
     return { success: false, error: error.message };
   }
 
-  return { success: true, jobs: data || [] };
+  // Filter out locked jobs in JS (simpler than complex Supabase OR syntax)
+  const unlockedJobs = (data || []).filter((job) => {
+    if (!job.locked_until) return true;
+    return new Date(job.locked_until) < new Date(now);
+  });
+
+  return { success: true, jobs: unlockedJobs };
 }
 
 /**

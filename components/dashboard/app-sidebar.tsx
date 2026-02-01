@@ -141,7 +141,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
           {/* Icon logo - shown when collapsed */}
           <div className="flex h-6 w-6 items-center justify-center shrink-0 group-data-[collapsible=icon]:block hidden">
             <Image
-              src="/logos/profile-icon-512.png"
+              src="/logos/icon.svg"
               alt="MAIA"
               width={24}
               height={24}
