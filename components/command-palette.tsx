@@ -375,22 +375,9 @@ export function CommandPalette() {
         </CommandGroup>
 
         {/* Database Search Results */}
-        {showSearchSection && (
+        {showSearchSection && hasSearchResults && (
           <>
             <CommandSeparator />
-            {/* Loading state */}
-            {isSearching && !hasSearchResults && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                Searching your data...
-              </div>
-            )}
-            {/* No results state */}
-            {!isSearching && !hasSearchResults && query.length >= 2 && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                No results found for &quot;{query}&quot;
-              </div>
-            )}
             {/* Grouped results - each type gets its own CommandGroup */}
             {Object.entries(groupedResults).map(([type, results]) => (
               <CommandGroup key={type} heading={getTypeLabel(type as SearchResult["type"]) + "s"}>
