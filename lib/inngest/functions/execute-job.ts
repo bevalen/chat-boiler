@@ -277,7 +277,7 @@ async function executeAgentTaskAction(
   try {
     // Use generateText for background jobs (returns complete result with tool calls)
     const result = await generateText({
-      model: gateway("openai/gpt-4o"),
+      model: gateway("anthropic/claude-sonnet-4.5"),
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
       tools,

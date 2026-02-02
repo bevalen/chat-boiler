@@ -91,7 +91,7 @@ export const processTaskWorkflow = inngest.createFunction(
 
       try {
         const result = await generateText({
-          model: gateway("openai/gpt-4o"),
+          model: gateway("anthropic/claude-sonnet-4.5"),
           system: combinedSystemPrompt,
           messages: [
             {

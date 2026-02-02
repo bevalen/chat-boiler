@@ -176,7 +176,7 @@ Focus on making real progress. If you need more information or are blocked, upda
 
           // Run the AI agent
           const result = await generateText({
-            model: gateway("openai/gpt-4o"),
+            model: gateway("anthropic/claude-sonnet-4.5"),
             system: context.systemPrompt,
             messages: [{ role: "user", content: taskPrompt }],
             tools,
