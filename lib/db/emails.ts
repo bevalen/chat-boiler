@@ -88,8 +88,8 @@ export async function storeInboundEmail(
       .eq("message_id", inReplyTo)
       .maybeSingle();
     
-    if (!result.error && result.data) {
-      threadId = result.data.thread_id;
+    if (!result.error && result.data && 'thread_id' in result.data) {
+      threadId = result.data.thread_id as string | null;
     }
   }
 
