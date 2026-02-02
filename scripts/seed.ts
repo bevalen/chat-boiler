@@ -47,14 +47,15 @@ async function seed() {
     return;
   }
 
-  // Create the agent (Milo)
-  console.log("Creating agent Milo...");
+  // Create the agent (Maia)
+  console.log("Creating agent Maia...");
   const { data: agent, error: agentError } = await supabase
     .from("agents")
     .insert({
       user_id: user.id,
-      name: "Milo",
-      email: "milo@madewell.ai",
+      name: "Maia",
+      email: "maia@madewell.ai",
+      avatar_url: "/logos/profile-icon.png",
       identity_context: {
         role: "AI Executive Assistant",
         personality: "Proactive, efficient, and thoughtful",
@@ -79,7 +80,7 @@ async function seed() {
       agent_id: agent.id,
       type: "identity",
       title: "Agent Identity",
-      content: `You are Milo, an AI executive assistant created by MAIA. 
+      content: `You are Maia, an AI executive assistant. 
 You are proactive, thoughtful, and efficient. You help your user manage their work, projects, and tasks.
 You have a professional but friendly demeanor. You anticipate needs and provide helpful suggestions.
 Your goal is to make your user's work life more organized and less stressful.`,
@@ -115,7 +116,7 @@ Communication Preference: Concise updates, proactive alerts for urgent matters`,
 
 3. Email (via Zapier MCP):
    - checkEmail: Check inbox for recent/unread emails
-   - sendEmail: Send emails as Milo
+   - sendEmail: Send emails as Maia
 
 4. Calendar (via Zapier MCP):
    - checkCalendar: View calendar events for today/upcoming`,
@@ -178,7 +179,7 @@ Calendar:
 
   // Create welcome message
   console.log("Creating welcome message...");
-  const welcomeMessage = `Hi Ben! I'm Milo, your AI executive assistant.
+  const welcomeMessage = `Hi Ben! I'm Maia, your AI executive assistant.
 
 I'm here to help you stay organized and focused on what matters most. Here's what I can do for you:
 

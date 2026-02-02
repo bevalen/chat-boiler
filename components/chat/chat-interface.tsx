@@ -728,7 +728,7 @@ export function ChatInterface({
     }
   };
 
-  const agentName = agent?.name || "Milo";
+  const agentName = agent?.name || "Maia";
   const agentTitle = agent?.title || "AI Assistant";
 
   // Filter conversations by search query

@@ -63,7 +63,7 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
   const [uploadingUserAvatar, setUploadingUserAvatar] = useState(false);
   
   // Agent state
-  const [agentName, setAgentName] = useState(agent?.name || "Milo");
+  const [agentName, setAgentName] = useState(agent?.name || "Maia");
   const [agentTitle, setAgentTitle] = useState(agent?.title || "AI Assistant");
   const [avatarUrl, setAvatarUrl] = useState(agent?.avatarUrl || "");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -353,7 +353,8 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
     const { error } = await supabase
       .from("agents")
       .update({
-        name: agentName,
+        name: "Maia", // Standardized name - not customizable
+        avatar_url: "/logos/profile-icon.png", // Standardized avatar
         title: agentTitle,
         personality,
         user_preferences: userPreferences,
@@ -592,82 +593,48 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
                   <CardTitle>AI Assistant Identity</CardTitle>
                 </div>
                 <CardDescription>
-                  Customize how your assistant presents itself
+                  Your AI assistant is Maia - your executive assistant
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Avatar Upload */}
+                {/* Standardized Identity Display */}
                 <div className="flex items-start gap-6">
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full bg-secondary border border-border overflow-hidden">
-                      {avatarUrl ? (
-                        <Image
-                          src={avatarUrl}
-                          alt={agentName}
-                          width={96}
-                          height={96}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Bot className="w-10 h-10 text-muted-foreground" />
-                        </div>
-                      )}
+                      <Image
+                        src="/logos/profile-icon.png"
+                        alt="Maia"
+                        width={96}
+                        height={96}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    {avatarUrl && (
-                      <button
-                        onClick={handleRemoveAgentAvatar}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
                   </div>
                   <div className="flex-1 space-y-2">
-                    <Label>Profile Photo</Label>
+                    <Label>Assistant Identity</Label>
+                    <p className="text-lg font-semibold">Maia</p>
                     <p className="text-sm text-muted-foreground">
-                      Upload an image for your assistant
+                      Your AI Executive Assistant
                     </p>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      className="hidden"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingAvatar}
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      {uploadingAvatar ? "Uploading..." : "Upload Image"}
-                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Maia&apos;s identity is standardized to provide a consistent, professional experience.
+                    </p>
                   </div>
                 </div>
 
                 <Separator />
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="agentName">Name</Label>
-                    <Input
-                      id="agentName"
-                      value={agentName}
-                      onChange={(e) => setAgentName(e.target.value)}
-                      placeholder="Milo Carter"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="agentTitle">Title</Label>
-                    <Input
-                      id="agentTitle"
-                      value={agentTitle}
-                      onChange={(e) => setAgentTitle(e.target.value)}
-                      placeholder="Executive Assistant"
-                    />
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="agentTitle">Title</Label>
+                  <Input
+                    id="agentTitle"
+                    value={agentTitle}
+                    onChange={(e) => setAgentTitle(e.target.value)}
+                    placeholder="Executive Assistant"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Customize how Maia introduces herself
+                  </p>
                 </div>
 
                 <div className="grid gap-2">
@@ -678,9 +645,13 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
                     className="bg-muted"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Email address used when sending emails on your behalf
+                    Email address used when Maia sends emails on your behalf
                   </p>
                 </div>
+
+                <Button onClick={handleSaveAgent} disabled={isSaving} className="w-full">
+                  {isSaving ? "Saving..." : "Save Settings"}
+                </Button>
               </CardContent>
             </Card>
           )}

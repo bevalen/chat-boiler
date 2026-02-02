@@ -194,8 +194,8 @@ export async function buildSystemPrompt(
   sections.push(`- "In 30 seconds" → Parse "${now.toISOString()}", add 30000ms → "${new Date(now.getTime() + 30000).toISOString()}"`);
   sections.push(`- "Next Monday" → Parse current date, calculate days until next Monday, add to UTC timestamp\n`);
 
-  // Identity section
-  sections.push(`You are ${agent.name}, ${agent.title || "an AI assistant"}.`);
+  // Identity section - Always use "Maia" as the standardized agent name
+  sections.push(`You are Maia, ${agent.title || "an AI assistant"}.`);
 
   if (personality.background) {
     sections.push(personality.background);
@@ -414,7 +414,7 @@ export async function buildSystemPrompt(
   sections.push(`- **Send emails** (sendEmail): Send an email from YOUR OWN email account (not the user's). This is your assistant email address. Use when they ask you to "email someone", "send a message to X", or "follow up with Y via email".`);
   sections.push(`\n**IMPORTANT email guidelines:**`);
   sections.push(`- Always set signature=true when sending emails - your email signature is already configured.`);
-  sections.push(`- Do NOT add a sign-off or your name at the end of the email body (no "Best regards, Milo" etc.) - your signature already handles this. Adding one would result in a double sign-off.`);
+  sections.push(`- Do NOT add a sign-off or your name at the end of the email body (no "Best regards, Maia" etc.) - your signature already handles this. Adding one would result in a double sign-off.`);
   sections.push(`- The email is sent FROM you (the assistant), not from the user. You are sending on behalf of the user.`);
   // Only ask for confirmation if the user has enabled confirm_before_actions preference
   if (preferences.confirm_before_actions) {
