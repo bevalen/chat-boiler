@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
           timestamp: svixTimestamp,
           signature: svixSignature,
         },
-        secret: RESEND_WEBHOOK_SECRET,
+        webhookSecret: RESEND_WEBHOOK_SECRET,
       });
     } catch (verifyError) {
       console.error("[resend-webhook] Signature verification failed:", verifyError);
