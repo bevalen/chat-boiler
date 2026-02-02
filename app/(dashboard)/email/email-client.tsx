@@ -263,7 +263,7 @@ export function EmailClient({
         setThreadAttachments(attachmentsMap);
         
         // Expand the latest email by default
-        const latestEmail = data.thread?.[data.thread.length - 1] || data.email;
+        const latestEmail = (data.thread && data.thread.length > 0) ? data.thread[data.thread.length - 1] : data.email;
         setExpandedEmails(new Set([latestEmail.id]));
         
         // Mark as read
@@ -393,7 +393,7 @@ export function EmailClient({
     
     threadEmails.forEach((email) => {
       if (email.direction === "inbound") {
-        participants.add(email.from_name?.split(" ")[0] || email.from_address.split("@")[0]);
+        participants.add(email.from_name?.split(" ")[0] || email.from_address?.split("@")[0] || "Unknown");
       }
     });
     
@@ -507,7 +507,7 @@ export function EmailClient({
                           )}>
                             {email.direction === "outbound" 
                               ? "Maia" 
-                              : email.from_name || email.from_address.split("@")[0]}
+                              : email.from_name || email.from_address?.split("@")[0] || "Unknown"}
                           </span>
                           <span className="text-xs text-muted-foreground shrink-0">
                             {formatTime(email.direction === "inbound" ? email.received_at : email.sent_at)}
@@ -518,7 +518,7 @@ export function EmailClient({
                             {getPreview(email)}
                           </span>
                         )}
-                        {isExpanded && email.direction === "outbound" && (
+                        {isExpanded && email.direction === "outbound" && email.to_addresses && email.to_addresses.length > 0 && (
                           <span className="text-xs text-muted-foreground truncate">
                             to {email.to_addresses[0]}
                           </span>
@@ -546,7 +546,7 @@ export function EmailClient({
                               {getPreview(email)}
                             </span>
                           )}
-                          {isExpanded && email.direction === "outbound" && (
+                          {isExpanded && email.direction === "outbound" && email.to_addresses && email.to_addresses.length > 0 && (
                             <span className="text-sm text-muted-foreground">
                               to {email.to_addresses[0]}
                             </span>
@@ -573,7 +573,9 @@ export function EmailClient({
                           </div>
                           <div className="overflow-hidden">
                             <span className="font-medium block mb-0.5">To:</span>
-                            <span className="text-foreground break-all block overflow-hidden">{email.to_addresses.join(", ")}</span>
+                            <span className="text-foreground break-all block overflow-hidden">
+                              {email.to_addresses && email.to_addresses.length > 0 ? email.to_addresses.join(", ") : "Unknown"}
+                            </span>
                           </div>
                           {email.cc_addresses && email.cc_addresses.length > 0 && (
                             <div className="overflow-hidden">
