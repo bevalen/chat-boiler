@@ -1,7 +1,6 @@
 import { inngest } from "../client";
-import { tool, generateText, stepCountIs } from "ai";
+import { tool, generateText, stepCountIs, gateway } from "ai";
 import { z } from "zod";
-import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { buildSystemPrompt, getAgentById } from "@/lib/db/agents";
 import { gatherContextForTask } from "@/lib/db/search";
@@ -92,7 +91,7 @@ export const processTaskWorkflow = inngest.createFunction(
 
       try {
         const result = await generateText({
-          model: openai("gpt-4o"),
+          model: gateway("openai/gpt-4o"),
           system: combinedSystemPrompt,
           messages: [
             {
