@@ -1518,9 +1518,9 @@ export type ChannelType = "web" | "email" | "linkedin";
 export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
 export type AgentRunState = "idle" | "running" | "completed" | "failed";
 export type CommentType = "note" | "status_change" | "system";
-export type FeedbackType = "bug" | "feature" | "improvement" | "question" | "other";
+export type FeedbackType = "bug_report" | "feature_request" | "improvement" | "question" | "other";
 export type FeedbackPriority = "low" | "medium" | "high" | "urgent";
-export type FeedbackStatus = "new" | "in_progress" | "resolved" | "closed" | "wont_fix";
+export type FeedbackStatus = "new" | "under_review" | "planned" | "in_progress" | "done" | "wont_fix";
 
 // Message metadata structure
 export interface MessageMetadata {
