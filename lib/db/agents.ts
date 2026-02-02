@@ -165,10 +165,34 @@ export async function buildSystemPrompt(
     hour12: true,
   });
   const currentTime = formatter.format(now);
-  sections.push(`## Current Time`);
-  sections.push(`Right now it is: ${currentTime} (${timezone})`);
-  sections.push(`UTC ISO timestamp: ${now.toISOString()}`);
-  sections.push(`\n**IMPORTANT for scheduling:** When creating reminders or scheduled jobs, you MUST use the UTC ISO timestamp above as your base. To schedule something "in 30 seconds", parse the UTC timestamp, add 30 seconds, and pass the result as a UTC ISO string (ending in Z). Never use local time strings without the Z suffix.\n`);
+  
+  // Calculate tomorrow for relative date examples
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const tomorrowFormatted = tomorrowFormatter.format(tomorrow);
+  
+  sections.push(`## Current Time & Date Context`);
+  sections.push(`**Right now it is:** ${currentTime} (${timezone})`);
+  sections.push(`**UTC ISO timestamp:** ${now.toISOString()}`);
+  sections.push(`**Today's date:** ${formatter.format(now).split(' at ')[0]}`);
+  sections.push(`**Tomorrow's date:** ${tomorrowFormatted}`);
+  sections.push(`\n**CRITICAL for scheduling and date calculations:**`);
+  sections.push(`1. **Always reference the timestamps above** when calculating relative dates like "tomorrow", "next week", "in 3 days"`);
+  sections.push(`2. **Parse the UTC ISO timestamp** as your base: \`${now.toISOString()}\``);
+  sections.push(`3. **For "tomorrow"**: Add exactly 1 day (86400000 milliseconds) to the UTC timestamp`);
+  sections.push(`4. **For "in X hours/days"**: Add the specified time to the UTC timestamp`);
+  sections.push(`5. **Always output as UTC ISO string** ending in 'Z' (e.g., '2026-02-03T14:00:00Z')`);
+  sections.push(`6. **Never use local time strings** without timezone conversion`);
+  sections.push(`\n**Example calculations (based on current time):**`);
+  sections.push(`- "Tomorrow at 2pm" → Parse "${now.toISOString()}", add 1 day, set hour to 14:00 in ${timezone}, convert to UTC`);
+  sections.push(`- "In 30 seconds" → Parse "${now.toISOString()}", add 30000ms → "${new Date(now.getTime() + 30000).toISOString()}"`);
+  sections.push(`- "Next Monday" → Parse current date, calculate days until next Monday, add to UTC timestamp\n`);
 
   // Identity section
   sections.push(`You are ${agent.name}, ${agent.title || "an AI assistant"}.`);
