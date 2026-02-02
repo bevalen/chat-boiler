@@ -1458,3 +1458,36 @@ export const Constants = {
   },
 } as const
 
+// Agent personality structure
+export interface AgentPersonality {
+  communication_style?: string;
+  tone?: string;
+  formality?: string;
+  traits?: string[];
+}
+
+// User preferences structure
+export interface UserPreferences {
+  work_hours?: {
+    start?: string;
+    end?: string;
+  };
+  notification_preferences?: {
+    email?: boolean;
+    push?: boolean;
+  };
+  preferences?: Record<string, any>;
+}
+
+// Agent identity context (includes SDR config)
+export interface AgentIdentityContext {
+  sdrConfig?: {
+    companyName?: string;
+    productDescription?: string;
+    targetAudience?: string;
+    valueProposition?: string;
+    outreachStrategy?: string;
+    followUpCadence?: string;
+  };
+}
+
