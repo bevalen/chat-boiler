@@ -78,13 +78,15 @@ export async function POST(req: NextRequest) {
     // Verify the webhook signature
     let event;
     try {
+      const webhookHeaders: Record<string, string> = {
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": svixSignature,
+      };
+      
       event = resend.webhooks.verify({
         payload,
-        headers: {
-          "svix-id": svixId,
-          "svix-timestamp": svixTimestamp,
-          "svix-signature": svixSignature,
-        },
+        headers: webhookHeaders,
         secret: RESEND_WEBHOOK_SECRET,
       });
     } catch (verifyError) {
