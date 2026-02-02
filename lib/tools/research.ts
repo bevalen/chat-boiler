@@ -1,180 +1,93 @@
-import { tool, UIToolInvocation, generateText, gateway } from "ai";
-import { z } from "zod";
-import { getAdminClient } from "@/lib/supabase/admin";
-
-// Log tool action to the action_log table
-async function logToolAction(
-  agentId: string,
-  toolName: string,
-  action: string,
-  params: Record<string, unknown>,
-  result: Record<string, unknown>
-) {
-  const supabase = getAdminClient();
-  await supabase.from("action_log").insert({
-    agent_id: agentId,
-    tool_name: toolName,
-    action,
-    params,
-    result,
-  });
-}
-
 /**
- * Execute a single search query using Perplexity
+ * Research tool using Perplexity Sonar API
+ * Provides web search and real-time information capabilities
  */
-async function executeSearch(
-  query: string,
-  mode: "web" | "academic"
-): Promise<{ success: boolean; answer: string; error?: string }> {
-  try {
-    const { text } = await generateText({
-      model: gateway("perplexity/sonar"),
-      system:
-        mode === "academic"
-          ? "You are an academic research assistant. Provide accurate, well-sourced answers based on scholarly and peer-reviewed sources. Include citations where possible."
-          : "You are a research assistant. Provide accurate, well-sourced answers based on current web information. Be concise but thorough. Cite your sources when available.",
-      prompt: query,
-      temperature: 0.2,
-    });
 
-    return { success: true, answer: text };
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    return { success: false, answer: "", error: errorMessage };
-  }
-}
+import { tool, UIToolInvocation } from "ai";
+import { z } from "zod";
+import OpenAI from "openai";
 
 /**
- * Create the research tool with agentId captured in closure
+ * Create the research tool
  */
 export function createResearchTool(agentId: string) {
   return tool({
     description:
-      "Search the web for real-time information using Perplexity's Sonar AI. Use this when you need to research current events, look up facts, find recent information, or answer questions that require up-to-date web knowledge. Returns an AI-synthesized answer based on current web sources. Can perform deep research with multiple related queries.",
+      "Search the web for current information, news, and real-time data. Use this when you need up-to-date information that's not in your training data, or when the user asks about recent events, current prices, latest news, or anything requiring live web search. Returns summarized information with source citations.",
     inputSchema: z.object({
-      query: z
+      query: z.string().describe("The search query - be specific and detailed for best results"),
+      focusArea: z
         .string()
-        .describe("The primary research question or topic to search for"),
-      searchMode: z
-        .enum(["web", "academic"])
         .optional()
-        .default("web")
-        .describe(
-          "Search mode: 'web' for general search, 'academic' for scholarly sources"
-        ),
-      followUpQueries: z
-        .array(z.string())
-        .optional()
-        .describe(
-          "Additional related queries to search for deeper research. Use this for complex topics that need multiple angles. Each query is searched separately and results are combined."
-        ),
+        .describe("Optional focus area to narrow the search (e.g., 'technology', 'business', 'science')"),
     }),
-    execute: async ({
-      query,
-      searchMode,
-      followUpQueries,
-    }: {
-      query: string;
-      searchMode?: "web" | "academic";
-      followUpQueries?: string[];
-    }) => {
-      const mode = searchMode ?? "web";
-      const allQueries = [query, ...(followUpQueries || [])];
-
+    execute: async ({ query, focusArea }: { query: string; focusArea?: string }) => {
       try {
-        // Execute all searches (primary + follow-ups)
-        const searchResults = await Promise.all(
-          allQueries.map((q) => executeSearch(q, mode))
-        );
-
-        // Check if primary search succeeded
-        const primaryResult = searchResults[0];
-        if (!primaryResult.success) {
-          const result = {
+        // Check if Perplexity API key is configured
+        if (!process.env.PERPLEXITY_API_KEY) {
+          return {
             success: false,
-            message: `Research failed: ${primaryResult.error}`,
-            query,
-            answer: "",
-            searchCount: 1,
-            error: primaryResult.error,
+            message: "Research capability is not configured. Please contact the administrator.",
           };
-
-          await logToolAction(
-            agentId,
-            "research",
-            "search_error",
-            { query, searchMode: mode, followUpQueries },
-            { success: false, error: primaryResult.error }
-          );
-
-          return result;
         }
 
-        // Combine results
-        let combinedAnswer = primaryResult.answer;
+        // Enhance query with focus area if provided
+        const enhancedQuery = focusArea ? `${query} (focus: ${focusArea})` : query;
 
-        // Add follow-up results if any
-        const followUpResults = searchResults.slice(1);
-        const successfulFollowUps = followUpResults.filter((r) => r.success);
+        // Use Perplexity Sonar API via OpenAI-compatible interface
+        const perplexity = new OpenAI({
+          apiKey: process.env.PERPLEXITY_API_KEY,
+          baseURL: "https://api.perplexity.ai",
+        });
 
-        if (successfulFollowUps.length > 0) {
-          combinedAnswer += "\n\n---\n\n**Additional Research:**\n\n";
-          successfulFollowUps.forEach((result, index) => {
-            const followUpQuery = followUpQueries?.[index] || "";
-            combinedAnswer += `**${followUpQuery}:**\n${result.answer}\n\n`;
-          });
+        console.log(`[research] Searching for: ${enhancedQuery}`);
+
+        const response = await perplexity.chat.completions.create({
+          model: "sonar-pro",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a helpful research assistant. Provide concise, accurate, and well-cited information from reliable sources. Always include source URLs when available.",
+            },
+            {
+              role: "user",
+              content: enhancedQuery,
+            },
+          ],
+          max_tokens: 1000,
+          temperature: 0.2,
+        });
+
+        const result = response.choices[0]?.message?.content;
+
+        if (!result) {
+          return {
+            success: false,
+            message: "No results found. Try rephrasing your query.",
+          };
         }
 
-        const result = {
+        console.log(`[research] Found results for: ${query}`);
+
+        return {
           success: true,
-          query,
-          searchMode: mode,
-          answer: combinedAnswer,
-          searchCount: allQueries.length,
-          successfulSearches: 1 + successfulFollowUps.length,
-          followUpQueries: followUpQueries || [],
+          query: query,
+          focusArea: focusArea || null,
+          result: result,
+          message: `Research completed for "${query}"`,
         };
-
-        // Log the action
-        await logToolAction(
-          agentId,
-          "research",
-          "search",
-          { query, searchMode: mode, followUpQueries, searchCount: allQueries.length },
-          { success: true, searchCount: allQueries.length }
-        );
-
-        return result;
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error occurred";
-
-        const result = {
+        console.error("[research] Error:", error);
+        return {
           success: false,
-          message: `Research failed: ${errorMessage}`,
-          query,
-          answer: "",
-          searchCount: 0,
-          error: errorMessage,
+          message: `Research failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         };
-
-        // Log the error
-        await logToolAction(
-          agentId,
-          "research",
-          "search_error",
-          { query, searchMode: mode, followUpQueries },
-          { success: false, error: errorMessage }
-        );
-
-        return result;
       }
     },
   });
 }
 
-// Type helpers for UI components
+// Type exports for UI components (AI SDK best practice)
 export type ResearchTool = ReturnType<typeof createResearchTool>;
 export type ResearchToolInvocation = UIToolInvocation<ResearchTool>;
