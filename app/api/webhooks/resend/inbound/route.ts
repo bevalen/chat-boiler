@@ -266,7 +266,7 @@ async function handleEmailReceived(data: EmailReceivedData) {
 
 interface EmailDeliveredData {
   email_id: string;
-  to: string;
+  to: string | string[];
 }
 
 async function handleEmailDelivered(data: EmailDeliveredData) {
@@ -294,7 +294,7 @@ async function handleEmailDelivered(data: EmailDeliveredData) {
 
 interface EmailBouncedData {
   email_id: string;
-  to: string;
+  to: string | string[];
   bounce?: {
     type: string;
     message: string;
