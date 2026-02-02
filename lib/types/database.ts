@@ -1551,24 +1551,14 @@ export type FeedbackSource = "manual" | "automatic" | "agent_error";
 export type FeedbackPriority = "critical" | "high" | "medium" | "low";
 
 // Channel types
-export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "linkedin" | "resend";
+export type ChannelType = "app" | "email" | "sms" | "discord" | "linkedin" | "resend";
 
 // Email types for Resend integration
 export type EmailDirection = "inbound" | "outbound";
 export type EmailStatus = "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
 
 // Database-level channel type
-export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "linkedin";
-
-// Slack credentials
-export interface SlackCredentials {
-  bot_token: string;
-  app_token: string;
-  user_slack_id: string;
-  team_id?: string;
-  team_name?: string;
-  default_channel_id?: string;
-}
+export type StorableChannelType = "email" | "sms" | "discord" | "linkedin";
 
 // Email credentials
 export interface EmailCredentials {
@@ -1600,7 +1590,7 @@ export interface LinkedInCredentials {
 }
 
 // Union type for all channel credentials
-export type ChannelCredentials = SlackCredentials | EmailCredentials | LinkedInCredentials | Record<string, unknown>;
+export type ChannelCredentials = EmailCredentials | LinkedInCredentials | Record<string, unknown>;
 
 // Action payload
 export interface ActionPayload {
