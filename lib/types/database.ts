@@ -1479,15 +1479,19 @@ export interface UserPreferences {
   preferences?: Record<string, any>;
 }
 
+// SDR configuration structure
+export interface SDRConfig {
+  companyName: string;
+  companyDescription: string;
+  productDescription?: string;
+  targetAudience?: string;
+  valueProposition?: string;
+  outreachStrategy?: string;
+  followUpCadence?: string;
+}
+
 // Agent identity context (includes SDR config)
 export interface AgentIdentityContext {
-  sdrConfig?: {
-    companyName?: string;
-    productDescription?: string;
-    targetAudience?: string;
-    valueProposition?: string;
-    outreachStrategy?: string;
-    followUpCadence?: string;
-  };
+  sdrConfig?: SDRConfig;
 }
 
