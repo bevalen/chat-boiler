@@ -24,6 +24,6 @@ export default async function RemindersPage() {
     status: "all",
   });
 
-  return <RemindersClient initialReminders={jobs || []} agentId={agent.id} />;
+  return <RemindersClient initialReminders={jobs as any || []} agentId={agent.id} />;
 }
 
