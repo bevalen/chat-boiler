@@ -26,9 +26,6 @@ export {
 // Export tool registry (main entry point for chat route)
 export { createToolRegistry, type ToolRegistry, type ToolRegistryContext } from "./registry";
 
-// Export specialized tools that don't follow the factory pattern yet
-export { checkCalendarTool } from "./calendar";
-
 // ============================================================
 // Type exports for UI components (AI SDK best practice)
 // Use UIToolInvocation types for type-safe tool rendering

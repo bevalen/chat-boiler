@@ -114,12 +114,9 @@ Communication Preference: Concise updates, proactive alerts for urgent matters`,
    - completeTask: Mark tasks as done
    - updateTask: Modify task details
 
-3. Email (via Zapier MCP):
+3. Email (via Resend):
    - checkEmail: Check inbox for recent/unread emails
-   - sendEmail: Send emails as Maia
-
-4. Calendar (via Zapier MCP):
-   - checkCalendar: View calendar events for today/upcoming`,
+   - sendEmail: Send emails as Maia`,
     },
     {
       agent_id: agent.id,

@@ -1551,14 +1551,14 @@ export type FeedbackSource = "manual" | "automatic" | "agent_error";
 export type FeedbackPriority = "critical" | "high" | "medium" | "low";
 
 // Channel types
-export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin" | "resend";
+export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "linkedin" | "resend";
 
 // Email types for Resend integration
 export type EmailDirection = "inbound" | "outbound";
 export type EmailStatus = "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
 
 // Database-level channel type
-export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
+export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "linkedin";
 
 // Slack credentials
 export interface SlackCredentials {
@@ -1577,19 +1577,6 @@ export interface EmailCredentials {
   smtp_user?: string;
   smtp_password?: string;
   from_address?: string;
-}
-
-// Zapier MCP credentials
-export interface ZapierMCPCredentials {
-  endpoint_url: string;
-  api_key?: string;
-  capabilities: {
-    check_email: boolean;
-    send_email: boolean;
-    check_calendar: boolean;
-  };
-  description?: string;
-  email_signature?: string;
 }
 
 // LinkedIn credentials
@@ -1613,7 +1600,7 @@ export interface LinkedInCredentials {
 }
 
 // Union type for all channel credentials
-export type ChannelCredentials = SlackCredentials | EmailCredentials | ZapierMCPCredentials | LinkedInCredentials | Record<string, unknown>;
+export type ChannelCredentials = SlackCredentials | EmailCredentials | LinkedInCredentials | Record<string, unknown>;
 
 // Action payload
 export interface ActionPayload {

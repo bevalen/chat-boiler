@@ -93,9 +93,9 @@ export async function POST(request: Request) {
         // Build the daily brief
         let briefContent = `Good morning! Here's your daily brief for ${dateStr}.\n\n`;
 
-        // Calendar section (placeholder - would integrate with Zapier MCP)
+        // Calendar section (placeholder - future integration)
         briefContent += `**CALENDAR TODAY**\n`;
-        briefContent += `Calendar integration not yet configured. Once set up, your events will appear here.\n\n`;
+        briefContent += `Calendar integration coming soon. Your events will appear here once configured.\n\n`;
 
         // Projects section
         briefContent += `**ACTIVE PROJECTS (${projects?.length || 0})**\n`;
