@@ -119,7 +119,6 @@ export async function POST(request: Request) {
     // 4. BUILD MESSAGE HISTORY
     const messagesWithHistory = await buildMessageHistory({
       channelSource,
-      channelMetadata,
       messages,
       conversationId: conversation.id,
       supabase,

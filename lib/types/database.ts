@@ -1493,6 +1493,12 @@ export interface SDRConfig {
 // Agent identity context (includes SDR config)
 export interface AgentIdentityContext {
   sdrConfig?: SDRConfig;
+  owner?: {
+    name?: string;
+    role?: string;
+    company?: string;
+    timezone?: string;
+  };
 }
 
 // LinkedIn credentials structure
