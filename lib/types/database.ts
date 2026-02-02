@@ -1597,7 +1597,6 @@ export interface ActionPayload {
   message?: string;
   instruction?: string;
   preferred_channel?: ChannelType;
-  slack_channel_id?: string;
   url?: string;
   body?: unknown;
   headers?: Record<string, string>;
@@ -1605,15 +1604,12 @@ export interface ActionPayload {
 
 // Message metadata
 export interface MessageMetadata extends Record<string, unknown> {
-  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "slack_message" | "incoming_email" | "linkedin_message";
+  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "incoming_email" | "linkedin_message";
   job_id?: string;
   job_type?: string;
   instruction?: string;
   date?: string;
   channel_source?: ChannelType;
-  slack_channel_id?: string;
-  slack_thread_ts?: string;
-  slack_user_id?: string;
   email_from?: string;
   email_subject?: string;
   email_message_id?: string;

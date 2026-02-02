@@ -312,29 +312,3 @@ export async function getConversationById(
   return mapConversationRow(data);
 }
 
-/**
- * Get messages from a Slack thread by thread_ts
- * This fetches previous messages that share the same slack_thread_ts metadata
- */
-export async function getMessagesForSlackThread(
-  supabase: SupabaseClient,
-  conversationId: string,
-  threadTs: string,
-  limit = 50
-): Promise<Message[]> {
-  // Query messages where metadata->slack_thread_ts matches
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("conversation_id", conversationId)
-    .filter("metadata->>slack_thread_ts", "eq", threadTs)
-    .order("created_at", { ascending: true })
-    .limit(limit);
-
-  if (error) {
-    console.error("Error fetching Slack thread messages:", error);
-    return [];
-  }
-
-  return (data || []).map(mapMessageRow);
-}

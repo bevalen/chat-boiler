@@ -73,7 +73,6 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   reminder_created: <Bell className="h-4 w-4" />,
   job_scheduled: <Clock className="h-4 w-4" />,
   notification_sent: <Bell className="h-4 w-4" />,
-  slack_message: <MessageSquare className="h-4 w-4" />,
   webhook_triggered: <Webhook className="h-4 w-4" />,
   error: <AlertCircle className="h-4 w-4" />,
   system: <Settings className="h-4 w-4" />,
@@ -94,7 +93,6 @@ const ACTIVITY_COLORS: Record<ActivityType, string> = {
   reminder_created: "text-blue-500",
   job_scheduled: "text-cyan-500",
   notification_sent: "text-indigo-500",
-  slack_message: "text-fuchsia-500",
   webhook_triggered: "text-teal-500",
   error: "text-red-500",
   system: "text-gray-500",
@@ -104,7 +102,6 @@ const SOURCE_LABELS: Record<ActivitySource, string> = {
   chat: "Chat",
   cron: "Scheduled",
   webhook: "Webhook",
-  slack: "Slack",
   email: "Email",
   system: "System",
 };
@@ -113,7 +110,6 @@ const SOURCE_COLORS: Record<ActivitySource, string> = {
   chat: "bg-blue-500/10 text-blue-500",
   cron: "bg-purple-500/10 text-purple-500",
   webhook: "bg-teal-500/10 text-teal-500",
-  slack: "bg-fuchsia-500/10 text-fuchsia-500",
   email: "bg-green-500/10 text-green-500",
   system: "bg-gray-500/10 text-gray-500",
 };

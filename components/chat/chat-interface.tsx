@@ -596,7 +596,7 @@ export function ChatInterface({
 
             // For user messages, check by content to avoid duplicates
             // User messages are already added by useChat, so we should skip them
-            // unless they came from an external source (like Slack)
+            // unless they came from an external source (like Email)
             if (newMessage.role === "user") {
               const isExternalMessage = newMessage.metadata?.channel_source && 
                 newMessage.metadata.channel_source !== "app";

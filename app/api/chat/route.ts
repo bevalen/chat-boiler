@@ -36,9 +36,6 @@ export async function POST(request: Request) {
       conversationId?: string;
       channelSource?: ChannelType | "cron";
       channelMetadata?: {
-        slack_channel_id?: string;
-        slack_thread_ts?: string;
-        slack_user_id?: string;
         email_from?: string;
         email_subject?: string;
         email_message_id?: string;
@@ -119,7 +116,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 4. BUILD MESSAGE HISTORY (includes Slack thread context if applicable)
+    // 4. BUILD MESSAGE HISTORY
     const messagesWithHistory = await buildMessageHistory({
       channelSource,
       channelMetadata,
@@ -213,13 +210,11 @@ export async function POST(request: Request) {
       onStepFinish: async ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
           const activitySource: ActivitySource =
-            channelSource === "slack"
-              ? "slack"
-              : channelSource === "email"
-                ? "email"
-                : channelSource === "cron"
-                  ? "cron"
-                  : "chat";
+            channelSource === "email"
+              ? "email"
+              : channelSource === "cron"
+                ? "cron"
+                : "chat";
 
           for (let i = 0; i < toolCalls.length; i++) {
             const tc = toolCalls[i];
@@ -320,8 +315,6 @@ export async function POST(request: Request) {
             channelSource && channelSource !== "app"
               ? {
                   channel_source: channelSource as ChannelType,
-                  slack_channel_id: channelMetadata?.slack_channel_id,
-                  slack_thread_ts: channelMetadata?.slack_thread_ts,
                 }
               : undefined;
           await addMessage(

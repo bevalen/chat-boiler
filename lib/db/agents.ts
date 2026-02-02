@@ -137,7 +137,7 @@ export async function updateAgent(
  * Build a system prompt from agent configuration
  * @param agent - The agent configuration
  * @param user - The user context (name, timezone, email)
- * @param channelSource - The channel source (app, slack, linkedin, etc.) for channel-specific prompts
+ * @param channelSource - The channel source (app, email, linkedin, etc.) for channel-specific prompts
  */
 export async function buildSystemPrompt(
   agent: Agent, 

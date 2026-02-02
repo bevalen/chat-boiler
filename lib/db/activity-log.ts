@@ -15,7 +15,6 @@ export type ActivityType =
   | "reminder_created"
   | "job_scheduled"
   | "notification_sent"
-  | "slack_message"
   | "webhook_triggered"
   | "error"
   | "system";
@@ -24,7 +23,6 @@ export type ActivitySource =
   | "chat"
   | "cron"
   | "webhook"
-  | "slack"
   | "email"
   | "system";
 
