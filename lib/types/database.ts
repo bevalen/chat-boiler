@@ -1524,6 +1524,7 @@ export interface AgentIdentityContext {
     company?: string;
     timezone?: string;
   };
+  capabilities?: string[];
 }
 
 // LinkedIn credentials structure
@@ -1546,13 +1547,18 @@ export interface LinkedInCredentials {
 
 // Common type aliases
 export type ChannelType = "app" | "web" | "email" | "linkedin";
+export type StorableChannelType = "slack" | "email" | "sms" | "discord";
 export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
 export type AgentRunState = "idle" | "running" | "completed" | "failed";
 export type CommentType = "note" | "status_change" | "system";
 export type FeedbackType = "bug_report" | "feature_request" | "improvement" | "question" | "other";
 export type FeedbackPriority = "low" | "medium" | "high" | "critical";
 export type FeedbackStatus = "new" | "under_review" | "planned" | "in_progress" | "done" | "wont_fix";
+export type FeedbackSource = "manual" | "agent_error" | "user_report";
 export type ContextBlockCategory = "work_preferences" | "personal_background" | "communication_style" | "technical_preferences" | "general";
+
+// Channel credentials union type
+export type ChannelCredentials = LinkedInCredentials | Record<string, unknown>;
 
 // Message metadata structure
 export interface MessageMetadata {
