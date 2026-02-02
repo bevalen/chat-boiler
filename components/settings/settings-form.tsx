@@ -110,6 +110,74 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
   const fileInputRef = useRef<HTMLInputElement>(null);
   const userFileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleRemoveUserAvatar = async () => {
+    if (!userAvatarUrl) return;
+
+    const supabase = createClient();
+    
+    // Delete files from storage
+    try {
+      const { data: existingFiles } = await supabase.storage
+        .from("avatars")
+        .list(`users/${user.id}`);
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(file => `users/${user.id}/${file.name}`);
+        await supabase.storage.from("avatars").remove(filesToDelete);
+      }
+    } catch (error) {
+      console.error("Error deleting avatar files:", error);
+    }
+
+    // Update user record to remove avatar URL
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ avatar_url: null })
+      .eq("id", user.id);
+
+    if (!updateError) {
+      setUserAvatarUrl("");
+      setMessage("Profile image removed");
+      router.refresh();
+    } else {
+      setMessage("Failed to remove profile image");
+    }
+  };
+
+  const handleRemoveAgentAvatar = async () => {
+    if (!avatarUrl || !agent) return;
+
+    const supabase = createClient();
+    
+    // Delete files from storage
+    try {
+      const { data: existingFiles } = await supabase.storage
+        .from("avatars")
+        .list(agent.id);
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(file => `${agent.id}/${file.name}`);
+        await supabase.storage.from("avatars").remove(filesToDelete);
+      }
+    } catch (error) {
+      console.error("Error deleting avatar files:", error);
+    }
+
+    // Update agent record to remove avatar URL
+    const { error: updateError } = await supabase
+      .from("agents")
+      .update({ avatar_url: null })
+      .eq("id", agent.id);
+
+    if (!updateError) {
+      setAvatarUrl("");
+      setMessage("Avatar removed");
+      router.refresh();
+    } else {
+      setMessage("Failed to remove avatar");
+    }
+  };
+
   const handleUserAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -120,6 +188,25 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
     const supabase = createClient();
     const fileExt = file.name.split(".").pop();
     const filePath = `users/${user.id}/avatar.${fileExt}`;
+
+    // Delete old avatar files to prevent orphaned files
+    if (userAvatarUrl) {
+      try {
+        // List all files in the user's avatar folder
+        const { data: existingFiles } = await supabase.storage
+          .from("avatars")
+          .list(`users/${user.id}`);
+
+        // Delete all existing avatar files
+        if (existingFiles && existingFiles.length > 0) {
+          const filesToDelete = existingFiles.map(file => `users/${user.id}/${file.name}`);
+          await supabase.storage.from("avatars").remove(filesToDelete);
+        }
+      } catch (error) {
+        console.error("Error deleting old avatar:", error);
+        // Continue with upload even if deletion fails
+      }
+    }
 
     // Upload to Supabase storage
     const { error: uploadError } = await supabase.storage
@@ -166,6 +253,25 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
     const supabase = createClient();
     const fileExt = file.name.split(".").pop();
     const filePath = `${agent.id}/avatar.${fileExt}`;
+
+    // Delete old avatar files to prevent orphaned files
+    if (avatarUrl) {
+      try {
+        // List all files in the agent's avatar folder
+        const { data: existingFiles } = await supabase.storage
+          .from("avatars")
+          .list(agent.id);
+
+        // Delete all existing avatar files
+        if (existingFiles && existingFiles.length > 0) {
+          const filesToDelete = existingFiles.map(file => `${agent.id}/${file.name}`);
+          await supabase.storage.from("avatars").remove(filesToDelete);
+        }
+      } catch (error) {
+        console.error("Error deleting old avatar:", error);
+        // Continue with upload even if deletion fails
+      }
+    }
 
     // Upload to Supabase storage
     const { error: uploadError } = await supabase.storage
@@ -409,7 +515,7 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
                 </div>
                 {userAvatarUrl && (
                   <button
-                    onClick={() => setUserAvatarUrl("")}
+                    onClick={handleRemoveUserAvatar}
                     className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90"
                   >
                     <X className="w-3 h-3" />
@@ -510,7 +616,7 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
                     </div>
                     {avatarUrl && (
                       <button
-                        onClick={() => setAvatarUrl("")}
+                        onClick={handleRemoveAgentAvatar}
                         className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90"
                       >
                         <X className="w-3 h-3" />
