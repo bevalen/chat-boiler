@@ -1495,3 +1495,21 @@ export interface AgentIdentityContext {
   sdrConfig?: SDRConfig;
 }
 
+// LinkedIn credentials structure
+export interface LinkedInCredentials {
+  extension_token?: string;
+  extension_id?: string;
+  token_expires_at?: string;
+  capabilities?: {
+    auto_respond?: boolean;
+    draft_mode?: boolean;
+    active_hours_only?: boolean;
+  };
+  settings?: {
+    response_delay_seconds?: number;
+    active_hours_start?: string;
+    active_hours_end?: string;
+    active_days?: string[];
+  };
+}
+
