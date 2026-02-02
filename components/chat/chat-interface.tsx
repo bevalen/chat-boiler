@@ -970,63 +970,76 @@ export function ChatInterface({
                       </div>
                     )}
 
-                    <div
-                      className={`relative max-w-[80%] px-5 py-3 rounded-2xl text-sm leading-relaxed ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground rounded-tr-sm"
-                          : "bg-secondary/50 border border-white/5 rounded-tl-sm"
-                      }`}
-                    >
-                      {message.parts.map((part, index) => {
-                        if (part.type === "text") {
-                          return message.role === "user" ? (
-                            <p key={index} className="whitespace-pre-wrap">
-                              {part.text}
-                            </p>
-                          ) : (
-                            <div
-                              key={index}
-                              className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:my-3 prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10 prose-strong:text-primary-foreground prose-strong:font-semibold"
-                            >
-                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
-                            </div>
-                          );
-                        }
-                        if (part.type === "tool-invocation" || part.type.startsWith("tool-")) {
-                          const toolName = part.type === "tool-invocation" 
-                            ? (part as any).toolInvocation.toolName 
-                            : part.type.replace("tool-", "");
+                    <div className="flex flex-col gap-1 max-w-[80%]">
+                      <div
+                        className={`relative px-5 py-3 rounded-2xl text-sm leading-relaxed ${
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground rounded-tr-sm"
+                            : "bg-secondary/50 border border-white/5 rounded-tl-sm"
+                        }`}
+                      >
+                        {message.parts.map((part, index) => {
+                          if (part.type === "text") {
+                            return message.role === "user" ? (
+                              <p key={index} className="whitespace-pre-wrap">
+                                {part.text}
+                              </p>
+                            ) : (
+                              <div
+                                key={index}
+                                className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:my-3 prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10 prose-strong:text-primary-foreground prose-strong:font-semibold"
+                              >
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
+                              </div>
+                            );
+                          }
+                          if (part.type === "tool-invocation" || part.type.startsWith("tool-")) {
+                            const toolName = part.type === "tool-invocation" 
+                              ? (part as any).toolInvocation.toolName 
+                              : part.type.replace("tool-", "");
+                              
+                            const rawState = part.type === "tool-invocation"
+                              ? (part as any).toolInvocation.state
+                              : (part as any).state;
+                              
+                            // Map new SDK states to our component states
+                            let state: "partial-call" | "call" | "result" = "call";
+                            if (rawState === "partial-call" || rawState === "input-streaming") state = "partial-call";
+                            else if (rawState === "call" || rawState === "input-available") state = "call";
+                            else if (rawState === "result" || rawState === "output-available" || rawState === "output-error") state = "result";
                             
-                          const rawState = part.type === "tool-invocation"
-                            ? (part as any).toolInvocation.state
-                            : (part as any).state;
-                            
-                          // Map new SDK states to our component states
-                          let state: "partial-call" | "call" | "result" = "call";
-                          if (rawState === "partial-call" || rawState === "input-streaming") state = "partial-call";
-                          else if (rawState === "call" || rawState === "input-available") state = "call";
-                          else if (rawState === "result" || rawState === "output-available" || rawState === "output-error") state = "result";
-                          
-                          const args = part.type === "tool-invocation" 
-                            ? (part as any).toolInvocation.args 
-                            : (part as any).input;
-                            
-                          const result = part.type === "tool-invocation" 
-                            ? (part as any).toolInvocation.result 
-                            : (part as any).output;
+                            const args = part.type === "tool-invocation" 
+                              ? (part as any).toolInvocation.args 
+                              : (part as any).input;
+                              
+                            const result = part.type === "tool-invocation" 
+                              ? (part as any).toolInvocation.result 
+                              : (part as any).output;
 
-                          return (
-                            <ToolInvocationDisplay 
-                              key={index} 
-                              toolName={toolName}
-                              state={state}
-                              args={args}
-                              result={result}
-                            />
-                          );
-                        }
-                        return null;
-                      })}
+                            return (
+                              <ToolInvocationDisplay 
+                                key={index} 
+                                toolName={toolName}
+                                state={state}
+                                args={args}
+                                result={result}
+                              />
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                      {message.createdAt && (
+                        <span className={`text-[10px] text-muted-foreground/50 px-1 ${
+                          message.role === "user" ? "text-right" : "text-left"
+                        }`}>
+                          {new Date(message.createdAt).toLocaleTimeString([], { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                          })}
+                        </span>
+                      )}
                     </div>
 
                     {message.role === "user" && (
