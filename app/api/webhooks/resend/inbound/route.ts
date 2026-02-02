@@ -150,10 +150,12 @@ async function handleEmailReceived(data: EmailReceivedData) {
   const supabase = getAdminClient();
 
   // Find the agent based on recipient email address
-  // We need to check all recipients to find one that matches our agent email format
+  // Check TO, CC, and BCC to find matching agent
   let agent: { id: string; user_id: string; name: string } | null = null;
   let matchedRecipient: string | null = null;
+  let recipientType: "to" | "cc" | "bcc" = "to"; // Track how the agent was addressed
 
+  // Check TO recipients first (direct emails)
   for (const recipient of to) {
     const userId = parseAgentEmailAddress(recipient);
     if (userId) {
@@ -161,19 +163,52 @@ async function handleEmailReceived(data: EmailReceivedData) {
       if (result.agent) {
         agent = result.agent;
         matchedRecipient = recipient;
+        recipientType = "to";
         break;
       }
     }
   }
 
+  // If not found in TO, check CC recipients
+  if (!agent && cc && cc.length > 0) {
+    for (const recipient of cc) {
+      const userId = parseAgentEmailAddress(recipient);
+      if (userId) {
+        const result = await findAgentByEmailAddress(supabase, recipient);
+        if (result.agent) {
+          agent = result.agent;
+          matchedRecipient = recipient;
+          recipientType = "cc";
+          break;
+        }
+      }
+    }
+  }
+
+  // If not found in CC, check BCC recipients
+  if (!agent && bcc && bcc.length > 0) {
+    for (const recipient of bcc) {
+      const userId = parseAgentEmailAddress(recipient);
+      if (userId) {
+        const result = await findAgentByEmailAddress(supabase, recipient);
+        if (result.agent) {
+          agent = result.agent;
+          matchedRecipient = recipient;
+          recipientType = "bcc";
+          break;
+        }
+      }
+    }
+  }
+
   if (!agent) {
-    console.warn(`[resend-webhook] No matching agent found for recipients: ${to.join(", ")}`);
+    console.warn(`[resend-webhook] No matching agent found for recipients - TO: ${to.join(", ")}, CC: ${cc?.join(", ") || "none"}, BCC: ${bcc?.join(", ") || "none"}`);
     // Don't return error - just acknowledge receipt
     // The email might be for a non-existent or deleted user
     return NextResponse.json({ received: true, status: "no_agent_found" });
   }
 
-  console.log(`[resend-webhook] Routed email to agent ${agent.name} (${agent.id})`);
+  console.log(`[resend-webhook] Routed email to agent ${agent.name} (${agent.id}) via ${recipientType.toUpperCase()}`);
 
   // Fetch full email content from Resend
   let emailContent: { html?: string; text?: string; headers?: Record<string, string> } | null = null;
@@ -260,7 +295,7 @@ async function handleEmailReceived(data: EmailReceivedData) {
     agentId: agent.id,
     activityType: "email_received",
     source: "email",
-    title: `Email received from ${fromName || fromAddress}`,
+    title: `Email received from ${fromName || fromAddress}${recipientType !== "to" ? ` (${recipientType.toUpperCase()})` : ""}`,
     description: subject,
     metadata: {
       email_id: storedEmail?.id,
@@ -268,6 +303,7 @@ async function handleEmailReceived(data: EmailReceivedData) {
       from: from,
       subject,
       has_attachments: (attachments?.length || 0) > 0,
+      recipient_type: recipientType, // Track if it was TO, CC, or BCC
     },
     status: "completed",
   });
@@ -277,7 +313,7 @@ async function handleEmailReceived(data: EmailReceivedData) {
     supabase,
     agent.id,
     "new_message",
-    `New email from ${fromName || fromAddress}`,
+    `New email from ${fromName || fromAddress}${recipientType !== "to" ? ` (${recipientType.toUpperCase()})` : ""}`,
     subject,
     null,
     null
@@ -292,9 +328,10 @@ async function handleEmailReceived(data: EmailReceivedData) {
         agentId: agent.id,
         fromAddress,
         subject: subject || "(No subject)",
+        recipientType, // Pass whether this was TO, CC, or BCC
       },
     });
-    console.log(`[resend-webhook] Triggered email processing for ${storedEmail?.id}`);
+    console.log(`[resend-webhook] Triggered email processing for ${storedEmail?.id} (recipient type: ${recipientType})`);
   } catch (inngestError) {
     console.error("[resend-webhook] Failed to trigger email processing:", inngestError);
     // Don't fail the webhook - email is already stored

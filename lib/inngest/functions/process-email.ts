@@ -24,7 +24,7 @@ import { createAttachmentTools } from "@/lib/tools/attachment-tools";
  * Build email-specific context addition to the base system prompt
  * This adds the email context to the standard buildSystemPrompt output
  */
-function buildEmailContextPromptAddition(context: EmailContext): string {
+function buildEmailContextPromptAddition(context: EmailContext, recipientType?: "to" | "cc" | "bcc"): string {
   const sections: string[] = [];
 
   sections.push(`## 📧 INCOMING EMAIL CONTEXT`);
@@ -33,6 +33,20 @@ function buildEmailContextPromptAddition(context: EmailContext): string {
   sections.push(`### Current Email`);
   sections.push(`**From:** ${context.email.from_name || context.email.from_address}`);
   sections.push(`**Subject:** ${context.email.subject || "(No subject)"}`);
+  
+  // Important: Indicate how the agent was addressed
+  if (recipientType === "cc") {
+    sections.push(`**⚠️ IMPORTANT:** You were CC'd on this email (not the primary recipient). This email is primarily addressed to someone else, and you're included for awareness. Be judicious about whether to reply - only respond if:`);
+    sections.push(`  - You're directly asked a question`);
+    sections.push(`  - There's a clear action item for you`);
+    sections.push(`  - Your input would add significant value`);
+    sections.push(`  - Otherwise, you may just want to mark it as read and save any relevant information to memory`);
+  } else if (recipientType === "bcc") {
+    sections.push(`**⚠️ IMPORTANT:** You were BCC'd on this email (hidden recipient). This email is for your awareness only. DO NOT reply unless absolutely critical, as the sender intended for you to observe silently.`);
+  } else {
+    sections.push(`**Recipient Status:** You are a direct recipient (TO) of this email.`);
+  }
+  
   sections.push(`**Content:**`);
   sections.push(context.email.text_body || context.email.html_body || "(No content)");
   sections.push(``);
@@ -361,7 +375,7 @@ export const processInboundEmail = inngest.createFunction(
   },
   { event: "email/received.process" },
   async ({ event, step }) => {
-    const { emailId, agentId, fromAddress, subject } = event.data;
+    const { emailId, agentId, fromAddress, subject, recipientType } = event.data;
 
     console.log(`[process-email] Processing email ${emailId} for agent ${agentId}`);
 
@@ -513,8 +527,8 @@ ${email.text_body || email.html_body || "(No content)"}`;
         "email" // channel source
       );
 
-      // Add email-specific context to the prompt
-      const emailContextAddition = buildEmailContextPromptAddition(context);
+      // Add email-specific context to the prompt (including recipient type)
+      const emailContextAddition = buildEmailContextPromptAddition(context, recipientType);
       const systemPrompt = `${baseSystemPrompt}\n\n${emailContextAddition}`;
 
       // Get conversation history
