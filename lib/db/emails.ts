@@ -81,16 +81,15 @@ export async function storeInboundEmail(
   // Try to find existing thread by inReplyTo or messageId
   let threadId: string | null = null;
   if (inReplyTo) {
-    const result = await supabase
+    const { data: existingEmail } = await supabase
       .from("emails")
-      .select("thread_id")
+      .select("*")
       .eq("agent_id", agentId)
       .eq("message_id", inReplyTo)
       .maybeSingle();
     
-    if (!result.error && result.data) {
-      // TypeScript can't infer the select field type, so we cast
-      threadId = (result.data as any).thread_id as string | null;
+    if (existingEmail) {
+      threadId = existingEmail.thread_id;
     }
   }
 
