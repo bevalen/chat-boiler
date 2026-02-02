@@ -1464,6 +1464,8 @@ export interface AgentPersonality {
   tone?: string;
   formality?: string;
   traits?: string[];
+  style?: string;
+  background?: string;
 }
 
 // User preferences structure
