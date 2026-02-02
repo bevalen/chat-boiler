@@ -157,6 +157,31 @@ export async function markAsRead(
 }
 
 /**
+ * Mark notifications as read by conversation ID
+ * Automatically marks notifications as read when user opens the related conversation
+ */
+export async function markNotificationsByConversationAsRead(
+  supabase: SupabaseClient,
+  agentId: string,
+  conversationId: string
+): Promise<{ success: boolean; error: string | null }> {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("agent_id", agentId)
+    .eq("link_type", "conversation")
+    .eq("link_id", conversationId)
+    .eq("read", false);
+
+  if (error) {
+    console.error("Error marking conversation notifications as read:", error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, error: null };
+}
+
+/**
  * Mark all notifications as read for an agent
  */
 export async function markAllAsRead(

@@ -207,6 +207,15 @@ export function ChatInterface({
         );
         setMessages(uiMessages);
       }
+      
+      // Auto-mark notifications as read for this conversation
+      fetch("/api/notifications/mark-by-conversation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: id }),
+      }).catch((err) => {
+        console.error("Failed to mark notifications as read:", err);
+      });
     } catch (error) {
       console.error("Failed to load conversation:", error);
       // Only reset if we're still trying to load this conversation
