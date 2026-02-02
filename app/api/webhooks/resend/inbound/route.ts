@@ -248,14 +248,15 @@ async function handleEmailReceived(data: EmailReceivedData) {
   });
 
   // Create notification for the user
-  await createNotification(supabase, {
-    agentId: agent.id,
-    type: "new_message",
-    title: `New email from ${fromName || fromAddress}`,
-    content: subject,
-    linkType: null,
-    linkId: null,
-  });
+  await createNotification(
+    supabase,
+    agent.id,
+    "new_message",
+    `New email from ${fromName || fromAddress}`,
+    subject,
+    null,
+    null
+  );
 
   return NextResponse.json({
     received: true,
