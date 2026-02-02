@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save } from "lucide-react";
+import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -970,7 +970,7 @@ export function ChatInterface({
                       </div>
                     )}
 
-                    <div className="flex flex-col gap-1 max-w-[80%]">
+                    <div className="flex flex-col gap-1 max-w-[80%] group">
                       <div
                         className={`relative px-5 py-3 rounded-2xl text-sm leading-relaxed ${
                           message.role === "user"
@@ -978,6 +978,22 @@ export function ChatInterface({
                             : "bg-secondary/50 border border-white/5 rounded-tl-sm"
                         }`}
                       >
+                        {/* Copy button */}
+                        <button
+                          onClick={() => {
+                            const textContent = message.parts
+                              .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                              .map((p) => p.text)
+                              .join("\n");
+                            navigator.clipboard.writeText(textContent);
+                          }}
+                          className={`absolute top-2 ${message.role === "user" ? "left-2" : "right-2"} opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-black/10 ${
+                            message.role === "user" ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          title="Copy message"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
                         {message.parts.map((part, index) => {
                           if (part.type === "text") {
                             return message.role === "user" ? (
