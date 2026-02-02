@@ -66,14 +66,55 @@ export const executeScheduledJob = inngest.createFunction(
       // Step 2: Execute based on action type
       switch (job.action_type) {
         case "notify":
+          // Create conversation first (separate step to prevent duplicates on retry)
+          const notifyConvId = await step.run("create-notify-conversation", async () => {
+            const { data: newConv } = await supabase
+              .from("conversations")
+              .insert({
+                agent_id: job.agent_id,
+                channel_type: "app",
+                status: "active",
+                title: `Scheduled: ${job.title}`,
+              })
+              .select("id")
+              .single();
+            return newConv?.id;
+          });
+
+          if (!notifyConvId) {
+            result = { success: false, error: "Could not create conversation" };
+            break;
+          }
+
           result = await step.run("execute-notify", async () => {
-            return await executeNotifyAction(supabase, job);
+            return await executeNotifyAction(supabase, job, notifyConvId);
           });
           break;
 
         case "agent_task":
+          // Create conversation first (separate step to prevent duplicates on retry)
+          const conversationId = await step.run("create-conversation", async () => {
+            const { data: newConv } = await supabase
+              .from("conversations")
+              .insert({
+                agent_id: job.agent_id,
+                channel_type: "app",
+                status: "active",
+                title: `Scheduled: ${job.title}`,
+              })
+              .select("id")
+              .single();
+            return newConv?.id;
+          });
+
+          if (!conversationId) {
+            result = { success: false, error: "Could not create conversation" };
+            break;
+          }
+
+          // Execute agent task using the pre-created conversation
           result = await step.run("execute-agent-task", async () => {
-            return await executeAgentTaskAction(supabase, job);
+            return await executeAgentTaskAction(supabase, job, conversationId);
           });
           break;
 
@@ -142,10 +183,12 @@ export const executeScheduledJob = inngest.createFunction(
 
 /**
  * Execute a notification action - send a reminder message
+ * Conversation must be created before calling this function to prevent duplicates on retry
  */
 async function executeNotifyAction(
   supabase: ReturnType<typeof getAdminClient>,
-  job: ScheduledJob
+  job: ScheduledJob,
+  conversationId: string
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   const payload = job.action_payload as ActionPayload;
   const message = payload?.message || job.title;
@@ -166,24 +209,6 @@ async function executeNotifyAction(
         notificationContent += `\n**Due:** ${new Date(task.due_date).toLocaleDateString()}`;
       }
     }
-  }
-
-  // Always create a NEW conversation for scheduled tasks
-  const { data: newConv } = await supabase
-    .from("conversations")
-    .insert({
-      agent_id: job.agent_id,
-      channel_type: "app",
-      status: "active",
-      title: `Scheduled: ${job.title}`,
-    })
-    .select("id")
-    .single();
-
-  const conversationId = newConv?.id || null;
-
-  if (!conversationId) {
-    return { success: false, error: "Could not create conversation" };
   }
 
   // Insert message
@@ -214,10 +239,12 @@ async function executeNotifyAction(
 
 /**
  * Execute an agent task action - runs the AI agent with full tool access
+ * Conversation must be created before calling this function to prevent duplicates on retry
  */
 async function executeAgentTaskAction(
   supabase: ReturnType<typeof getAdminClient>,
-  job: ScheduledJob
+  job: ScheduledJob,
+  conversationId: string
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   const payload = job.action_payload as ActionPayload;
   const instruction = payload?.instruction || job.description || "Execute scheduled task";
@@ -234,32 +261,25 @@ async function executeAgentTaskAction(
     .eq("user_id", agent.userId)
     .single();
 
-  // Create conversation
-  const { data: newConv, error: convError } = await supabase
-    .from("conversations")
-    .insert({
-      agent_id: job.agent_id,
-      channel_type: "app",
-      status: "active",
-      title: `Scheduled: ${job.title}`,
-    })
-    .select("id")
-    .single();
-
-  if (convError || !newConv) {
-    return { success: false, error: "Could not create conversation" };
-  }
-
-  const conversationId = newConv.id;
   const userMessage = `[Scheduled Task: ${job.title}]\n\n${instruction}`;
 
-  // Save user message
-  await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    role: "user",
-    content: userMessage,
-    metadata: { type: "scheduled_agent_task", job_id: job.id },
-  });
+  // Save user message (check if it already exists to prevent duplicates on retry)
+  const { data: existingMessage } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("role", "user")
+    .limit(1)
+    .single();
+
+  if (!existingMessage) {
+    await supabase.from("messages").insert({
+      conversation_id: conversationId,
+      role: "user",
+      content: userMessage,
+      metadata: { type: "scheduled_agent_task", job_id: job.id },
+    });
+  }
 
   // Build system prompt
   const systemPrompt = await buildSystemPrompt(agent, {
