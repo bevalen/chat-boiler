@@ -112,6 +112,25 @@ export function EmailClient({
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
   const [isLoadingThread, setIsLoadingThread] = useState(false);
 
+  // Keyboard shortcut: Tab to toggle between Inbox and Sent
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle Tab when not in thread view and not in an input
+      if (e.key === "Tab" && !selectedThread && !isLoadingThread) {
+        const target = e.target as HTMLElement;
+        const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+        
+        if (!isInput) {
+          e.preventDefault();
+          setDirectionFilter((prev) => prev === "inbound" ? "outbound" : "inbound");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedThread, isLoadingThread]);
+
   // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
@@ -627,6 +646,12 @@ export function EmailClient({
             Sent
           </Button>
         </div>
+        
+        {/* Keyboard hint */}
+        <span className="text-[10px] text-muted-foreground hidden sm:flex items-center gap-1">
+          <kbd className="px-1.5 py-0.5 rounded bg-muted border text-[10px] font-mono">Tab</kbd>
+          to switch
+        </span>
         
         <div className="flex-1" />
         
