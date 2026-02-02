@@ -1054,11 +1054,11 @@ export function ChatInterface({
                           return null;
                         })}
                       </div>
-                      {message.createdAt && (
+                      {(message as any).createdAt && (
                         <span className={`text-[10px] text-muted-foreground/50 px-1 ${
                           message.role === "user" ? "text-right" : "text-left"
                         }`}>
-                          {new Date(message.createdAt).toLocaleTimeString([], { 
+                          {new Date((message as any).createdAt).toLocaleTimeString([], { 
                             hour: 'numeric', 
                             minute: '2-digit',
                             hour12: true 
