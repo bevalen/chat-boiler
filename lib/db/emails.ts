@@ -88,8 +88,9 @@ export async function storeInboundEmail(
       .eq("message_id", inReplyTo)
       .maybeSingle();
     
-    if (!result.error && result.data && 'thread_id' in result.data) {
-      threadId = result.data.thread_id as string | null;
+    if (!result.error && result.data) {
+      // TypeScript can't infer the select field type, so we cast
+      threadId = (result.data as any).thread_id as string | null;
     }
   }
 
