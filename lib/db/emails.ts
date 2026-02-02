@@ -81,15 +81,15 @@ export async function storeInboundEmail(
   // Try to find existing thread by inReplyTo or messageId
   let threadId: string | null = null;
   if (inReplyTo) {
-    const { data: existingEmail, error: threadError } = await supabase
+    const result = await supabase
       .from("emails")
       .select("thread_id")
       .eq("agent_id", agentId)
       .eq("message_id", inReplyTo)
       .maybeSingle();
     
-    if (!threadError && existingEmail?.thread_id) {
-      threadId = existingEmail.thread_id;
+    if (!result.error && result.data) {
+      threadId = result.data.thread_id;
     }
   }
 
