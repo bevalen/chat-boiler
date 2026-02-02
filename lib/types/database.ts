@@ -1488,6 +1488,23 @@ export interface SDRConfig {
   valueProposition?: string;
   outreachStrategy?: string;
   followUpCadence?: string;
+  industries?: string;
+  elevatorPitch?: string;
+  founderStory?: string;
+  videoOverviewUrl?: string;
+  quickIntroTemplate?: string;
+  minimumRevenue?: string;
+  icpCriteria?: string[];
+  icpPositiveSignals?: string[];
+  icpNegativeSignals?: string[];
+  targetTitles?: string[];
+  personalBackground?: {
+    militaryService?: string;
+    education?: string;
+    hometown?: string;
+    interests?: string;
+    other?: string;
+  };
 }
 
 // Agent identity context (includes SDR config)
@@ -1525,8 +1542,9 @@ export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
 export type AgentRunState = "idle" | "running" | "completed" | "failed";
 export type CommentType = "note" | "status_change" | "system";
 export type FeedbackType = "bug_report" | "feature_request" | "improvement" | "question" | "other";
-export type FeedbackPriority = "low" | "medium" | "high" | "urgent";
+export type FeedbackPriority = "low" | "medium" | "high" | "critical";
 export type FeedbackStatus = "new" | "under_review" | "planned" | "in_progress" | "done" | "wont_fix";
+export type ContextBlockCategory = "work_preferences" | "personal_background" | "communication_style" | "technical_preferences" | "general";
 
 // Message metadata structure
 export interface MessageMetadata {
