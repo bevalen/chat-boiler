@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { tool, generateText } from "ai";
+import { tool, generateText, stepCountIs } from "ai";
 import { z } from "zod";
 import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -182,7 +182,7 @@ Focus on making real progress. If you need more information or are blocked, upda
             messages: [{ role: "user", content: taskPrompt }],
             tools,
             toolChoice: "auto",
-            maxSteps: MAX_TOOL_STEPS_PER_TASK,
+            stopWhen: stepCountIs(MAX_TOOL_STEPS_PER_TASK),
           });
 
           // Get response text

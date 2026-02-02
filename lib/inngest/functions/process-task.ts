@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { tool, generateText } from "ai";
+import { tool, generateText, stepCountIs } from "ai";
 import { z } from "zod";
 import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -102,7 +102,7 @@ export const processTaskWorkflow = inngest.createFunction(
           ],
           tools,
           toolChoice: "auto",
-          maxSteps: MAX_TOOL_STEPS,
+          stopWhen: stepCountIs(MAX_TOOL_STEPS),
         });
 
         const response = result.text;

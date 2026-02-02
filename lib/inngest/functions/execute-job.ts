@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { tool, generateText } from "ai";
+import { tool, generateText, stepCountIs } from "ai";
 import { z } from "zod";
 import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -283,18 +283,13 @@ async function executeAgentTaskAction(
       messages: [{ role: "user", content: userMessage }],
       tools,
       toolChoice: "auto",
-      maxSteps: MAX_TOOL_STEPS,
+      stopWhen: stepCountIs(MAX_TOOL_STEPS),
     });
 
     // Extract the final text response
     finalResponse = result.text || "Task completed.";
     
-    console.log(`[inngest:execute-job] Agent completed job ${job.id} with ${result.steps?.length || 0} steps`);
-    
-    // Log tool usage for debugging
-    if (result.steps && result.steps.length > 0) {
-      console.log(`[inngest:execute-job] Tool calls made:`, result.steps.map(s => s.toolName || 'text').join(', '));
-    }
+    console.log(`[inngest:execute-job] Agent completed job ${job.id}`);
   } catch (agentError) {
     const errorMsg = agentError instanceof Error ? agentError.message : "Agent execution failed";
     console.error(`[inngest:execute-job] Agent error for job ${job.id}:`, errorMsg);
