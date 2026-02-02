@@ -26,9 +26,9 @@ function mapCredentialsRow(row: ChannelCredentialsRow): UserChannelCredential {
   return {
     id: row.id,
     userId: row.user_id,
-    channelType: row.channel_type,
+    channelType: row.channel_type as any,
     credentials: row.credentials as ChannelCredentials,
-    isActive: row.is_active,
+    isActive: row.is_active ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -163,9 +163,9 @@ export async function upsertChannelCredentials(
     .upsert(
       {
         user_id: userId,
-        channel_type: channelType,
+        channel_type: channelType as any,
         credentials,
-        is_active: isActive,
+        is_active: isActive ?? false,
       },
       {
         onConflict: "user_id,channel_type",

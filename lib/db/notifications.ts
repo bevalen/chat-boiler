@@ -21,12 +21,12 @@ function mapNotificationRow(row: NotificationRow): Notification {
   return {
     id: row.id,
     agentId: row.agent_id,
-    type: row.type,
+    type: row.type as any,
     title: row.title,
     content: row.content,
-    linkType: row.link_type,
+    linkType: row.link_type as any,
     linkId: row.link_id,
-    read: row.read,
+    read: row.read ?? false,
     createdAt: row.created_at,
   };
 }

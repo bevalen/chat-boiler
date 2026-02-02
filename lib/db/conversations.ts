@@ -40,7 +40,7 @@ function mapMessageRow(row: MessageRow): Message {
   return {
     id: row.id,
     conversationId: row.conversation_id,
-    role: row.role,
+    role: row.role as any,
     content: row.content,
     metadata: row.metadata as Record<string, unknown> | null,
     createdAt: row.created_at,
