@@ -409,6 +409,8 @@ export type Database = {
           in_reply_to: string | null
           is_read: boolean | null
           message_id: string | null
+          processed_at: string | null
+          processed_by_agent: boolean | null
           read_at: string | null
           received_at: string | null
           references_ids: string[] | null
@@ -440,6 +442,8 @@ export type Database = {
           in_reply_to?: string | null
           is_read?: boolean | null
           message_id?: string | null
+          processed_at?: string | null
+          processed_by_agent?: boolean | null
           read_at?: string | null
           received_at?: string | null
           references_ids?: string[] | null
@@ -471,6 +475,8 @@ export type Database = {
           in_reply_to?: string | null
           is_read?: boolean | null
           message_id?: string | null
+          processed_at?: string | null
+          processed_by_agent?: boolean | null
           read_at?: string | null
           received_at?: string | null
           references_ids?: string[] | null
@@ -1452,171 +1458,3 @@ export const Constants = {
   },
 } as const
 
-// ========== Custom Types (preserved from original database.ts) ==========
-
-// Typed structures for agent configuration
-export interface AgentPersonality {
-  traits?: string[];
-  style?: string;
-  tone?: string;
-  background?: string;
-}
-
-export interface UserPreferences {
-  response_style?: "concise" | "detailed" | "balanced";
-  verbosity?: "brief" | "moderate" | "verbose";
-  use_bullet_points?: boolean;
-  proactive_suggestions?: boolean;
-  confirm_before_actions?: boolean;
-  preferred_communication?: string;
-}
-
-// SDR Configuration for LinkedIn SDR mode
-export interface SDRConfig {
-  // Company info
-  companyName: string;
-  companyDescription: string;
-  industries?: string;
-  elevatorPitch?: string;
-  founderStory?: string;
-  videoOverviewUrl?: string;
-  
-  // Personal background (for rapport building)
-  personalBackground?: {
-    militaryService?: string;
-    education?: string;
-    hometown?: string;
-    interests?: string;
-    other?: string;
-  };
-  
-  // ICP criteria
-  icpCriteria?: string[];
-  icpPositiveSignals?: string[];
-  icpNegativeSignals?: string[];
-  
-  // Templates
-  quickIntroTemplate?: string;
-  
-  // Settings
-  minimumRevenue?: string;
-  targetTitles?: string[];
-}
-
-export interface AgentIdentityContext {
-  role?: string;
-  capabilities?: string[];
-  owner?: {
-    name?: string;
-    company?: string;
-    role?: string;
-    timezone?: string;
-  };
-  sdrConfig?: SDRConfig;
-}
-
-// Safety permissions for agent actions
-export interface AgentSafetyPermissions {
-  require_confirmation: string[];
-  auto_approve: string[];
-}
-
-// Context block categories
-export type ContextBlockCategory = 
-  | "work_preferences" 
-  | "personal_background" 
-  | "communication_style" 
-  | "technical_preferences"
-  | "general";
-
-// Task status types
-export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
-
-// Task assignee types
-export type AssigneeType = "user" | "agent";
-
-// Agent run state
-export type AgentRunState = "not_started" | "running" | "needs_input" | "failed" | "completed";
-
-// Comment types
-export type CommentType = "progress" | "question" | "note" | "resolution" | "approval_request" | "approval_granted" | "status_change";
-
-// Author types
-export type CommentAuthorType = "user" | "agent" | "system";
-
-// Feedback types
-export type FeedbackType = "feature_request" | "bug_report";
-export type FeedbackStatus = "new" | "under_review" | "planned" | "in_progress" | "done" | "wont_fix";
-export type FeedbackSource = "manual" | "automatic" | "agent_error";
-export type FeedbackPriority = "critical" | "high" | "medium" | "low";
-
-// Channel types
-export type ChannelType = "app" | "email" | "sms" | "discord" | "linkedin" | "resend";
-
-// Email types for Resend integration
-export type EmailDirection = "inbound" | "outbound";
-export type EmailStatus = "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
-
-// Database-level channel type
-export type StorableChannelType = "email" | "sms" | "discord" | "linkedin";
-
-// Email credentials
-export interface EmailCredentials {
-  smtp_host?: string;
-  smtp_port?: number;
-  smtp_user?: string;
-  smtp_password?: string;
-  from_address?: string;
-}
-
-// LinkedIn credentials
-export interface LinkedInCredentials {
-  extension_token: string;
-  extension_id?: string;
-  user_linkedin_id?: string;
-  user_linkedin_name?: string;
-  capabilities: {
-    auto_respond: boolean;
-    draft_mode: boolean;
-    active_hours_only: boolean;
-  };
-  settings: {
-    response_delay_seconds?: number;
-    active_hours_start?: string;
-    active_hours_end?: string;
-    active_days?: string[];
-  };
-  token_expires_at?: string;
-}
-
-// Union type for all channel credentials
-export type ChannelCredentials = EmailCredentials | LinkedInCredentials | Record<string, unknown>;
-
-// Action payload
-export interface ActionPayload {
-  message?: string;
-  instruction?: string;
-  preferred_channel?: ChannelType;
-  url?: string;
-  body?: unknown;
-  headers?: Record<string, string>;
-}
-
-// Message metadata
-export interface MessageMetadata extends Record<string, unknown> {
-  type?: "scheduled_notification" | "scheduled_agent_task" | "daily_brief" | "incoming_email" | "linkedin_message";
-  job_id?: string;
-  job_type?: string;
-  instruction?: string;
-  date?: string;
-  channel_source?: ChannelType;
-  email_from?: string;
-  email_subject?: string;
-  email_message_id?: string;
-  linkedin_conversation_id?: string;
-  linkedin_profile_url?: string;
-  linkedin_message_id?: string;
-  linkedin_sender_name?: string;
-  linkedin_sender_title?: string;
-  linkedin_sender_company?: string;
-}

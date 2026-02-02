@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronRight,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -255,10 +256,27 @@ export function EmailClient({
         setSelectedEmail(data.email);
         setSelectedThread(data.thread?.length > 0 ? data.thread : [data.email]);
         
-        // Store attachments by email ID
+        // Store attachments by email ID and fetch signed URLs
         const attachmentsMap = new Map<string, EmailAttachment[]>();
         if (data.attachments?.length > 0) {
-          attachmentsMap.set(email.id, data.attachments);
+          // Fetch signed URLs for all attachments
+          const attachmentsWithUrls = await Promise.all(
+            data.attachments.map(async (att: EmailAttachment) => {
+              if (att.is_downloaded && att.storage_path) {
+                try {
+                  const urlRes = await fetch(`/api/attachments/${att.id}`);
+                  if (urlRes.ok) {
+                    const urlData = await urlRes.json();
+                    return { ...att, download_url: urlData.attachment.downloadUrl };
+                  }
+                } catch (error) {
+                  console.error("Error fetching attachment URL:", error);
+                }
+              }
+              return att;
+            })
+          );
+          attachmentsMap.set(email.id, attachmentsWithUrls);
         }
         setThreadAttachments(attachmentsMap);
         
@@ -501,14 +519,19 @@ export function EmailClient({
                       {/* Mobile: Stack layout */}
                       <div className="flex-1 min-w-0 flex flex-col gap-1 sm:hidden max-w-full">
                         <div className="flex items-center justify-between gap-2">
-                          <span className={cn(
-                            "text-sm truncate",
-                            !email.is_read && email.direction === "inbound" && "font-semibold"
-                          )}>
-                            {email.direction === "outbound" 
-                              ? "Maia" 
-                              : email.from_name || email.from_address?.split("@")[0] || "Unknown"}
-                          </span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {email.processed_by_agent && email.direction === "inbound" && (
+                              <Bot className="h-3 w-3 shrink-0 text-primary" title="Processed by Maia" />
+                            )}
+                            <span className={cn(
+                              "text-sm truncate",
+                              !email.is_read && email.direction === "inbound" && "font-semibold"
+                            )}>
+                              {email.direction === "outbound" 
+                                ? "Maia" 
+                                : email.from_name || email.from_address?.split("@")[0] || "Unknown"}
+                            </span>
+                          </div>
                           <span className="text-xs text-muted-foreground shrink-0">
                             {formatTime(email.direction === "inbound" ? email.received_at : email.sent_at)}
                           </span>
@@ -528,9 +551,12 @@ export function EmailClient({
                       {/* Desktop: Horizontal layout */}
                       <div className="hidden sm:flex sm:items-center sm:gap-3 sm:flex-1 sm:min-w-0">
                         {/* Sender */}
-                        <div className="w-40 shrink-0">
+                        <div className="w-40 shrink-0 flex items-center gap-1.5">
+                          {email.processed_by_agent && email.direction === "inbound" && (
+                            <Bot className="h-3.5 w-3.5 shrink-0 text-primary" title="Processed by Maia" />
+                          )}
                           <span className={cn(
-                            "text-sm",
+                            "text-sm truncate",
                             !email.is_read && email.direction === "inbound" && "font-semibold"
                           )}>
                             {email.direction === "outbound" 
@@ -594,10 +620,30 @@ export function EmailClient({
                                 href={att.download_url || "#"}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2 py-1 text-xs bg-muted rounded hover:bg-muted/80 max-w-full"
+                                download={att.filename}
+                                onClick={(e) => {
+                                  if (!att.download_url || !att.is_downloaded) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                className={`flex items-center gap-1.5 px-2 py-1 text-xs bg-muted rounded max-w-full ${
+                                  att.is_downloaded && att.download_url
+                                    ? "hover:bg-muted/80 cursor-pointer"
+                                    : "opacity-50 cursor-not-allowed"
+                                }`}
+                                title={
+                                  att.is_downloaded
+                                    ? `Download ${att.filename}`
+                                    : "Attachment not yet available"
+                                }
                               >
                                 <Paperclip className="h-3 w-3 shrink-0" />
                                 <span className="truncate">{att.filename}</span>
+                                {att.size_bytes && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    ({(att.size_bytes / 1024).toFixed(1)}KB)
+                                  </span>
+                                )}
                               </a>
                             ))}
                           </div>
@@ -819,12 +865,17 @@ export function EmailClient({
                   {/* Mobile: Stack layout */}
                   <div className="flex-1 min-w-0 flex flex-col gap-1 sm:hidden max-w-full">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={cn(
-                        "text-sm truncate",
-                        isUnread && "font-semibold"
-                      )}>
-                        {participants}
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {email.processed_by_agent && (
+                          <Bot className="h-3.5 w-3.5 shrink-0 text-primary" title="Processed by Maia" />
+                        )}
+                        <span className={cn(
+                          "text-sm truncate",
+                          isUnread && "font-semibold"
+                        )}>
+                          {participants}
+                        </span>
+                      </div>
                       <span className={cn(
                         "text-xs shrink-0",
                         isUnread ? "font-medium text-foreground" : "text-muted-foreground"
@@ -843,18 +894,23 @@ export function EmailClient({
                   {/* Desktop: Horizontal layout */}
                   <div className="hidden sm:flex sm:items-center sm:gap-3 sm:flex-1 sm:min-w-0">
                     {/* Sender/Participants */}
-                    <div className="w-44 shrink-0 truncate">
-                      <span className={cn(
-                        "text-sm",
-                        isUnread && "font-semibold"
-                      )}>
-                        {participants}
-                      </span>
-                      {threadCount > 1 && (
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          {threadCount}
-                        </span>
+                    <div className="w-44 shrink-0 flex items-center gap-1.5 min-w-0">
+                      {email.processed_by_agent && (
+                        <Bot className="h-3.5 w-3.5 shrink-0 text-primary" title="Processed by Maia" />
                       )}
+                      <div className="truncate">
+                        <span className={cn(
+                          "text-sm",
+                          isUnread && "font-semibold"
+                        )}>
+                          {participants}
+                        </span>
+                        {threadCount > 1 && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {threadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     {/* Subject and Preview */}

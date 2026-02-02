@@ -20,6 +20,7 @@ import {
   createGetEmailThreadTool,
 } from "./email-resend";
 import { createResearchTool } from "./research";
+import { createAttachmentTools } from "./attachment-tools";
 
 export interface ToolRegistryContext {
   agentId: string;
@@ -119,6 +120,9 @@ export function createToolRegistry(context: ToolRegistryContext) {
   // Research tool (Perplexity API)
   const researchTool = createResearchTool(agentId);
 
+  // Attachment tools (for accessing email attachments)
+  const attachmentTools = createAttachmentTools(supabase, agentId);
+
   // Combine all tools into a single registry
   return {
     // Memory
@@ -135,6 +139,8 @@ export function createToolRegistry(context: ToolRegistryContext) {
     ...feedbackTools,
     // Email
     ...emailTools,
+    // Attachments
+    ...attachmentTools,
     // Research
     research: researchTool,
   };

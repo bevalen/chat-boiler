@@ -18,6 +18,7 @@ import {
   createForwardEmailTool,
 } from "@/lib/tools/email-resend";
 import { createResearchTool } from "@/lib/tools/research";
+import { createAttachmentTools } from "@/lib/tools/attachment-tools";
 
 /**
  * Build email-specific context addition to the base system prompt
@@ -691,6 +692,9 @@ ${email.text_body || email.html_body || "(No content)"}`;
         // Email-specific linking tools
         ...createEmailAgentTools(supabase, agentId, emailId, agent.userId),
 
+        // Attachment tools
+        ...createAttachmentTools(supabase, agentId),
+
         // Research tool
         research: createResearchTool(agentId),
       };
@@ -742,7 +746,21 @@ ${email.text_body || email.html_body || "(No content)"}`;
       }
     });
 
-    // Step 5: Log completion
+    // Step 5: Mark email as processed
+    await step.run("mark-as-processed", async () => {
+      const supabase = getAdminClient();
+
+      // Mark the email as processed by the agent
+      await supabase
+        .from("emails")
+        .update({
+          processed_by_agent: true,
+          processed_at: new Date().toISOString(),
+        })
+        .eq("id", emailId);
+    });
+
+    // Step 6: Log completion
     await step.run("log-completion", async () => {
       const supabase = getAdminClient();
 

@@ -5,6 +5,7 @@ import { storeInboundEmail, findAgentByEmailAddress } from "@/lib/db/emails";
 import { logActivity } from "@/lib/db/activity-log";
 import { createNotification } from "@/lib/db/notifications";
 import { inngest } from "@/lib/inngest/client";
+import { downloadEmailAttachments } from "@/lib/email/attachments";
 
 /**
  * Resend Inbound Email Webhook Handler
@@ -230,6 +231,29 @@ async function handleEmailReceived(data: EmailReceivedData) {
   }
 
   console.log(`[resend-webhook] Stored email with ID: ${storedEmail?.id}`);
+
+  // Download and store attachments immediately (Resend URLs expire in 1 hour)
+  if (attachments && attachments.length > 0 && storedEmail) {
+    console.log(`[resend-webhook] Downloading ${attachments.length} attachments...`);
+    const downloadResults = await downloadEmailAttachments(supabase, {
+      resendEmailId: email_id,
+      emailId: storedEmail.id,
+      userId: agent.user_id,
+      agentId: agent.id,
+      attachments: attachments.map((att) => ({
+        id: att.id,
+        filename: att.filename,
+        contentType: att.content_type,
+      })),
+    });
+
+    console.log(
+      `[resend-webhook] Downloaded ${downloadResults.successCount}/${attachments.length} attachments`
+    );
+    if (downloadResults.failedCount > 0) {
+      console.error("[resend-webhook] Some attachments failed:", downloadResults.errors);
+    }
+  }
 
   // Log the activity
   await logActivity(supabase, {
