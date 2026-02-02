@@ -521,7 +521,7 @@ export function EmailClient({
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {email.processed_by_agent && email.direction === "inbound" && (
-                              <Bot className="h-3 w-3 shrink-0 text-primary" title="Processed by Maia" />
+                              <Bot className="h-3 w-3 shrink-0 text-primary" aria-label="Processed by Maia" />
                             )}
                             <span className={cn(
                               "text-sm truncate",
@@ -553,7 +553,7 @@ export function EmailClient({
                         {/* Sender */}
                         <div className="w-40 shrink-0 flex items-center gap-1.5">
                           {email.processed_by_agent && email.direction === "inbound" && (
-                            <Bot className="h-3.5 w-3.5 shrink-0 text-primary" title="Processed by Maia" />
+                            <Bot className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Processed by Maia" />
                           )}
                           <span className={cn(
                             "text-sm truncate",
@@ -867,7 +867,7 @@ export function EmailClient({
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         {email.processed_by_agent && (
-                          <Bot className="h-3.5 w-3.5 shrink-0 text-primary" title="Processed by Maia" />
+                          <Bot className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Processed by Maia" />
                         )}
                         <span className={cn(
                           "text-sm truncate",
@@ -896,7 +896,7 @@ export function EmailClient({
                     {/* Sender/Participants */}
                     <div className="w-44 shrink-0 flex items-center gap-1.5 min-w-0">
                       {email.processed_by_agent && (
-                        <Bot className="h-3.5 w-3.5 shrink-0 text-primary" title="Processed by Maia" />
+                        <Bot className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Processed by Maia" />
                       )}
                       <div className="truncate">
                         <span className={cn(
