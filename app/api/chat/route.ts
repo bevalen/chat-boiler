@@ -137,7 +137,7 @@ export async function POST(request: Request) {
         timezone: profile?.timezone || undefined,
         email: profile?.email || undefined,
       },
-      channelSource
+      channelSource === "cron" ? undefined : channelSource
     );
 
     console.log("[chat/route] Using agent:", agent.name);
