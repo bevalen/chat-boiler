@@ -5,6 +5,7 @@ export type ActivityType =
   | "cron_execution"
   | "email_sent"
   | "email_received"
+  | "email_processed"
   | "research"
   | "memory_saved"
   | "task_created"

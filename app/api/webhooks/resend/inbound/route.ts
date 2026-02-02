@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { storeInboundEmail, findAgentByEmailAddress } from "@/lib/db/emails";
 import { logActivity } from "@/lib/db/activity-log";
 import { createNotification } from "@/lib/db/notifications";
+import { inngest } from "@/lib/inngest/client";
 
 /**
  * Resend Inbound Email Webhook Handler
@@ -257,6 +258,23 @@ async function handleEmailReceived(data: EmailReceivedData) {
     null,
     null
   );
+
+  // Trigger AI agent to process the email
+  try {
+    await inngest.send({
+      name: "email/received.process",
+      data: {
+        emailId: storedEmail!.id,
+        agentId: agent.id,
+        fromAddress,
+        subject: subject || "(No subject)",
+      },
+    });
+    console.log(`[resend-webhook] Triggered email processing for ${storedEmail?.id}`);
+  } catch (inngestError) {
+    console.error("[resend-webhook] Failed to trigger email processing:", inngestError);
+    // Don't fail the webhook - email is already stored
+  }
 
   return NextResponse.json({
     received: true,

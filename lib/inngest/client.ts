@@ -47,5 +47,15 @@ export type TaskProcessEvent = {
   };
 };
 
+export type EmailReceivedEvent = {
+  name: "email/received.process";
+  data: {
+    emailId: string;
+    agentId: string;
+    fromAddress: string;
+    subject: string;
+  };
+};
+
 // Union of all event types
-export type InngestEvents = JobExecuteEvent | ProjectWorkEvent | TaskProcessEvent;
+export type InngestEvents = JobExecuteEvent | ProjectWorkEvent | TaskProcessEvent | EmailReceivedEvent;

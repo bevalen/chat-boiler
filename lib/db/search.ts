@@ -334,33 +334,176 @@ export async function getRelevantContext(
 }
 
 /**
- * Gather relevant context for an incoming email
- * Searches projects, past conversations, and memories to find related content
+ * Context gathered for an email for agent processing
+ */
+export interface EmailContext {
+  email: {
+    id: string;
+    from_address: string;
+    from_name: string | null;
+    subject: string | null;
+    text_body: string | null;
+    html_body: string | null;
+    in_reply_to: string | null;
+    thread_id: string | null;
+    received_at: string | null;
+  };
+  relatedProjects: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    status: string | null;
+    similarity: number;
+  }>;
+  relatedTasks: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    status: string | null;
+    similarity: number;
+  }>;
+  threadHistory: Array<{
+    id: string;
+    from_address: string;
+    subject: string | null;
+    text_body: string | null;
+    direction: string;
+    created_at: string | null;
+  }>;
+  relatedConversations: Array<{
+    id: string;
+    title: string | null;
+    channel_type: string | null;
+    recentMessage: string | null;
+  }>;
+  semanticContext: string;
+}
+
+/**
+ * Gather comprehensive context for an incoming email
+ * Includes thread history, related projects/tasks, past conversations, and semantic search
  */
 export async function gatherContextForEmail(
   supabase: SupabaseClient,
   agentId: string,
-  emailContent: string,
+  emailId: string,
   options: { matchCount?: number; matchThreshold?: number } = {}
-): Promise<string> {
+): Promise<EmailContext | null> {
   const { matchCount = 15, matchThreshold = 0.6 } = options;
 
   try {
-    // Search for related content across all sources
-    const results = await semanticSearchAll(supabase, emailContent, agentId, {
-      matchCount,
-      matchThreshold,
-    });
+    // 1. Get email details
+    const { data: email, error: emailError } = await supabase
+      .from("emails")
+      .select("id, from_address, from_name, subject, text_body, html_body, in_reply_to, thread_id, received_at")
+      .eq("id", emailId)
+      .single();
 
-    if (results.length === 0) {
-      return "";
+    if (emailError || !email) {
+      console.error("[search] Error fetching email:", emailError);
+      return null;
     }
 
-    // Format the results for the AI
-    return formatContextForAI(results);
+    // 2. Get email thread history (previous emails in this conversation)
+    const threadHistory: EmailContext["threadHistory"] = [];
+    if (email.thread_id || email.in_reply_to) {
+      const { data: threadEmails } = await supabase
+        .from("emails")
+        .select("id, from_address, subject, text_body, direction, created_at")
+        .eq("agent_id", agentId)
+        .or(
+          email.thread_id
+            ? `thread_id.eq.${email.thread_id}`
+            : `message_id.eq.${email.in_reply_to},in_reply_to.eq.${email.in_reply_to}`
+        )
+        .neq("id", emailId)
+        .order("created_at", { ascending: true })
+        .limit(10);
+
+      if (threadEmails) {
+        threadHistory.push(...threadEmails);
+      }
+    }
+
+    // 3. Search for related projects and tasks
+    const emailContent = `${email.subject || ""}\n${email.text_body || email.html_body || ""}`;
+    
+    const [projectResults, taskResults, semanticResults] = await Promise.all([
+      searchProjects(supabase, emailContent, agentId, {
+        matchCount: 5,
+        matchThreshold,
+      }),
+      searchTasks(supabase, emailContent, agentId, {
+        matchCount: 5,
+        matchThreshold,
+      }),
+      semanticSearchAll(supabase, emailContent, agentId, {
+        matchCount,
+        matchThreshold,
+      }),
+    ]);
+
+    // 4. Find related conversations (from past messages)
+    const conversationIds = new Set(
+      semanticResults
+        .filter((r) => r.sourceType === "message" && r.metadata.conversation_id)
+        .map((r) => (r.metadata as { conversation_id: string }).conversation_id)
+    );
+
+    const relatedConversations: EmailContext["relatedConversations"] = [];
+    if (conversationIds.size > 0) {
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id, title, channel_type")
+        .in("id", Array.from(conversationIds))
+        .limit(5);
+
+      if (conversations) {
+        for (const conv of conversations) {
+          const { data: recentMsg } = await supabase
+            .from("messages")
+            .select("content")
+            .eq("conversation_id", conv.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+
+          relatedConversations.push({
+            id: conv.id,
+            title: conv.title,
+            channel_type: conv.channel_type,
+            recentMessage: recentMsg?.content || null,
+          });
+        }
+      }
+    }
+
+    // 5. Format semantic context
+    const semanticContext = formatContextForAI(semanticResults);
+
+    return {
+      email,
+      relatedProjects: projectResults.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        status: p.status,
+        similarity: p.similarity,
+      })),
+      relatedTasks: taskResults.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        similarity: t.similarity,
+      })),
+      threadHistory,
+      relatedConversations,
+      semanticContext,
+    };
   } catch (error) {
     console.error("[search] Error gathering context for email:", error);
-    return "";
+    return null;
   }
 }
 

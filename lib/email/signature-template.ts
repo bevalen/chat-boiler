@@ -4,7 +4,7 @@
  * Generates HTML email signatures with:
  * - Agent branding: "This email is from {AgentName}, {UserName}'s Executive Assistant"
  * - MAIA branding with logo
- * - CTA: "Want your own AI Assistant? Get MAIA"
+ * - Madewell AI attribution
  */
 
 export interface SignatureParams {
@@ -59,15 +59,13 @@ export function generateEmailSignature(params: SignatureParams): string {
         This email was sent by ${agentName}, an AI assistant powered by MAIA.
         ${userEmail ? `Reply to reach ${userName} at <a href="mailto:${userEmail}" style="color: #2563EB; text-decoration: none;">${userEmail}</a>` : ""}
       </div>
-      <div style="margin-top: 12px;">
-        <a href="https://madewell-maia.vercel.app/hire" style="display: inline-block; background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
-          Want your own AI Assistant? Get MAIA
-        </a>
-      </div>
     </td>
   </tr>
   <tr>
     <td style="padding-top: 12px;">
+      <div style="color: #6B7280; font-size: 12px; margin-bottom: 6px;">
+        Maia was built by Madewell AI
+      </div>
       <table cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td>
@@ -109,7 +107,8 @@ export function generateTextSignature(params: SignatureParams): string {
   }
 
   lines.push("");
-  lines.push("Want your own AI Assistant? Get MAIA: https://madewell-maia.vercel.app/hire");
+  lines.push("Maia was built by Madewell AI");
+  lines.push("https://madewell-maia.vercel.app");
 
   return lines.join("\n");
 }
