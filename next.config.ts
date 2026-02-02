@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
 import withPWAInit from "@ducanh2912/next-pwa";
-import { withWorkflow } from "workflow/next";
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -29,5 +28,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Wrap with both PWA and Workflow support
-export default withWorkflow(withPWA(nextConfig));
+// Wrap with PWA support
+export default withPWA(nextConfig);

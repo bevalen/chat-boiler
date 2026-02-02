@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { start } from "workflow/api";
-import { executeJobWorkflow } from "@/workflows/jobs/execute-job";
+import { inngest } from "@/lib/inngest/client";
 import { getDueJobs, lockJobForExecution, unlockJobAfterFailure, markJobExecuted, markJobFailed } from "@/lib/db/scheduled-jobs";
 import { logActivity } from "@/lib/db/activity-log";
 import { createNotification } from "@/lib/db/notifications";
@@ -19,7 +18,8 @@ export const maxDuration = 60;
 
 /**
  * Master dispatcher endpoint called by Vercel Cron every minute
- * Starts Vercel Workflows for each due scheduled job
+ * Dispatches agent_task jobs to Inngest for durable execution
+ * Executes lightweight jobs (notify, webhook) directly
  */
 export async function POST(request: Request) {
   console.log("[dispatcher] Starting job dispatch cycle");
@@ -127,8 +127,12 @@ export async function POST(request: Request) {
         }).catch((err) => console.error("[dispatcher] Failed to log job start:", err));
 
         if (job.action_type === "agent_task") {
-          // Durable execution for long-running agent work
-          await start(executeJobWorkflow, [{ job }]);
+          // Durable execution via Inngest for long-running agent work
+          await inngest.send({
+            name: "job/scheduled.execute",
+            data: { job },
+          });
+          console.log(`[dispatcher] Sent job ${job.id} to Inngest for durable execution`);
           results.push({
             jobId: job.id,
             title: job.title,
@@ -214,8 +218,8 @@ export async function GET(request: Request) {
 }
 
 /**
- * Execute a job directly by calling the chat API
- * This approach works but has a 60-second timeout on Vercel
+ * Execute a job directly (for lightweight jobs like notify and webhook)
+ * Agent tasks are handled by Inngest for durable execution
  */
 async function executeJobDirectly(
   supabase: ReturnType<typeof getAdminClient>,
@@ -224,11 +228,10 @@ async function executeJobDirectly(
   switch (job.action_type) {
     case "notify":
       return executeNotifyAction(supabase, job);
-    case "agent_task":
-      return executeAgentTaskAction(supabase, job);
     case "webhook":
       return executeWebhookAction(job);
     default:
+      // agent_task is handled by Inngest before reaching here
       return { success: false, error: `Unknown action type: ${job.action_type}` };
   }
 }
@@ -303,114 +306,6 @@ async function executeNotifyAction(
   );
 
   return { success: true, data: { conversationId, message: notificationContent } };
-}
-
-/**
- * Execute an agent task action - calls the chat API to run the AI agent
- */
-async function executeAgentTaskAction(
-  supabase: ReturnType<typeof getAdminClient>,
-  job: ScheduledJob
-): Promise<{ success: boolean; data?: unknown; error?: string }> {
-  const payload = job.action_payload as ActionPayload;
-  const instruction = payload?.instruction || job.description || "Execute scheduled task";
-  const { data: agent } = await supabase
-    .from("agents")
-    .select("user_id")
-    .eq("id", job.agent_id)
-    .single();
-
-  // Create a NEW conversation for this agent task
-  const { data: newConv, error: convError } = await supabase
-    .from("conversations")
-    .insert({
-      agent_id: job.agent_id,
-      channel_type: "app",
-      status: "active",
-      title: `Scheduled: ${job.title}`,
-    })
-    .select("id")
-    .single();
-
-  if (convError || !newConv) {
-    return { success: false, error: "Could not create conversation for agent task" };
-  }
-
-  const conversationId = newConv.id;
-  const userMessage = `[Scheduled Task: ${job.title}]\n\n${instruction}`;
-
-  // Insert the user message first
-  const { error: msgError } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    role: "user",
-    content: userMessage,
-    metadata: { type: "scheduled_agent_task", job_id: job.id },
-  });
-
-  if (msgError) {
-    return { success: false, error: msgError.message };
-  }
-
-  // Call the chat API to run the actual AI agent
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  
-  console.log(`[executeAgentTaskAction] Calling chat API for job ${job.id} at ${baseUrl}`);
-
-  try {
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const response = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-cron": process.env.CRON_SECRET || "internal",
-        ...(serviceRoleKey ? { Authorization: `Bearer ${serviceRoleKey}` } : {}),
-      },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: userMessage }],
-        channelSource: "cron",
-        userId: agent?.user_id,
-        agentId: job.agent_id,
-        conversationId: conversationId,
-        isBackgroundTask: true,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[executeAgentTaskAction] Chat API returned ${response.status}: ${errorText}`);
-      return { success: false, error: `Chat API error: ${response.status}` };
-    }
-
-    // Stream the response to ensure it completes
-    const reader = response.body?.getReader();
-    if (reader) {
-      let fullResponse = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        fullResponse += new TextDecoder().decode(value);
-      }
-      console.log(`[executeAgentTaskAction] Chat API completed for job ${job.id}, response length: ${fullResponse.length}`);
-    }
-
-    // Create notification
-    await createNotification(
-      supabase,
-      job.agent_id,
-      "task_update",
-      `Scheduled task completed: ${job.title}`,
-      instruction.substring(0, 200),
-      "conversation",
-      conversationId
-    );
-
-    return { success: true, data: { conversationId, instruction } };
-  } catch (fetchError) {
-    const errorMsg = fetchError instanceof Error ? fetchError.message : "Unknown fetch error";
-    console.error(`[executeAgentTaskAction] Fetch error for job ${job.id}:`, errorMsg);
-    return { success: false, error: errorMsg };
-  }
 }
 
 /**

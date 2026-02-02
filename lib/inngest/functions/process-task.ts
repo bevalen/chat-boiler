@@ -1,129 +1,170 @@
-import { DurableAgent } from "@workflow/ai/agent";
-import { getWritable } from "workflow";
-import { tool } from "ai";
+import { inngest } from "../client";
+import { tool, streamText, stepCountIs } from "ai";
 import { z } from "zod";
-import type { UIMessageChunk } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { buildSystemPrompt, getAgentById } from "@/lib/db/agents";
 import { gatherContextForTask } from "@/lib/db/search";
+import { createNotification } from "@/lib/db/notifications";
+import { createResearchTool } from "@/lib/tools";
 
-// SAFETY LIMITS to prevent runaway API costs
-const MAX_TOOL_STEPS = 30; // Maximum tool calls per task
+// SAFETY LIMITS
+const MAX_TOOL_STEPS = 30;
 
 /**
- * Process a task assigned to the agent using a durable workflow
+ * Process an agent-assigned task using Inngest for durable execution
  */
-export async function processTaskWorkflow(params: {
-  taskId: string;
-  agentId: string;
-}) {
-  "use workflow";
+export const processTaskWorkflow = inngest.createFunction(
+  {
+    id: "process-task",
+    retries: 3,
+    concurrency: {
+      limit: 3,
+      key: "event.data.agentId",
+    },
+  },
+  { event: "task/process.start" },
+  async ({ event, step }) => {
+    const { taskId, agentId } = event.data;
+    const supabase = getAdminClient();
 
-  const { taskId, agentId } = params;
-  const supabase = getAdminClient();
+    console.log(`[inngest:process-task] Starting task ${taskId}`);
 
-  // Step 1: Lock the task and mark as running
-  await lockTask(taskId);
-
-  // Step 2: Gather context for the task
-  const context = await gatherTaskContext(taskId, agentId);
-  if (!context) {
-    await failTask(taskId, "Failed to gather task context");
-    return { success: false, error: "Failed to gather task context" };
-  }
-
-  // Step 3: Build the agent prompt
-  const systemPrompt = buildTaskAgentPrompt(context);
-
-  // Step 4: Create and run the durable agent
-  const writable = getWritable<UIMessageChunk>();
-
-  const agent = new DurableAgent({
-    model: "anthropic/claude-sonnet-4",
-    system: systemPrompt,
-    tools: createTaskTools(supabase, agentId, taskId),
-  });
-
-  try {
-    await agent.stream({
-      messages: [
-        {
-          role: "user",
-          content: `Begin working on the task: "${context.task.title}"`,
-        },
-      ],
-      writable,
-      maxSteps: MAX_TOOL_STEPS, // CRITICAL: Prevent infinite tool loops
+    // Step 1: Lock the task
+    await step.run("lock-task", async () => {
+      await supabase
+        .from("tasks")
+        .update({
+          agent_run_state: "running",
+          last_agent_run_at: new Date().toISOString(),
+          lock_expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        })
+        .eq("id", taskId);
     });
 
-    // Step 5: Get final task status
-    const { data: finalTask } = await supabase
-      .from("tasks")
-      .select("status, agent_run_state")
-      .eq("id", taskId)
-      .single();
+    // Step 2: Gather context
+    const context = await step.run("gather-context", async () => {
+      return await gatherContextForTask(supabase, agentId, taskId);
+    });
 
-    // Step 6: Release lock
-    await releaseLock(taskId);
+    if (!context) {
+      await step.run("fail-task-no-context", async () => {
+        await supabase
+          .from("tasks")
+          .update({
+            agent_run_state: "failed",
+            failure_reason: "Failed to gather task context",
+            lock_expires_at: null,
+          })
+          .eq("id", taskId);
+      });
+      return { success: false, error: "Failed to gather task context" };
+    }
 
-    return {
-      success: true,
-      taskId,
-      finalStatus: finalTask?.status || "in_progress",
-    };
-  } catch (error) {
-    await failTask(taskId, error instanceof Error ? error.message : "Unknown error");
-    return {
-      success: false,
-      taskId,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+    // Step 3: Get agent and build prompt
+    const agentContext = await step.run("load-agent", async () => {
+      const agent = await getAgentById(supabase, agentId);
+      if (!agent) throw new Error("Agent not found");
+
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("name, timezone, email")
+        .eq("user_id", agent.userId)
+        .single();
+
+      const systemPrompt = await buildSystemPrompt(agent, {
+        id: agent.userId,
+        name: profile?.name || "User",
+        timezone: profile?.timezone || undefined,
+        email: profile?.email || undefined,
+      });
+
+      return { agent, systemPrompt };
+    });
+
+    // Build task-specific prompt
+    const taskPrompt = buildTaskAgentPrompt(context);
+    const combinedSystemPrompt = `${agentContext.systemPrompt}\n\n${taskPrompt}`;
+
+    // Step 4: Create tools and run agent
+    const result = await step.run("run-agent", async () => {
+      const tools = createTaskTools(supabase, agentId, taskId);
+
+      try {
+        const result = streamText({
+          model: openai("gpt-4o"),
+          system: combinedSystemPrompt,
+          messages: [
+            {
+              role: "user",
+              content: `Begin working on the task: "${context.task.title}"`,
+            },
+          ],
+          tools,
+          toolChoice: "auto",
+          stopWhen: stepCountIs(MAX_TOOL_STEPS),
+        });
+
+        // Collect response
+        let response = "";
+        for await (const chunk of result.textStream) {
+          response += chunk;
+        }
+
+        return { success: true, response };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        console.error(`[inngest:process-task] Agent error:`, errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    });
+
+    // Step 5: Get final status and cleanup
+    const finalResult = await step.run("finalize", async () => {
+      const { data: finalTask } = await supabase
+        .from("tasks")
+        .select("status, agent_run_state, title")
+        .eq("id", taskId)
+        .single();
+
+      // Release lock
+      await supabase.from("tasks").update({ lock_expires_at: null }).eq("id", taskId);
+
+      // If task wasn't explicitly completed or paused, mark as needing attention
+      if (result.success && finalTask?.agent_run_state === "running") {
+        await supabase
+          .from("tasks")
+          .update({ agent_run_state: "completed" })
+          .eq("id", taskId);
+      } else if (!result.success) {
+        const errorMsg = "error" in result ? result.error : "Unknown error";
+        await supabase
+          .from("tasks")
+          .update({
+            agent_run_state: "failed",
+            failure_reason: errorMsg,
+          })
+          .eq("id", taskId);
+
+        await supabase.from("comments").insert({
+          task_id: taskId,
+          author_type: "system",
+          content: `Task processing failed: ${errorMsg}`,
+          comment_type: "note",
+        });
+      }
+
+      return {
+        success: result.success,
+        taskId,
+        finalStatus: finalTask?.status || "in_progress",
+      };
+    });
+
+    console.log(`[inngest:process-task] Completed task ${taskId}: ${finalResult.success ? "success" : "failed"}`);
+    return finalResult;
   }
-}
-
-async function lockTask(taskId: string) {
-  "use step";
-  const supabase = getAdminClient();
-  await supabase
-    .from("tasks")
-    .update({
-      agent_run_state: "running",
-      last_agent_run_at: new Date().toISOString(),
-      lock_expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    })
-    .eq("id", taskId);
-}
-
-async function gatherTaskContext(taskId: string, agentId: string) {
-  "use step";
-  const supabase = getAdminClient();
-  return await gatherContextForTask(supabase, agentId, taskId);
-}
-
-async function failTask(taskId: string, reason: string) {
-  "use step";
-  const supabase = getAdminClient();
-  await supabase
-    .from("tasks")
-    .update({
-      agent_run_state: "failed",
-      failure_reason: reason,
-      lock_expires_at: null,
-    })
-    .eq("id", taskId);
-
-  await supabase.from("comments").insert({
-    task_id: taskId,
-    author_type: "system",
-    content: `Task processing failed: ${reason}`,
-    comment_type: "note",
-  });
-}
-
-async function releaseLock(taskId: string) {
-  "use step";
-  const supabase = getAdminClient();
-  await supabase.from("tasks").update({ lock_expires_at: null }).eq("id", taskId);
-}
+);
 
 function buildTaskAgentPrompt(context: NonNullable<Awaited<ReturnType<typeof gatherContextForTask>>>) {
   const sections: string[] = [];
@@ -148,9 +189,12 @@ function buildTaskAgentPrompt(context: NonNullable<Awaited<ReturnType<typeof gat
 
   if (context.comments.length > 0) {
     sections.push(`## PREVIOUS PROGRESS`);
-    [...context.comments].reverse().slice(0, 10).forEach((c) => {
-      sections.push(`[${c.author_type}] ${c.content}`);
-    });
+    [...context.comments]
+      .reverse()
+      .slice(0, 10)
+      .forEach((c) => {
+        sections.push(`[${c.author_type}] ${c.content}`);
+      });
     sections.push(``);
   }
 
@@ -175,14 +219,16 @@ function createTaskTools(
   taskId: string
 ) {
   return {
+    // Research tool
+    research: createResearchTool(agentId),
+
     logProgress: tool({
       description: "Log progress on the current task",
       inputSchema: z.object({
         content: z.string().describe("Progress update"),
         commentType: z.enum(["progress", "note"]).optional(),
       }),
-      execute: async ({ content, commentType }) => {
-        "use step";
+      execute: async ({ content, commentType }: { content: string; commentType?: "progress" | "note" }) => {
         const { data, error } = await supabase
           .from("comments")
           .insert({
@@ -204,8 +250,7 @@ function createTaskTools(
       inputSchema: z.object({
         resolution: z.string().describe("What was accomplished"),
       }),
-      execute: async ({ resolution }) => {
-        "use step";
+      execute: async ({ resolution }: { resolution: string }) => {
         await supabase.from("comments").insert({
           task_id: taskId,
           author_type: "agent",
@@ -227,8 +272,15 @@ function createTaskTools(
 
         if (error) return { success: false, error: error.message };
 
-        const { createNotification } = await import("@/lib/db/notifications");
-        await createNotification(supabase, agentId, "task_update", `Task completed: ${data.title}`, resolution.substring(0, 200), "task", taskId);
+        await createNotification(
+          supabase,
+          agentId,
+          "task_update",
+          `Task completed: ${data.title}`,
+          resolution.substring(0, 200),
+          "task",
+          taskId
+        );
 
         return { success: true, message: "Task completed", stopped: true };
       },
@@ -240,9 +292,10 @@ function createTaskTools(
         question: z.string().describe("What you need from the user"),
         context: z.string().optional().describe("Additional context"),
       }),
-      execute: async ({ question, context }) => {
-        "use step";
-        const content = context ? `**Waiting for input:** ${question}\n\n${context}` : `**Waiting for input:** ${question}`;
+      execute: async ({ question, context }: { question: string; context?: string }) => {
+        const content = context
+          ? `**Waiting for input:** ${question}\n\n${context}`
+          : `**Waiting for input:** ${question}`;
 
         await supabase.from("comments").insert({
           task_id: taskId,
@@ -261,8 +314,15 @@ function createTaskTools(
 
         if (error) return { success: false, error: error.message };
 
-        const { createNotification } = await import("@/lib/db/notifications");
-        await createNotification(supabase, agentId, "task_update", `Input needed: ${data.title}`, question.substring(0, 200), "task", taskId);
+        await createNotification(
+          supabase,
+          agentId,
+          "task_update",
+          `Input needed: ${data.title}`,
+          question.substring(0, 200),
+          "task",
+          taskId
+        );
 
         return { success: true, message: "Requested human input", stopped: true };
       },
@@ -275,8 +335,7 @@ function createTaskTools(
         checkAt: z.string().describe("When to check (ISO datetime)"),
         instruction: z.string().optional().describe("What to do when following up"),
       }),
-      execute: async ({ reason, checkAt, instruction }) => {
-        "use step";
+      execute: async ({ reason, checkAt, instruction }: { reason: string; checkAt: string; instruction?: string }) => {
         const { createScheduledJob } = await import("@/lib/db/scheduled-jobs");
 
         const { data: task } = await supabase.from("tasks").select("title").eq("id", taskId).single();
@@ -316,17 +375,24 @@ function createTaskTools(
         priority: z.enum(["high", "medium", "low"]).optional(),
         assignToAgent: z.boolean().optional().default(true),
       }),
-      execute: async ({ title, description, priority, assignToAgent }) => {
-        "use step";
+      execute: async ({ title, description, priority, assignToAgent }: { title: string; description?: string; priority?: "high" | "medium" | "low"; assignToAgent?: boolean }) => {
         const { generateEmbedding } = await import("@/lib/embeddings");
 
-        const { data: parentTask } = await supabase.from("tasks").select("project_id").eq("id", taskId).single();
+        const { data: parentTask } = await supabase
+          .from("tasks")
+          .select("project_id")
+          .eq("id", taskId)
+          .single();
 
         let assigneeId: string | null = null;
         if (assignToAgent) {
           assigneeId = agentId;
         } else {
-          const { data: agentData } = await supabase.from("agents").select("user_id").eq("id", agentId).single();
+          const { data: agentData } = await supabase
+            .from("agents")
+            .select("user_id")
+            .eq("id", agentId)
+            .single();
           assigneeId = agentData?.user_id || null;
         }
 
@@ -368,8 +434,7 @@ function createTaskTools(
       inputSchema: z.object({
         query: z.string().describe("What to search for"),
       }),
-      execute: async ({ query }) => {
-        "use step";
+      execute: async ({ query }: { query: string }) => {
         const { semanticSearchAll, formatContextForAI } = await import("@/lib/db/search");
         const results = await semanticSearchAll(supabase, query, agentId, {
           matchCount: 10,

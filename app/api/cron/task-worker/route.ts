@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { start } from "workflow/api";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/db/activity-log";
-import { processTaskWorkflow } from "@/workflows/tasks/process-task";
+import { inngest } from "@/lib/inngest/client";
 
 export const maxDuration = 60;
 
 /**
- * Task Worker - Polls for agent-assigned tasks and starts workflows to process them
+ * Task Worker - Polls for agent-assigned tasks and sends them to Inngest for durable processing
  * This endpoint is called by Vercel Cron every 5 minutes
  */
 export async function POST(request: Request) {
@@ -87,13 +86,16 @@ export async function POST(request: Request) {
           status: "started",
         }).catch((err) => console.error("[task-worker] Failed to log task start:", err));
 
-        // Start the workflow
-        await start(processTaskWorkflow, [{
-          taskId: task.id,
-          agentId: task.agent_id,
-        }]);
+        // Send to Inngest for durable processing
+        await inngest.send({
+          name: "task/process.start",
+          data: {
+            taskId: task.id,
+            agentId: task.agent_id,
+          },
+        });
 
-        console.log(`[task-worker] Workflow started for task ${task.id}`);
+        console.log(`[task-worker] Sent task ${task.id} to Inngest for processing`);
 
         results.push({
           taskId: task.id,
