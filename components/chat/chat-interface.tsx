@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Copy } from "lucide-react";
+import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Copy, CheckCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -107,6 +107,7 @@ export function ChatInterface({
   // Optimistic message shown while creating first conversation
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   // Use a ref to always have the latest conversationId in the transport
   const conversationIdRef = useRef<string | null>(null);
@@ -1058,11 +1059,17 @@ export function ChatInterface({
                               .map((p) => p.text)
                               .join("\n");
                             navigator.clipboard.writeText(textContent);
+                            setCopiedMessageId(message.id);
+                            setTimeout(() => setCopiedMessageId(null), 2000);
                           }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-                          title="Copy message"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
+                          title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
                         >
-                          <Copy className="w-3 h-3" />
+                          {copiedMessageId === message.id ? (
+                            <CheckCheck className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
                         </button>
                       </div>
                     </div>
