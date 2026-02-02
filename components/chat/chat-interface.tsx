@@ -1043,6 +1043,27 @@ export function ChatInterface({
                       <div className={`flex items-center gap-2 px-1 ${
                         message.role === "user" ? "justify-end" : "justify-start"
                       }`}>
+                        {message.role === "user" && (
+                          <button
+                            onClick={() => {
+                              const textContent = message.parts
+                                .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                                .map((p) => p.text)
+                                .join("\n");
+                              navigator.clipboard.writeText(textContent);
+                              setCopiedMessageId(message.id);
+                              setTimeout(() => setCopiedMessageId(null), 2000);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
+                            title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
+                          >
+                            {copiedMessageId === message.id ? (
+                              <CheckCheck className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        )}
                         {(message as any).createdAt && (
                           <span className="text-[10px] text-muted-foreground/50">
                             {new Date((message as any).createdAt).toLocaleTimeString([], { 
@@ -1052,25 +1073,27 @@ export function ChatInterface({
                             })}
                           </span>
                         )}
-                        <button
-                          onClick={() => {
-                            const textContent = message.parts
-                              .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                              .map((p) => p.text)
-                              .join("\n");
-                            navigator.clipboard.writeText(textContent);
-                            setCopiedMessageId(message.id);
-                            setTimeout(() => setCopiedMessageId(null), 2000);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
-                          title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
-                        >
-                          {copiedMessageId === message.id ? (
-                            <CheckCheck className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
+                        {message.role === "assistant" && (
+                          <button
+                            onClick={() => {
+                              const textContent = message.parts
+                                .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                                .map((p) => p.text)
+                                .join("\n");
+                              navigator.clipboard.writeText(textContent);
+                              setCopiedMessageId(message.id);
+                              setTimeout(() => setCopiedMessageId(null), 2000);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
+                            title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
+                          >
+                            {copiedMessageId === message.id ? (
+                              <CheckCheck className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
 
