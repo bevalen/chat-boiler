@@ -1514,7 +1514,7 @@ export interface LinkedInCredentials {
 }
 
 // Common type aliases
-export type ChannelType = "web" | "email" | "linkedin";
+export type ChannelType = "app" | "web" | "email" | "linkedin";
 export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
 export type AgentRunState = "idle" | "running" | "completed" | "failed";
 export type CommentType = "note" | "status_change" | "system";

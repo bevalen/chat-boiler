@@ -40,7 +40,7 @@ export function buildMessageMetadata(
     linkedin_sender_company?: string;
   }
 ): MessageMetadata | undefined {
-  if (!channelSource || channelSource === "app") {
+  if (!channelSource || channelSource === "app" || channelSource === "cron") {
     return undefined;
   }
 
