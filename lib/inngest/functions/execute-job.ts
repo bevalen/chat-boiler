@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { tool, streamText, stepCountIs } from "ai";
+import { tool, generateText } from "ai";
 import { z } from "zod";
 import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -276,23 +276,25 @@ async function executeAgentTaskAction(
   let finalResponse = "";
 
   try {
-    // Use streamText with tool calling support
-    const result = streamText({
+    // Use generateText for background jobs (returns complete result with tool calls)
+    const result = await generateText({
       model: openai("gpt-4o"),
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
       tools,
       toolChoice: "auto",
-      stopWhen: stepCountIs(MAX_TOOL_STEPS),
+      maxSteps: MAX_TOOL_STEPS,
     });
 
-    // Collect the full response
-    for await (const chunk of result.textStream) {
-      finalResponse += chunk;
+    // Extract the final text response
+    finalResponse = result.text || "Task completed.";
+    
+    console.log(`[inngest:execute-job] Agent completed job ${job.id} with ${result.steps?.length || 0} steps`);
+    
+    // Log tool usage for debugging
+    if (result.steps && result.steps.length > 0) {
+      console.log(`[inngest:execute-job] Tool calls made:`, result.steps.map(s => s.toolName || 'text').join(', '));
     }
-
-    finalResponse = finalResponse || "Task completed.";
-    console.log(`[inngest:execute-job] Agent completed job ${job.id}`);
   } catch (agentError) {
     const errorMsg = agentError instanceof Error ? agentError.message : "Agent execution failed";
     console.error(`[inngest:execute-job] Agent error for job ${job.id}:`, errorMsg);

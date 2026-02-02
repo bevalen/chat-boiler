@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { tool, streamText, stepCountIs } from "ai";
+import { tool, generateText } from "ai";
 import { z } from "zod";
 import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -176,20 +176,17 @@ Focus on making real progress. If you need more information or are blocked, upda
 `;
 
           // Run the AI agent
-          const result = streamText({
+          const result = await generateText({
             model: openai("gpt-4o"),
             system: context.systemPrompt,
             messages: [{ role: "user", content: taskPrompt }],
             tools,
             toolChoice: "auto",
-            stopWhen: stepCountIs(MAX_TOOL_STEPS_PER_TASK),
+            maxSteps: MAX_TOOL_STEPS_PER_TASK,
           });
 
-          // Collect response
-          let response = "";
-          for await (const chunk of result.textStream) {
-            response += chunk;
-          }
+          // Get response text
+          const response = result.text;
 
           // Save agent's work to conversation
           if (conversationId) {

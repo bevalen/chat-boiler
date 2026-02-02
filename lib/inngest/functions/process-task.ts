@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { tool, streamText, stepCountIs } from "ai";
+import { tool, generateText } from "ai";
 import { z } from "zod";
 import { openai } from "@ai-sdk/openai";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -91,7 +91,7 @@ export const processTaskWorkflow = inngest.createFunction(
       const tools = createTaskTools(supabase, agentId, taskId);
 
       try {
-        const result = streamText({
+        const result = await generateText({
           model: openai("gpt-4o"),
           system: combinedSystemPrompt,
           messages: [
@@ -102,14 +102,12 @@ export const processTaskWorkflow = inngest.createFunction(
           ],
           tools,
           toolChoice: "auto",
-          stopWhen: stepCountIs(MAX_TOOL_STEPS),
+          maxSteps: MAX_TOOL_STEPS,
         });
 
-        // Collect response
-        let response = "";
-        for await (const chunk of result.textStream) {
-          response += chunk;
-        }
+        const response = result.text;
+        
+        console.log(`[inngest:process-task] Agent completed with ${result.steps?.length || 0} steps`);
 
         return { success: true, response };
       } catch (error) {
