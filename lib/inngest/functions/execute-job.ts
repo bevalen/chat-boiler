@@ -290,7 +290,16 @@ async function executeAgentTaskAction(
   });
 
   // Create comprehensive tools for the agent
-  const tools = createAgentTools(supabase, job.agent_id, payload?.taskId, conversationId);
+  const tools = createAgentTools(
+    supabase, 
+    job.agent_id, 
+    agent.userId,
+    agent.name,
+    profile?.name || "User",
+    profile?.email,
+    payload?.taskId, 
+    conversationId
+  );
 
   let finalResponse = "";
 
@@ -402,14 +411,18 @@ async function executeWebhookAction(
 function createAgentTools(
   supabase: ReturnType<typeof getAdminClient>,
   agentId: string,
+  userId: string,
+  agentName: string,
+  userName: string,
+  userEmail?: string,
   taskId?: string,
   conversationId?: string
 ) {
   return {
     // Email tools from lib/tools
     checkEmail: createCheckEmailTool(agentId),
-    sendEmail: createSendEmailTool(agentId),
-    replyToEmail: createReplyToEmailTool(agentId),
+    sendEmail: createSendEmailTool(agentId, userId, agentName, userName, userEmail),
+    replyToEmail: createReplyToEmailTool(agentId, userId, agentName, userName, userEmail),
 
     // Research tool
     research: createResearchTool(agentId),
