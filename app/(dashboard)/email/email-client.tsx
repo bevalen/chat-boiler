@@ -99,18 +99,24 @@ function ThreadSkeleton() {
           </div>
           {/* Expanded content for last item */}
           {i === 2 && (
-            <div className="ml-7 sm:ml-11 mr-2 sm:mr-4 mt-2 mb-4 space-y-3">
+            <div className="ml-5 sm:ml-11 mr-1 sm:mr-4 mt-2 mb-4 space-y-3 overflow-hidden">
               {/* Headers */}
-              <div className="space-y-1">
-                <Skeleton className="h-3 w-full max-w-[280px]" />
-                <Skeleton className="h-3 w-full max-w-[220px]" />
+              <div className="space-y-2">
+                <div>
+                  <Skeleton className="h-3 w-12 mb-1" />
+                  <Skeleton className="h-3 w-full max-w-[250px]" />
+                </div>
+                <div>
+                  <Skeleton className="h-3 w-8 mb-1" />
+                  <Skeleton className="h-3 w-full max-w-[180px]" />
+                </div>
               </div>
               {/* Body */}
               <div className="space-y-2 mt-4">
                 <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-                <Skeleton className="h-4 w-4/6" />
-                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-11/12" />
+                <Skeleton className="h-4 w-10/12" />
+                <Skeleton className="h-4 w-full" />
               </div>
             </div>
           )}
@@ -464,21 +470,21 @@ export function EmailClient({
         </div>
 
         {/* Thread Messages */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 overflow-x-hidden">
           {isLoadingThread ? (
             <ThreadSkeleton />
           ) : (
-            <div className="max-w-4xl mx-auto py-4 px-2 sm:px-4 overflow-x-hidden">
+            <div className="max-w-4xl mx-auto py-4 px-2 sm:px-4 overflow-x-hidden w-full">
               {selectedThread?.map((email, index) => {
                 const isExpanded = expandedEmails.has(email.id);
                 const attachments = threadAttachments.get(email.id) || [];
                 
                 return (
-                  <div key={email.id} className="mb-2">
+                  <div key={email.id} className="mb-2 overflow-hidden">
                     {/* Collapsed Email Header */}
                     <div
                       className={cn(
-                        "flex items-center gap-3 px-2 sm:px-4 py-3 rounded-lg cursor-pointer transition-colors max-w-full overflow-hidden",
+                        "flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-3 rounded-lg cursor-pointer transition-colors overflow-hidden",
                         isExpanded ? "bg-muted/50" : "hover:bg-muted/30"
                       )}
                       onClick={() => toggleEmailExpanded(email.id)}
@@ -556,23 +562,23 @@ export function EmailClient({
                     
                     {/* Expanded Email Content */}
                     {isExpanded && (
-                      <div className="ml-7 sm:ml-11 mr-2 sm:mr-4 mt-2 mb-4 overflow-x-hidden max-w-full">
+                      <div className="ml-5 sm:ml-11 mr-1 sm:mr-4 mt-2 mb-4 overflow-hidden" style={{ maxWidth: 'calc(100% - 1.5rem)' }}>
                         {/* Headers */}
-                        <div className="text-xs text-muted-foreground mb-4 space-y-0.5">
-                          <div className="flex flex-col sm:flex-row sm:items-start gap-0 sm:gap-1">
-                            <span className="inline-block w-10 shrink-0 font-medium sm:font-normal">From:</span>
-                            <span className="text-foreground break-all sm:break-words">
+                        <div className="text-xs text-muted-foreground mb-4 space-y-2 overflow-hidden">
+                          <div className="overflow-hidden">
+                            <span className="font-medium block mb-0.5">From:</span>
+                            <span className="text-foreground break-all block overflow-hidden">
                               {email.from_name ? `${email.from_name} <${email.from_address}>` : email.from_address}
                             </span>
                           </div>
-                          <div className="flex flex-col sm:flex-row sm:items-start gap-0 sm:gap-1">
-                            <span className="inline-block w-10 shrink-0 font-medium sm:font-normal">To:</span>
-                            <span className="text-foreground break-all sm:break-words">{email.to_addresses.join(", ")}</span>
+                          <div className="overflow-hidden">
+                            <span className="font-medium block mb-0.5">To:</span>
+                            <span className="text-foreground break-all block overflow-hidden">{email.to_addresses.join(", ")}</span>
                           </div>
                           {email.cc_addresses && email.cc_addresses.length > 0 && (
-                            <div className="flex flex-col sm:flex-row sm:items-start gap-0 sm:gap-1">
-                              <span className="inline-block w-10 shrink-0 font-medium sm:font-normal">Cc:</span>
-                              <span className="text-foreground break-all sm:break-words">{email.cc_addresses.join(", ")}</span>
+                            <div className="overflow-hidden">
+                              <span className="font-medium block mb-0.5">Cc:</span>
+                              <span className="text-foreground break-all block overflow-hidden">{email.cc_addresses.join(", ")}</span>
                             </div>
                           )}
                         </div>
@@ -596,10 +602,11 @@ export function EmailClient({
                         )}
                         
                         {/* Body */}
-                        <div className="text-sm email-body-content overflow-x-hidden max-w-full">
+                        <div className="text-sm email-body-content overflow-hidden">
                           {email.html_body ? (
                             <div
-                              className="max-w-full overflow-x-hidden"
+                              className="overflow-hidden"
+                              style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                               dangerouslySetInnerHTML={{ 
                                 __html: typeof window !== "undefined" 
                                   ? cleanEmailHtml(email.html_body) 
@@ -607,7 +614,10 @@ export function EmailClient({
                               }}
                             />
                           ) : (
-                            <pre className="whitespace-pre-wrap font-sans break-words max-w-full overflow-x-hidden">
+                            <pre 
+                              className="whitespace-pre-wrap font-sans overflow-hidden" 
+                              style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+                            >
                               {email.text_body || "No content"}
                             </pre>
                           )}
@@ -615,7 +625,7 @@ export function EmailClient({
                       </div>
                     )}
                     
-                    {index < selectedThread.length - 1 && <Separator className="my-2" />}
+                    {selectedThread && index < selectedThread.length - 1 && <Separator className="my-2" />}
                   </div>
                 );
               })}
@@ -627,10 +637,18 @@ export function EmailClient({
         <style jsx global>{`
           .email-body-content {
             line-height: 1.5;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            word-break: break-word;
-            max-width: 100%;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            word-break: break-word !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+          }
+          .email-body-content * {
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            word-break: break-word !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
           }
           .email-body-content img {
             max-width: 150px !important;
@@ -642,9 +660,10 @@ export function EmailClient({
             }
           }
           .email-body-content table {
-            max-width: 100%;
+            max-width: 100% !important;
+            width: auto !important;
             font-size: 13px;
-            display: block;
+            display: block !important;
             overflow-x: auto;
           }
           .email-body-content table img {
@@ -660,8 +679,8 @@ export function EmailClient({
           }
           .email-body-content a {
             color: hsl(var(--primary));
-            word-break: break-all;
-            overflow-wrap: break-word;
+            word-break: break-all !important;
+            overflow-wrap: break-word !important;
           }
           .email-body-content hr {
             margin: 16px 0;
@@ -685,7 +704,7 @@ export function EmailClient({
           }
           .email-body-content table td {
             padding: 2px 4px !important;
-            word-break: break-word;
+            word-break: break-word !important;
           }
           .email-body-content table br {
             display: none;
@@ -696,17 +715,12 @@ export function EmailClient({
           }
           .email-body-content p {
             margin: 0 0 8px 0;
-            word-break: break-word;
+            word-break: break-word !important;
           }
           .email-body-content div,
           .email-body-content span {
-            word-break: break-word;
-            overflow-wrap: break-word;
-          }
-          /* Ensure long text wraps properly */
-          .email-body-content * {
-            max-width: 100%;
-            word-wrap: break-word;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
           }
         `}</style>
       </div>
