@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   MessageSquare,
+  Mail,
   FolderKanban,
   ListTodo,
   Clock,
@@ -30,7 +31,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +49,11 @@ const navItems = [
     title: "Chat",
     url: "/",
     icon: MessageSquare,
+  },
+  {
+    title: "Email",
+    url: "/email",
+    icon: Mail,
   },
   {
     title: "Projects",
@@ -103,11 +111,14 @@ interface AppSidebarProps {
     email: string;
     name?: string;
   };
+  agentId?: string;
 }
 
-export function AppSidebar({ user }: AppSidebarProps) {
+export function AppSidebar({ user, agentId }: AppSidebarProps) {
   const pathname = usePathname();
   const { setOpen, setOpenMobile, isMobile } = useSidebar();
+  const [unreadEmailCount, setUnreadEmailCount] = useState(0);
+  const supabase = createClient();
 
   // Close mobile menu when navigating
   const handleNavClick = () => {
@@ -124,6 +135,49 @@ export function AppSidebar({ user }: AppSidebarProps) {
       setOpen(true);
     }
   }, [pathname]); // Only run on path change, not on state change
+
+  // Fetch unread email count and subscribe to real-time updates
+  useEffect(() => {
+    if (!agentId) return;
+
+    // Fetch initial unread count
+    const fetchUnreadCount = async () => {
+      const { count, error } = await supabase
+        .from("emails")
+        .select("*", { count: "exact", head: true })
+        .eq("agent_id", agentId)
+        .eq("is_read", false)
+        .eq("direction", "inbound");
+
+      if (!error && count !== null) {
+        setUnreadEmailCount(count);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel(`sidebar-emails:${agentId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "emails",
+          filter: `agent_id=eq.${agentId}`,
+        },
+        () => {
+          // Refetch count on any email change
+          fetchUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [agentId, supabase]);
 
   const initials = user.name
     ? user.name
@@ -165,21 +219,38 @@ export function AppSidebar({ user }: AppSidebarProps) {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.url}
-                    tooltip={item.title}
-                    className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-white/5 transition-all duration-200"
-                  >
-                    <Link href={item.url} onClick={handleNavClick} className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navItems.map((item) => {
+                const showBadge = item.title === "Email" && unreadEmailCount > 0;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.url || (item.url === "/email" && pathname.startsWith("/email"))}
+                      tooltip={showBadge ? `${item.title} (${unreadEmailCount} unread)` : item.title}
+                      className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:font-medium hover:bg-white/5 transition-all duration-200"
+                    >
+                      <Link href={item.url} onClick={handleNavClick} className="flex items-center gap-3 relative">
+                        <div className="relative">
+                          <item.icon className="h-4 w-4" />
+                          {/* Badge dot for collapsed state */}
+                          {showBadge && (
+                            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary hidden group-data-[collapsible=icon]:block" />
+                          )}
+                        </div>
+                        <span className="flex-1">{item.title}</span>
+                        {showBadge && (
+                          <Badge 
+                            variant="default" 
+                            className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-semibold bg-primary text-primary-foreground group-data-[collapsible=icon]:hidden"
+                          >
+                            {unreadEmailCount > 99 ? "99+" : unreadEmailCount}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

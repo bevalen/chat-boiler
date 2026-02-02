@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   MessageSquare,
+  Mail,
   FolderKanban,
   ListTodo,
   Clock,
@@ -56,6 +57,12 @@ const navigationItems = [
     url: "/",
     icon: MessageSquare,
     keywords: ["home", "chat", "message", "conversation"],
+  },
+  {
+    title: "Email",
+    url: "/email",
+    icon: Mail,
+    keywords: ["email", "inbox", "mail", "sent", "messages"],
   },
   {
     title: "Projects",

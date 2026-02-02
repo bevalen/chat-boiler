@@ -34,6 +34,7 @@ export default async function DashboardLayout({
             email: user.email || "",
             name: profileResult.data?.name,
           }}
+          agentId={agent?.id}
         />
         <SidebarInset>
           <DashboardHeader agentId={agent?.id || null} />
