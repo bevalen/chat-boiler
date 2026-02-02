@@ -979,30 +979,14 @@ export function ChatInterface({
                       </div>
                     )}
 
-                    <div className="flex flex-col gap-1 max-w-[80%] group">
+                    <div className="flex flex-col gap-1 max-w-[80%] group relative">
                       <div
-                        className={`relative px-5 py-3 rounded-2xl text-sm leading-relaxed ${
+                        className={`px-5 py-3 rounded-2xl text-sm leading-relaxed ${
                           message.role === "user"
                             ? "bg-primary text-primary-foreground rounded-tr-sm"
                             : "bg-secondary/50 border border-white/5 rounded-tl-sm"
                         }`}
                       >
-                        {/* Copy button */}
-                        <button
-                          onClick={() => {
-                            const textContent = message.parts
-                              .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                              .map((p) => p.text)
-                              .join("\n");
-                            navigator.clipboard.writeText(textContent);
-                          }}
-                          className={`absolute top-2 ${message.role === "user" ? "left-2" : "right-2"} opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-black/10 ${
-                            message.role === "user" ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                          title="Copy message"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
                         {message.parts.map((part, index) => {
                           if (part.type === "text") {
                             return message.role === "user" ? (
@@ -1054,17 +1038,33 @@ export function ChatInterface({
                           return null;
                         })}
                       </div>
-                      {(message as any).createdAt && (
-                        <span className={`text-[10px] text-muted-foreground/50 px-1 ${
-                          message.role === "user" ? "text-right" : "text-left"
-                        }`}>
-                          {new Date((message as any).createdAt).toLocaleTimeString([], { 
-                            hour: 'numeric', 
-                            minute: '2-digit',
-                            hour12: true 
-                          })}
-                        </span>
-                      )}
+                      {/* Timestamp and Copy button row */}
+                      <div className={`flex items-center gap-2 px-1 ${
+                        message.role === "user" ? "justify-end" : "justify-start"
+                      }`}>
+                        {(message as any).createdAt && (
+                          <span className="text-[10px] text-muted-foreground/50">
+                            {new Date((message as any).createdAt).toLocaleTimeString([], { 
+                              hour: 'numeric', 
+                              minute: '2-digit',
+                              hour12: true 
+                            })}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => {
+                            const textContent = message.parts
+                              .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                              .map((p) => p.text)
+                              .join("\n");
+                            navigator.clipboard.writeText(textContent);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                          title="Copy message"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {message.role === "user" && (
