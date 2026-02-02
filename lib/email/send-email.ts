@@ -130,6 +130,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
     // Format the from address
     const fromAddress = formatFromAddress(agentName, userName, agentId);
+    const agentEmailAddress = getAgentEmailAddress(agentId);
 
     // Normalize recipients to arrays
     const toAddresses = Array.isArray(to) ? to : [to];
@@ -145,7 +146,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       text: finalTextBody || undefined,
       cc: ccAddresses,
       bcc: bccAddresses,
-      replyTo: replyTo || userEmail,
+      replyTo: replyTo || agentEmailAddress,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
       tags,
     };
@@ -182,12 +183,12 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         in_reply_to: inReplyTo || null,
         thread_id: emailThreadId,
         references_ids: references || null,
-        from_address: getAgentEmailAddress(agentId),
+        from_address: agentEmailAddress,
         from_name: `${agentName} (${userName}'s Assistant)`,
         to_addresses: toAddresses,
         cc_addresses: ccAddresses || null,
         bcc_addresses: bccAddresses || null,
-        reply_to_address: replyTo || userEmail || null,
+        reply_to_address: replyTo || agentEmailAddress || null,
         subject,
         html_body: finalHtmlBody || null,
         text_body: finalTextBody || null,

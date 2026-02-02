@@ -45,7 +45,7 @@ export function generateEmailSignature(params: SignatureParams): string {
             <img src="https://madewell-maia.vercel.app/logos/profile-icon.png" alt="${agentName}" width="48" height="48" style="border-radius: 50%; display: block;" />
           </td>
           <td style="vertical-align: top;">
-            <div style="font-weight: 600; color: #111827; font-size: 15px;">${agentName}</div>
+            <div style="font-weight: 600; color: #111827; font-size: 15px;">${agentName} @ Madewell</div>
             <div style="color: #6B7280; font-size: 13px;">${userName}'s Executive Assistant</div>
             ${userInfo ? `<div style="color: #9CA3AF; font-size: 12px; margin-top: 2px;">${userInfo}</div>` : ""}
           </td>
@@ -57,7 +57,6 @@ export function generateEmailSignature(params: SignatureParams): string {
     <td style="border-top: 1px solid #E5E7EB; padding-top: 12px;">
       <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 8px;">
         This email was sent by ${agentName}, an AI assistant powered by MAIA.
-        ${userEmail ? `Reply to reach ${userName} at <a href="mailto:${userEmail}" style="color: #2563EB; text-decoration: none;">${userEmail}</a>` : ""}
       </div>
     </td>
   </tr>
@@ -85,7 +84,7 @@ export function generateEmailSignature(params: SignatureParams): string {
  * Generate a simpler text-based signature for plain text emails
  */
 export function generateTextSignature(params: SignatureParams): string {
-  const { agentName, userName, userTitle, userCompany, userEmail } = params;
+  const { agentName, userName, userTitle, userCompany, agentEmail } = params;
 
   const lines: string[] = [
     "---",
@@ -102,8 +101,8 @@ export function generateTextSignature(params: SignatureParams): string {
   lines.push("");
   lines.push(`This email was sent by ${agentName}, an AI assistant powered by MAIA.`);
   
-  if (userEmail) {
-    lines.push(`Reply to reach ${userName} at ${userEmail}`);
+  if (agentEmail) {
+    lines.push(`Reply to reach ${agentName} at ${agentEmail}`);
   }
 
   lines.push("");
