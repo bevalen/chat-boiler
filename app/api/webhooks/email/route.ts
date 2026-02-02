@@ -389,7 +389,7 @@ export async function POST(request: Request) {
     }
 
     // Format the email with context for the AI
-    const formattedMessage = formatEmailForAI(payload, context + linkedTaskInfo);
+    const formattedMessage = formatEmailForAI(payload, linkedTaskInfo);
 
     // Send to chat API for processing
     const response = await sendToChatAPI(
