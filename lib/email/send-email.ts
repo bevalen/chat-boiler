@@ -137,7 +137,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     const bccAddresses = bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined;
 
     // Send via Resend
-    const sendOptions: Parameters<typeof resend.emails.send>[0] = {
+    const sendOptions = {
       from: fromAddress,
       to: toAddresses,
       subject,
@@ -154,7 +154,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       ? { idempotencyKey } 
       : undefined;
 
-    const { data, error } = await resend.emails.send(sendOptions, idempotencyOptions);
+    const { data, error } = await resend.emails.send(sendOptions as any, idempotencyOptions);
 
     if (error) {
       console.error("[send-email] Resend error:", error);

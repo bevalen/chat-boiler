@@ -116,7 +116,7 @@ export async function storeInboundEmail(
     subject,
     html_body: htmlBody || null,
     text_body: textBody || null,
-    headers: headers || null,
+    headers: headers as any || null,
     is_read: false,
     received_at: receivedAt,
   };
