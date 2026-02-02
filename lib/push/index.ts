@@ -1,6 +1,39 @@
 import webpush from "web-push";
 import { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Strip markdown formatting from text for push notifications
+ * Removes common markdown syntax to display plain text
+ */
+function stripMarkdown(text: string): string {
+  return text
+    // Remove bold/italic markers
+    .replace(/\*\*\*(.+?)\*\*\*/g, '$1') // bold+italic
+    .replace(/\*\*(.+?)\*\*/g, '$1')     // bold
+    .replace(/\*(.+?)\*/g, '$1')         // italic
+    .replace(/__(.+?)__/g, '$1')         // bold (underscore)
+    .replace(/_(.+?)_/g, '$1')           // italic (underscore)
+    // Remove code blocks
+    .replace(/```[\s\S]*?```/g, '[code]')
+    .replace(/`(.+?)`/g, '$1')
+    // Remove links but keep text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Remove images
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    // Remove headings
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove blockquotes
+    .replace(/^>\s+/gm, '')
+    // Remove horizontal rules
+    .replace(/^[-*_]{3,}$/gm, '')
+    // Remove list markers
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    // Clean up any remaining multiple spaces/newlines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // Configure web-push with VAPID keys
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
@@ -132,9 +165,14 @@ export async function sendNotificationPush(
     linkId?: string | null;
   }
 ): Promise<void> {
+  // Strip markdown from notification content for mobile push notifications
+  const plainTextContent = notification.content 
+    ? stripMarkdown(notification.content)
+    : "You have a new notification from MAIA";
+
   await sendPushNotification(supabase, agentId, {
     title: notification.title,
-    body: notification.content || "You have a new notification from MAIA",
+    body: plainTextContent,
     data: {
       id: notification.id,
       linkType: notification.linkType || undefined,

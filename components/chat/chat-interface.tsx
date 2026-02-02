@@ -1090,7 +1090,11 @@ export function ChatInterface({
                 className="min-h-[56px] max-h-[200px] w-full bg-transparent border-0 focus-visible:ring-0 resize-none py-4 pl-4 pr-14 text-base placeholder:text-muted-foreground/50"
                 rows={1}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  // On mobile, Enter key should add line break (only Send button sends message)
+                  // On desktop, Enter sends message, Shift+Enter adds line break
+                  const isMobile = window.innerWidth < 768;
+                  
+                  if (e.key === "Enter" && !isMobile && !e.shiftKey) {
                     e.preventDefault();
                     handleSubmit(e);
                   }
@@ -1155,8 +1159,10 @@ const markdownComponents = {
     const isMailto = href.startsWith('mailto:');
     const isTel = href.startsWith('tel:');
     const isAnchor = href.startsWith('#');
+    const isInternal = href.startsWith('/');
     
-    if (isMailto || isTel || isAnchor) {
+    // Internal links and special links (mailto, tel, anchor) open in same window
+    if (isMailto || isTel || isAnchor || isInternal) {
       return (
         <a
           href={href}
@@ -1168,7 +1174,7 @@ const markdownComponents = {
       );
     }
     
-    // Extract domain for display if link text is a URL
+    // External links: Extract domain for display if link text is a URL
     const childText = typeof children === 'string' ? children : '';
     const isUrlText = childText.startsWith('http://') || childText.startsWith('https://');
     let displayText: React.ReactNode = children;
@@ -1184,6 +1190,7 @@ const markdownComponents = {
       }
     }
     
+    // External links open in new tab with icon
     return (
       <a
         href={href}
@@ -1235,6 +1242,12 @@ const markdownComponents = {
   ),
   h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
     <h3 className="text-base font-semibold mt-2 mb-1" {...props}>{children}</h3>
+  ),
+  // Add horizontal scroll for wide tables
+  table: ({ children, ...props }: React.HTMLAttributes<HTMLTableElement>) => (
+    <div className="overflow-x-auto my-3">
+      <table className="border-collapse" {...props}>{children}</table>
+    </div>
   ),
 };
 

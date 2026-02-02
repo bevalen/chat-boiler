@@ -57,6 +57,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface FullProject {
   id: string;
@@ -440,9 +442,9 @@ export function ProjectDetail({
                                 placeholder="Project description..."
                             />
                         ) : (
-                            <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                                {project.description || "No description provided."}
-                            </p>
+                            <div className="text-foreground/90 leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-strong:font-semibold">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{project.description || "No description provided."}</ReactMarkdown>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
@@ -557,16 +559,16 @@ export function ProjectDetail({
                                     </div>
                                     
                                     {item.type === 'comment' ? (
-                                        <div className="text-sm bg-background border rounded-r-lg rounded-bl-lg p-3 shadow-sm">
-                                            {item.content}
+                                        <div className="text-sm bg-background border rounded-r-lg rounded-bl-lg p-3 shadow-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-strong:font-semibold">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown>
                                         </div>
                                     ) : (
                                         <div className="text-sm text-muted-foreground">
                                             <p>{item.content}</p>
                                             {item.description && (
-                                                <p className="text-xs mt-1 bg-muted/50 p-1.5 rounded text-muted-foreground/80 font-mono">
-                                                    {item.description}
-                                                </p>
+                                                <div className="text-xs mt-1 bg-muted/50 p-1.5 rounded text-muted-foreground/80 prose prose-xs dark:prose-invert max-w-none">
+                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.description}</ReactMarkdown>
+                                                </div>
                                             )}
                                         </div>
                                     )}

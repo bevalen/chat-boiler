@@ -39,6 +39,8 @@ import {
 import { Notification } from "@/lib/db/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type FilterType = "all" | "unread" | "read";
 type NotificationType = "all" | "reminder" | "new_message" | "task_update" | "project_update";
@@ -449,14 +451,14 @@ export function NotificationsClient({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p
+                        <div
                           className={cn(
-                            "font-medium",
+                            "font-medium prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-strong:font-semibold",
                             !notification.read && "text-foreground"
                           )}
                         >
-                          {notification.title}
-                        </p>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{notification.title}</ReactMarkdown>
+                        </div>
                         <Badge
                           variant="outline"
                           className="mt-1 text-xs font-normal"
@@ -469,9 +471,9 @@ export function NotificationsClient({
                       )}
                     </div>
                     {notification.content && (
-                      <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                        {notification.content}
-                      </p>
+                      <div className="mt-2 text-sm text-muted-foreground line-clamp-2 prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-strong:font-semibold">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{notification.content}</ReactMarkdown>
+                      </div>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">
                       {formatTimeAgo(notification.createdAt)}

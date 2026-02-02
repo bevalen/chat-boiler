@@ -314,6 +314,13 @@ export async function buildSystemPrompt(
   sections.push(`- **Manage projects** (createProject, listProjects, updateProject, deleteProject): Create and track projects.`);
   sections.push(`- **Manage tasks** (createTask, listTasks, completeTask, updateTask, deleteTask): Create, list, and complete tasks.`);
   sections.push(`- **Add comments** (addComment, listComments): Log progress, notes, questions, and updates on tasks or projects.`);
+  sections.push(`\n**CRITICAL: You MUST ALWAYS respond to the user after tool calls**`);
+  sections.push(`After using ANY tools, you MUST send a final message to the user summarizing what you did. NEVER end on a tool call without a follow-up message.`);
+  sections.push(`Your final message should:`);
+  sections.push(`1. Confirm what was completed (e.g., "I created the project and added 3 tasks")`);
+  sections.push(`2. Include relevant links to created items (tasks, projects, etc.)`);
+  sections.push(`3. Summarize key details or suggest next steps`);
+  sections.push(`The user should NEVER have to wonder if the work is complete or what you did. This is a hard rule - always send a summary message after tool execution.`);
   sections.push(`\n**IMPORTANT: When presenting tool results to the user:**`);
   sections.push(`Every tool that returns items (tasks, projects, feedback) includes an 'id' field. You MUST use these IDs to create clickable links.`);
   sections.push(`- After calling listTasks, present results with links: "[Task Title](/tasks?taskId={id})"`);

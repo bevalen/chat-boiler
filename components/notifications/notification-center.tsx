@@ -23,6 +23,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/hooks/use-notifications";
 import { Notification } from "@/lib/db/notifications";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface NotificationCenterProps {
   agentId: string | null;
@@ -167,22 +169,22 @@ export function NotificationCenter({ agentId }: NotificationCenterProps) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p
+                      <div
                         className={cn(
-                          "text-sm line-clamp-2",
+                          "text-sm line-clamp-2 prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-strong:font-semibold",
                           !notification.read && "font-medium"
                         )}
                       >
-                        {notification.title}
-                      </p>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{notification.title}</ReactMarkdown>
+                      </div>
                       {!notification.read && (
                         <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
                       )}
                     </div>
                     {notification.content && (
-                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                        {notification.content}
-                      </p>
+                      <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2 prose prose-xs dark:prose-invert max-w-none prose-p:my-0 prose-strong:font-semibold">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{notification.content}</ReactMarkdown>
+                      </div>
                     )}
                     <p className="mt-1 text-xs text-muted-foreground/70">
                       {formatTimeAgo(notification.createdAt)}

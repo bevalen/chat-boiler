@@ -59,6 +59,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export interface Task {
   id: string;
@@ -535,16 +537,16 @@ export function TaskDialog({
                                 </div>
                                 
                                 {item.type === 'comment' ? (
-                                    <div className="text-sm bg-background border rounded-r-lg rounded-bl-lg p-3 shadow-sm">
-                                        {item.data.content}
+                                    <div className="text-sm bg-background border rounded-r-lg rounded-bl-lg p-3 shadow-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-strong:font-semibold">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.data.content}</ReactMarkdown>
                                     </div>
                                 ) : (
                                     <div className="text-sm text-muted-foreground">
                                         <p>{item.data.title}</p>
                                         {item.data.description && (
-                                            <p className="text-xs mt-1 bg-muted/50 p-1.5 rounded text-muted-foreground/80 font-mono">
-                                                {item.data.description}
-                                            </p>
+                                            <div className="text-xs mt-1 bg-muted/50 p-1.5 rounded text-muted-foreground/80 prose prose-xs dark:prose-invert max-w-none">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.data.description}</ReactMarkdown>
+                                            </div>
                                         )}
                                     </div>
                                 )}
