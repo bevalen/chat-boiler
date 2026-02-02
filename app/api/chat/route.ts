@@ -985,7 +985,7 @@ export async function POST(request: Request) {
             task_id: taskId,
             author_type: "agent",
             author_id: agentId,
-            content: `Scheduled follow-up for ${checkDate.toLocaleString()}: ${reason}`,
+            content: `Scheduled follow-up for ${checkDate.toISOString()}: ${reason}`,
             comment_type: "note",
           });
 
@@ -995,7 +995,7 @@ export async function POST(request: Request) {
             taskId,
             taskTitle: task.title,
             scheduledFor: checkAt,
-            message: `Follow-up scheduled for ${checkDate.toLocaleString()}`,
+            message: `Follow-up scheduled for ${checkDate.toISOString()}`,
           };
         },
       }),
@@ -1346,12 +1346,24 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
+            // Get user's timezone for proper display
+            const userTimezone = profile?.timezone || "America/New_York";
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: userTimezone,
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+
             const jobs = (data || []).map((job) => ({
               id: job.id,
               title: job.title,
               type: job.job_type,
               scheduleType: job.schedule_type,
-              nextRun: job.next_run_at ? new Date(job.next_run_at).toLocaleString() : null,
+              nextRun: job.next_run_at ? formatter.format(new Date(job.next_run_at)) : null,
               cronExpression: job.cron_expression,
               status: job.status,
             }));
@@ -1446,13 +1458,25 @@ export async function POST(request: Request) {
 
             if (error) return { success: false, error: error.message };
 
+            // Format next run time with user's timezone
+            const userTimezone = profile?.timezone || "America/New_York";
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: userTimezone,
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+
             return {
               success: true,
               job: {
                 id: data.id,
                 title: data.title,
                 status: data.status,
-                nextRun: data.next_run_at ? new Date(data.next_run_at).toLocaleString() : null,
+                nextRun: data.next_run_at ? formatter.format(new Date(data.next_run_at)) : null,
               },
               message: `Updated scheduled job: "${data.title}"`,
             };
