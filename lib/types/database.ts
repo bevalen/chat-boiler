@@ -1479,6 +1479,12 @@ export interface UserPreferences {
     push?: boolean;
   };
   preferences?: Record<string, any>;
+  response_style?: "concise" | "detailed" | "balanced";
+  verbosity?: "brief" | "moderate" | "verbose";
+  use_bullet_points?: boolean;
+  proactive_suggestions?: boolean;
+  confirm_before_actions?: boolean;
+  preferred_communication?: string;
 }
 
 // SDR configuration structure
