@@ -3,7 +3,6 @@ import {
   Database,
   ChannelType,
   StorableChannelType,
-  SlackCredentials,
   LinkedInCredentials,
   ChannelCredentials,
 } from "@/lib/types/database";
@@ -85,69 +84,6 @@ export async function getAllChannelCredentials(
 }
 
 /**
- * Get Slack credentials for a user (convenience function with typed return)
- */
-export async function getSlackCredentials(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<{ credentials: SlackCredentials | null; isActive: boolean; error: string | null }> {
-  const { credentials, error } = await getChannelCredentials(
-    supabase,
-    userId,
-    "slack"
-  );
-
-  if (error || !credentials) {
-    return { credentials: null, isActive: false, error };
-  }
-
-  return {
-    credentials: credentials.credentials as SlackCredentials,
-    isActive: credentials.isActive,
-    error: null,
-  };
-}
-
-/**
- * Get user by Slack user ID (for incoming Slack messages)
- */
-export async function getUserBySlackId(
-  supabase: SupabaseClient,
-  slackUserId: string
-): Promise<{ userId: string | null; agentId: string | null; error: string | null }> {
-  // Query for credentials containing this Slack user ID
-  const { data, error } = await supabase
-    .from("user_channel_credentials")
-    .select("user_id")
-    .eq("channel_type", "slack")
-    .eq("is_active", true)
-    .contains("credentials", { user_slack_id: slackUserId })
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") {
-      return { userId: null, agentId: null, error: null };
-    }
-    console.error("Error finding user by Slack ID:", error);
-    return { userId: null, agentId: null, error: error.message };
-  }
-
-  // Get the user's agent
-  const { data: agent, error: agentError } = await supabase
-    .from("agents")
-    .select("id")
-    .eq("user_id", data.user_id)
-    .single();
-
-  if (agentError) {
-    console.error("Error finding agent for user:", agentError);
-    return { userId: data.user_id, agentId: null, error: agentError.message };
-  }
-
-  return { userId: data.user_id, agentId: agent.id, error: null };
-}
-
-/**
  * Create or update channel credentials for a user
  */
 export async function upsertChannelCredentials(
@@ -179,18 +115,6 @@ export async function upsertChannelCredentials(
   }
 
   return { credentials: mapCredentialsRow(data), error: null };
-}
-
-/**
- * Update Slack credentials specifically (convenience function)
- */
-export async function updateSlackCredentials(
-  supabase: SupabaseClient,
-  userId: string,
-  slackCredentials: SlackCredentials,
-  isActive: boolean = true
-): Promise<{ credentials: UserChannelCredential | null; error: string | null }> {
-  return upsertChannelCredentials(supabase, userId, "slack", slackCredentials, isActive);
 }
 
 /**
@@ -236,49 +160,6 @@ export async function deleteChannelCredentials(
   }
 
   return { success: true, error: null };
-}
-
-/**
- * Check if a user has active Slack credentials
- */
-export async function hasActiveSlack(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<boolean> {
-  const { credentials, isActive, error } = await getSlackCredentials(
-    supabase,
-    userId
-  );
-  return !error && credentials !== null && isActive;
-}
-
-/**
- * Get all users with active Slack credentials (for bot initialization)
- */
-export async function getAllActiveSlackUsers(
-  supabase: SupabaseClient
-): Promise<{
-  users: Array<{ userId: string; credentials: SlackCredentials }>;
-  error: string | null;
-}> {
-  const { data, error } = await supabase
-    .from("user_channel_credentials")
-    .select("user_id, credentials")
-    .eq("channel_type", "slack")
-    .eq("is_active", true);
-
-  if (error) {
-    console.error("Error fetching active Slack users:", error);
-    return { users: [], error: error.message };
-  }
-
-  return {
-    users: (data || []).map((row) => ({
-      userId: row.user_id,
-      credentials: row.credentials as SlackCredentials,
-    })),
-    error: null,
-  };
 }
 
 // ============================================================================
