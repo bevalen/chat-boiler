@@ -56,7 +56,7 @@ export function generateEmailSignature(params: SignatureParams): string {
   <tr>
     <td style="border-top: 1px solid #E5E7EB; padding-top: 12px;">
       <div style="color: #9CA3AF; font-size: 12px; margin-bottom: 8px;">
-        This email was sent by ${agentName}, an AI assistant powered by MAIA.
+        This email was sent by ${agentName}, an AI assistant powered by Madewell AI.
       </div>
     </td>
   </tr>
@@ -99,7 +99,7 @@ export function generateTextSignature(params: SignatureParams): string {
   }
 
   lines.push("");
-  lines.push(`This email was sent by ${agentName}, an AI assistant powered by MAIA.`);
+  lines.push(`This email was sent by ${agentName}, an AI assistant powered by Madewell AI.`);
   
   if (agentEmail) {
     lines.push(`Reply to reach ${agentName} at ${agentEmail}`);

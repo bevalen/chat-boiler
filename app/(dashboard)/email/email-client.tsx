@@ -34,20 +34,33 @@ interface EmailClientProps {
 // Loading skeleton for email list - matches actual row layout
 function EmailListSkeleton() {
   return (
-    <div className="divide-y">
+    <div className="divide-y rounded-lg overflow-hidden border sm:border-0">
       {[...Array(10)].map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-4 py-2">
-          {/* Checkbox */}
-          <Skeleton className="h-4 w-4 rounded shrink-0" />
-          {/* Sender/Participants - w-44 to match */}
-          <Skeleton className="h-4 w-44 shrink-0" />
-          {/* Subject and preview */}
-          <div className="flex-1 flex items-center gap-2 min-w-0">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-4 flex-1 max-w-[200px] hidden sm:block" />
+        <div key={i} className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-3 sm:py-2">
+          {/* Checkbox - hidden on mobile */}
+          <Skeleton className="h-4 w-4 rounded shrink-0 hidden sm:block" />
+          
+          {/* Mobile: Stack layout */}
+          <div className="flex-1 min-w-0 flex flex-col gap-1 sm:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <Skeleton className="h-4 flex-1 max-w-[150px]" />
+              <Skeleton className="h-4 w-14 shrink-0" />
+            </div>
+            <Skeleton className="h-4 w-32" />
           </div>
-          {/* Date */}
-          <Skeleton className="h-4 w-14 shrink-0" />
+
+          {/* Desktop: Horizontal layout */}
+          <div className="hidden sm:flex sm:items-center sm:gap-3 sm:flex-1 sm:min-w-0">
+            {/* Sender/Participants - w-44 to match */}
+            <Skeleton className="h-4 w-44 shrink-0" />
+            {/* Subject and preview */}
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 flex-1 max-w-[200px]" />
+            </div>
+            {/* Date */}
+            <Skeleton className="h-4 w-14 shrink-0" />
+          </div>
         </div>
       ))}
     </div>
@@ -57,27 +70,40 @@ function EmailListSkeleton() {
 // Loading skeleton for thread view - matches actual thread layout
 function ThreadSkeleton() {
   return (
-    <div className="max-w-4xl mx-auto py-4 px-4 space-y-2">
+    <div className="max-w-4xl mx-auto py-4 px-2 sm:px-4 space-y-2">
       {[...Array(3)].map((_, i) => (
         <div key={i}>
           {/* Email header row */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg">
+          <div className="flex items-center gap-3 px-2 sm:px-4 py-3 rounded-lg">
             {/* Chevron */}
             <Skeleton className="h-4 w-4 shrink-0" />
-            {/* Sender - w-40 to match */}
-            <Skeleton className="h-4 w-40 shrink-0" />
-            {/* Preview */}
-            <Skeleton className="h-4 flex-1 max-w-[300px]" />
-            {/* Date */}
-            <Skeleton className="h-4 w-44 shrink-0" />
+            
+            {/* Mobile: Stack layout */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1 sm:hidden">
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-4 flex-1 max-w-[120px]" />
+                <Skeleton className="h-4 w-12 shrink-0" />
+              </div>
+              <Skeleton className="h-3 w-32" />
+            </div>
+
+            {/* Desktop: Horizontal layout */}
+            <div className="hidden sm:flex sm:items-center sm:gap-3 sm:flex-1 sm:min-w-0">
+              {/* Sender - w-40 to match */}
+              <Skeleton className="h-4 w-40 shrink-0" />
+              {/* Preview */}
+              <Skeleton className="h-4 flex-1 max-w-[300px]" />
+              {/* Date */}
+              <Skeleton className="h-4 w-44 shrink-0" />
+            </div>
           </div>
           {/* Expanded content for last item */}
           {i === 2 && (
-            <div className="ml-11 mr-4 mt-2 mb-4 space-y-3">
+            <div className="ml-7 sm:ml-11 mr-2 sm:mr-4 mt-2 mb-4 space-y-3">
               {/* Headers */}
               <div className="space-y-1">
-                <Skeleton className="h-3 w-72" />
-                <Skeleton className="h-3 w-56" />
+                <Skeleton className="h-3 w-full max-w-[280px]" />
+                <Skeleton className="h-3 w-full max-w-[220px]" />
               </div>
               {/* Body */}
               <div className="space-y-2 mt-4">
@@ -415,13 +441,13 @@ export function EmailClient({
     const threadSubject = selectedThread?.[0]?.subject || "(No subject)";
     
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full overflow-x-hidden">
         {/* Thread Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-8 w-8 shrink-0"
             onClick={() => {
               setSelectedThread(null);
               setSelectedEmail(null);
@@ -431,9 +457,9 @@ export function EmailClient({
             <ArrowLeft className="h-4 w-4" />
           </Button>
           {isLoadingThread ? (
-            <Skeleton className="h-5 w-64" />
+            <Skeleton className="h-5 flex-1 max-w-64" />
           ) : (
-            <h1 className="text-lg font-medium truncate flex-1">{threadSubject}</h1>
+            <h1 className="text-base sm:text-lg font-medium truncate flex-1">{threadSubject}</h1>
           )}
         </div>
 
@@ -442,7 +468,7 @@ export function EmailClient({
           {isLoadingThread ? (
             <ThreadSkeleton />
           ) : (
-            <div className="max-w-4xl mx-auto py-4 px-4">
+            <div className="max-w-4xl mx-auto py-4 px-2 sm:px-4 overflow-x-hidden">
               {selectedThread?.map((email, index) => {
                 const isExpanded = expandedEmails.has(email.id);
                 const attachments = threadAttachments.get(email.id) || [];
@@ -452,7 +478,7 @@ export function EmailClient({
                     {/* Collapsed Email Header */}
                     <div
                       className={cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors",
+                        "flex items-center gap-3 px-2 sm:px-4 py-3 rounded-lg cursor-pointer transition-colors max-w-full overflow-hidden",
                         isExpanded ? "bg-muted/50" : "hover:bg-muted/30"
                       )}
                       onClick={() => toggleEmailExpanded(email.id)}
@@ -466,57 +492,87 @@ export function EmailClient({
                         )}
                       </div>
                       
-                      {/* Sender */}
-                      <div className="w-40 shrink-0">
-                        <span className={cn(
-                          "text-sm",
-                          !email.is_read && email.direction === "inbound" && "font-semibold"
-                        )}>
-                          {email.direction === "outbound" 
-                            ? "Maia" 
-                            : email.from_name || email.from_address}
-                        </span>
-                      </div>
-                      
-                      {/* Preview or To line */}
-                      <div className="flex-1 min-w-0">
+                      {/* Mobile: Stack layout */}
+                      <div className="flex-1 min-w-0 flex flex-col gap-1 sm:hidden max-w-full">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={cn(
+                            "text-sm truncate",
+                            !email.is_read && email.direction === "inbound" && "font-semibold"
+                          )}>
+                            {email.direction === "outbound" 
+                              ? "Maia" 
+                              : email.from_name || email.from_address.split("@")[0]}
+                          </span>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {formatTime(email.direction === "inbound" ? email.received_at : email.sent_at)}
+                          </span>
+                        </div>
                         {!isExpanded && (
-                          <span className="text-sm text-muted-foreground truncate block">
+                          <span className="text-xs text-muted-foreground truncate">
                             {getPreview(email)}
                           </span>
                         )}
                         {isExpanded && email.direction === "outbound" && (
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-xs text-muted-foreground truncate">
                             to {email.to_addresses[0]}
                           </span>
                         )}
                       </div>
-                      
-                      {/* Date */}
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {formatFullDate(email.direction === "inbound" ? email.received_at : email.sent_at)}
-                      </span>
+
+                      {/* Desktop: Horizontal layout */}
+                      <div className="hidden sm:flex sm:items-center sm:gap-3 sm:flex-1 sm:min-w-0">
+                        {/* Sender */}
+                        <div className="w-40 shrink-0">
+                          <span className={cn(
+                            "text-sm",
+                            !email.is_read && email.direction === "inbound" && "font-semibold"
+                          )}>
+                            {email.direction === "outbound" 
+                              ? "Maia" 
+                              : email.from_name || email.from_address}
+                          </span>
+                        </div>
+                        
+                        {/* Preview or To line */}
+                        <div className="flex-1 min-w-0">
+                          {!isExpanded && (
+                            <span className="text-sm text-muted-foreground truncate block">
+                              {getPreview(email)}
+                            </span>
+                          )}
+                          {isExpanded && email.direction === "outbound" && (
+                            <span className="text-sm text-muted-foreground">
+                              to {email.to_addresses[0]}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Date */}
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {formatFullDate(email.direction === "inbound" ? email.received_at : email.sent_at)}
+                        </span>
+                      </div>
                     </div>
                     
                     {/* Expanded Email Content */}
                     {isExpanded && (
-                      <div className="ml-11 mr-4 mt-2 mb-4">
+                      <div className="ml-7 sm:ml-11 mr-2 sm:mr-4 mt-2 mb-4 overflow-x-hidden max-w-full">
                         {/* Headers */}
                         <div className="text-xs text-muted-foreground mb-4 space-y-0.5">
-                          <div>
-                            <span className="inline-block w-10">From:</span>
-                            <span className="text-foreground">
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-0 sm:gap-1">
+                            <span className="inline-block w-10 shrink-0 font-medium sm:font-normal">From:</span>
+                            <span className="text-foreground break-all sm:break-words">
                               {email.from_name ? `${email.from_name} <${email.from_address}>` : email.from_address}
                             </span>
                           </div>
-                          <div>
-                            <span className="inline-block w-10">To:</span>
-                            <span className="text-foreground">{email.to_addresses.join(", ")}</span>
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-0 sm:gap-1">
+                            <span className="inline-block w-10 shrink-0 font-medium sm:font-normal">To:</span>
+                            <span className="text-foreground break-all sm:break-words">{email.to_addresses.join(", ")}</span>
                           </div>
                           {email.cc_addresses && email.cc_addresses.length > 0 && (
-                            <div>
-                              <span className="inline-block w-10">Cc:</span>
-                              <span className="text-foreground">{email.cc_addresses.join(", ")}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-start gap-0 sm:gap-1">
+                              <span className="inline-block w-10 shrink-0 font-medium sm:font-normal">Cc:</span>
+                              <span className="text-foreground break-all sm:break-words">{email.cc_addresses.join(", ")}</span>
                             </div>
                           )}
                         </div>
@@ -530,19 +586,20 @@ export function EmailClient({
                                 href={att.download_url || "#"}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2 py-1 text-xs bg-muted rounded hover:bg-muted/80"
+                                className="flex items-center gap-1.5 px-2 py-1 text-xs bg-muted rounded hover:bg-muted/80 max-w-full"
                               >
-                                <Paperclip className="h-3 w-3" />
-                                {att.filename}
+                                <Paperclip className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{att.filename}</span>
                               </a>
                             ))}
                           </div>
                         )}
                         
                         {/* Body */}
-                        <div className="text-sm email-body-content">
+                        <div className="text-sm email-body-content overflow-x-hidden max-w-full">
                           {email.html_body ? (
                             <div
+                              className="max-w-full overflow-x-hidden"
                               dangerouslySetInnerHTML={{ 
                                 __html: typeof window !== "undefined" 
                                   ? cleanEmailHtml(email.html_body) 
@@ -550,7 +607,7 @@ export function EmailClient({
                               }}
                             />
                           ) : (
-                            <pre className="whitespace-pre-wrap font-sans">
+                            <pre className="whitespace-pre-wrap font-sans break-words max-w-full overflow-x-hidden">
                               {email.text_body || "No content"}
                             </pre>
                           )}
@@ -570,20 +627,41 @@ export function EmailClient({
         <style jsx global>{`
           .email-body-content {
             line-height: 1.5;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            max-width: 100%;
           }
           .email-body-content img {
             max-width: 150px !important;
             height: auto !important;
           }
+          @media (max-width: 640px) {
+            .email-body-content img {
+              max-width: 100px !important;
+            }
+          }
           .email-body-content table {
             max-width: 100%;
             font-size: 13px;
+            display: block;
+            overflow-x: auto;
           }
           .email-body-content table img {
             max-width: 120px !important;
           }
+          @media (max-width: 640px) {
+            .email-body-content table {
+              font-size: 11px;
+            }
+            .email-body-content table img {
+              max-width: 80px !important;
+            }
+          }
           .email-body-content a {
             color: hsl(var(--primary));
+            word-break: break-all;
+            overflow-wrap: break-word;
           }
           .email-body-content hr {
             margin: 16px 0;
@@ -597,8 +675,17 @@ export function EmailClient({
             max-width: 400px !important;
             font-size: 12px;
           }
+          @media (max-width: 640px) {
+            .email-body-content table[width="100%"],
+            .email-body-content table[style*="width: 100%"],
+            .email-body-content table[style*="width:100%"] {
+              max-width: 100% !important;
+              font-size: 10px;
+            }
+          }
           .email-body-content table td {
             padding: 2px 4px !important;
+            word-break: break-word;
           }
           .email-body-content table br {
             display: none;
@@ -609,6 +696,17 @@ export function EmailClient({
           }
           .email-body-content p {
             margin: 0 0 8px 0;
+            word-break: break-word;
+          }
+          .email-body-content div,
+          .email-body-content span {
+            word-break: break-word;
+            overflow-wrap: break-word;
+          }
+          /* Ensure long text wraps properly */
+          .email-body-content * {
+            max-width: 100%;
+            word-wrap: break-word;
           }
         `}</style>
       </div>
@@ -617,9 +715,9 @@ export function EmailClient({
 
   // Email List View
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b">
+      <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 border-b">
         {/* Filter Tabs */}
         <div className="flex items-center gap-1">
           <Button
@@ -628,10 +726,10 @@ export function EmailClient({
             className="h-8 text-xs"
             onClick={() => setDirectionFilter("inbound")}
           >
-            <Inbox className="h-3.5 w-3.5 mr-1.5" />
-            Inbox
+            <Inbox className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Inbox</span>
             {unreadCount > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-primary text-primary-foreground rounded-full">
+              <span className="ml-1 sm:ml-1.5 px-1.5 py-0.5 text-[10px] bg-primary text-primary-foreground rounded-full">
                 {unreadCount}
               </span>
             )}
@@ -642,8 +740,8 @@ export function EmailClient({
             className="h-8 text-xs"
             onClick={() => setDirectionFilter("outbound")}
           >
-            <Send className="h-3.5 w-3.5 mr-1.5" />
-            Sent
+            <Send className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Sent</span>
           </Button>
         </div>
         
@@ -669,17 +767,18 @@ export function EmailClient({
 
       {/* Email List */}
       <ScrollArea className="flex-1">
-        {isLoading ? (
-          <EmailListSkeleton />
-        ) : filteredEmails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <MailOpen className="h-10 w-10 mb-3 opacity-50" />
-            <p className="text-sm">
-              {directionFilter === "inbound" ? "No emails in inbox" : "No sent emails"}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y">
+        <div className="p-2 sm:p-0">
+          {isLoading ? (
+            <EmailListSkeleton />
+          ) : filteredEmails.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <MailOpen className="h-10 w-10 mb-3 opacity-50" />
+              <p className="text-sm">
+                {directionFilter === "inbound" ? "No emails in inbox" : "No sent emails"}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y rounded-lg overflow-hidden border sm:border-0">
             {filteredEmails.map((email) => {
               const threadId = email.thread_id || email.id;
               const threadCount = getThreadCount(threadId);
@@ -690,57 +789,85 @@ export function EmailClient({
                 <div
                   key={email.id}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors hover:bg-muted/50",
+                    "flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-3 sm:py-2 cursor-pointer transition-colors hover:bg-muted/50 max-w-full overflow-hidden",
                     isUnread && "bg-muted/30"
                   )}
                   onClick={() => handleEmailClick(email)}
                 >
-                  {/* Checkbox */}
+                  {/* Checkbox - hidden on mobile */}
                   <Checkbox 
-                    className="shrink-0 opacity-0 group-hover:opacity-100"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 hidden sm:block"
                     onClick={(e) => e.stopPropagation()}
                   />
                   
-                  {/* Sender/Participants */}
-                  <div className="w-44 shrink-0 truncate">
-                    <span className={cn(
-                      "text-sm",
-                      isUnread && "font-semibold"
-                    )}>
-                      {participants}
-                    </span>
-                    {threadCount > 1 && (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        {threadCount}
+                  {/* Mobile: Stack layout */}
+                  <div className="flex-1 min-w-0 flex flex-col gap-1 sm:hidden max-w-full">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn(
+                        "text-sm truncate",
+                        isUnread && "font-semibold"
+                      )}>
+                        {participants}
                       </span>
-                    )}
-                  </div>
-                  
-                  {/* Subject and Preview */}
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className={cn(
+                        "text-xs shrink-0",
+                        isUnread ? "font-medium text-foreground" : "text-muted-foreground"
+                      )}>
+                        {formatTime(email.created_at)}
+                      </span>
+                    </div>
                     <span className={cn(
                       "text-sm truncate",
                       isUnread ? "font-medium" : "text-foreground"
                     )}>
                       {email.subject || "(No subject)"}
                     </span>
-                    <span className="text-sm text-muted-foreground truncate hidden sm:block">
-                      — {getPreview(email)}
+                  </div>
+
+                  {/* Desktop: Horizontal layout */}
+                  <div className="hidden sm:flex sm:items-center sm:gap-3 sm:flex-1 sm:min-w-0">
+                    {/* Sender/Participants */}
+                    <div className="w-44 shrink-0 truncate">
+                      <span className={cn(
+                        "text-sm",
+                        isUnread && "font-semibold"
+                      )}>
+                        {participants}
+                      </span>
+                      {threadCount > 1 && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {threadCount}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Subject and Preview */}
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className={cn(
+                        "text-sm truncate",
+                        isUnread ? "font-medium" : "text-foreground"
+                      )}>
+                        {email.subject || "(No subject)"}
+                      </span>
+                      <span className="text-sm text-muted-foreground truncate">
+                        — {getPreview(email)}
+                      </span>
+                    </div>
+                    
+                    {/* Date */}
+                    <span className={cn(
+                      "text-xs shrink-0",
+                      isUnread ? "font-medium text-foreground" : "text-muted-foreground"
+                    )}>
+                      {formatTime(email.created_at)}
                     </span>
                   </div>
-                  
-                  {/* Date */}
-                  <span className={cn(
-                    "text-xs shrink-0",
-                    isUnread ? "font-medium text-foreground" : "text-muted-foreground"
-                  )}>
-                    {formatTime(email.created_at)}
-                  </span>
                 </div>
               );
             })}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </ScrollArea>
     </div>
   );

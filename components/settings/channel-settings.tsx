@@ -852,7 +852,7 @@ export function ChannelSettings({ userId, agentId }: ChannelSettingsProps) {
                 <div className="border-t pt-2 mt-2">
                   <p className="font-medium">Maia</p>
                   <p className="text-muted-foreground text-xs">Your Executive Assistant</p>
-                  <p className="text-xs text-muted-foreground mt-1">Powered by MAIA</p>
+                  <p className="text-xs text-muted-foreground mt-1">Powered by Madewell AI</p>
                 </div>
               </div>
             </div>
