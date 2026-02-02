@@ -1,5 +1,9 @@
 /**
- * Incoming Email Webhook Handler
+ * Incoming Email Webhook Handler (LEGACY - Zapier)
+ *
+ * NOTE: This is the legacy Zapier-based email webhook.
+ * For new deployments, use the Resend webhook at /api/webhooks/resend/inbound
+ * which triggers the Inngest email processor with full context gathering.
  *
  * This endpoint receives incoming emails via Zapier webhook and triggers
  * the AI agent to process and respond to them.
@@ -7,14 +11,14 @@
  * Flow:
  * 1. Validate webhook secret
  * 2. Look up the agent owner
- * 3. Gather context (projects, conversations, memories)
+ * 3. Find related tasks
  * 4. Call the chat API with the email content
  * 5. Agent decides to respond directly or forward to user
  */
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { gatherContextForEmail, findTasksForEmail } from "@/lib/db/search";
+import { findTasksForEmail } from "@/lib/db/search";
 import { getAgentById } from "@/lib/db/agents";
 import { createNotification } from "@/lib/db/notifications";
 
@@ -305,12 +309,8 @@ export async function POST(request: Request) {
     console.log("[email-webhook] Processing for user:", owner.userId);
     console.log("[email-webhook] Agent:", owner.agentId);
 
-    // Gather relevant context before responding
-    const emailContent = `${payload.subject}\n\n${payload.body_plain}`;
-    const context = await gatherContextForEmail(supabase, owner.agentId, emailContent);
-    console.log("[email-webhook] Context gathered, length:", context.length);
-
     // Find related tasks for this email
+    const emailContent = `${payload.subject}\n\n${payload.body_plain}`;
     const relatedTasks = await findTasksForEmail(supabase, owner.agentId, emailContent, {
       matchCount: 3,
       matchThreshold: 0.7, // Higher threshold for more precise matching
