@@ -6,3 +6,4 @@ export * from "./notifications";
 export * from "./channel-credentials";
 export * from "./feedback";
 export * from "./activity-log";
+export * from "./emails";

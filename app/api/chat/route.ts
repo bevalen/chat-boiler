@@ -10,14 +10,27 @@ import {
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/embeddings";
 import { ChannelType, MessageMetadata, FeedbackType, FeedbackPriority } from "@/lib/types/database";
-import { 
-  createCheckEmailTool, 
-  createSendEmailTool, 
-  createForwardEmailToUserTool,
+// Legacy Zapier MCP email tools (deprecated - kept for reference)
+// import { 
+//   createCheckEmailTool as createCheckEmailToolZapier, 
+//   createSendEmailTool as createSendEmailToolZapier, 
+//   createForwardEmailToUserTool,
+//   createReplyToEmailTool as createReplyToEmailToolZapier,
+//   createArchiveEmailTool,
+//   createEmailDraftTool,
+// } from "@/lib/tools/email";
+
+// Resend-based email tools (new)
+import {
+  createCheckEmailTool,
+  createSendEmailTool,
   createReplyToEmailTool,
-  createArchiveEmailTool,
-  createEmailDraftTool,
-} from "@/lib/tools/email";
+  createForwardEmailTool,
+  createMarkEmailAsReadTool,
+  createGetEmailDetailsTool,
+  createGetEmailThreadTool,
+} from "@/lib/tools/email-resend";
+import { getAgentEmailAddress } from "@/lib/email/resend-client";
 import { createResearchTool } from "@/lib/tools/research";
 import { createFeedback, searchFeedback, updateFeedback, deleteFeedback, createAutomaticBugReport } from "@/lib/db/feedback";
 import { logActivity, ActivityType, ActivitySource } from "@/lib/db/activity-log";
@@ -1629,17 +1642,39 @@ export async function POST(request: Request) {
         },
       }),
 
-      // Email tools (Zapier MCP integration)
+      // Email tools (Resend integration)
+      // Agent email address: agent-{userId}@maia.madewell.ai
       checkEmail: createCheckEmailTool(agentId),
-      sendEmail: createSendEmailTool(agentId),
-      replyToEmail: createReplyToEmailTool(agentId),
-      archiveEmail: createArchiveEmailTool(agentId),
-      createEmailDraft: createEmailDraftTool(agentId),
-      // Forward email to user tool - available when handling incoming emails
-      // so the agent can escalate to the user when uncertain
-      ...(channelSource === "email" && profile?.email
-        ? { forwardEmailToUser: createForwardEmailToUserTool(agentId, profile.email) }
-        : {}),
+      sendEmail: createSendEmailTool(
+        agentId,
+        user.id,
+        agent.name,
+        profile?.name || "User",
+        profile?.email,
+        agent.identityContext?.owner?.role,
+        agent.identityContext?.owner?.company
+      ),
+      replyToEmail: createReplyToEmailTool(
+        agentId,
+        user.id,
+        agent.name,
+        profile?.name || "User",
+        profile?.email,
+        agent.identityContext?.owner?.role,
+        agent.identityContext?.owner?.company
+      ),
+      forwardEmail: createForwardEmailTool(
+        agentId,
+        user.id,
+        agent.name,
+        profile?.name || "User",
+        profile?.email,
+        agent.identityContext?.owner?.role,
+        agent.identityContext?.owner?.company
+      ),
+      markEmailAsRead: createMarkEmailAsReadTool(agentId),
+      getEmailDetails: createGetEmailDetailsTool(agentId),
+      getEmailThread: createGetEmailThreadTool(agentId),
 
       // Research tool (Perplexity Sonar API)
       research: createResearchTool(agentId),

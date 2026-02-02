@@ -104,7 +104,11 @@ export type FeedbackSource = "manual" | "automatic" | "agent_error";
 export type FeedbackPriority = "critical" | "high" | "medium" | "low";
 
 // Channel types
-export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
+export type ChannelType = "app" | "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin" | "resend";
+
+// Email types for Resend integration
+export type EmailDirection = "inbound" | "outbound";
+export type EmailStatus = "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
 
 // Database-level channel type (subset that can be stored)
 export type StorableChannelType = "slack" | "email" | "sms" | "discord" | "zapier_mcp" | "linkedin";
@@ -792,6 +796,147 @@ export interface Database {
           is_active?: boolean;
           created_at?: string | null;
           updated_at?: string | null;
+        };
+      };
+      // Emails table for Resend integration
+      emails: {
+        Row: {
+          id: string;
+          user_id: string;
+          agent_id: string;
+          resend_email_id: string | null;
+          direction: "inbound" | "outbound";
+          status: "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
+          message_id: string | null;
+          in_reply_to: string | null;
+          thread_id: string | null;
+          references_ids: string[] | null;
+          from_address: string;
+          from_name: string | null;
+          to_addresses: string[];
+          cc_addresses: string[] | null;
+          bcc_addresses: string[] | null;
+          reply_to_address: string | null;
+          subject: string;
+          html_body: string | null;
+          text_body: string | null;
+          headers: Json | null;
+          is_read: boolean;
+          read_at: string | null;
+          sent_at: string | null;
+          delivered_at: string | null;
+          bounced_at: string | null;
+          bounce_reason: string | null;
+          received_at: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          agent_id: string;
+          resend_email_id?: string | null;
+          direction: "inbound" | "outbound";
+          status?: "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
+          message_id?: string | null;
+          in_reply_to?: string | null;
+          thread_id?: string | null;
+          references_ids?: string[] | null;
+          from_address: string;
+          from_name?: string | null;
+          to_addresses: string[];
+          cc_addresses?: string[] | null;
+          bcc_addresses?: string[] | null;
+          reply_to_address?: string | null;
+          subject: string;
+          html_body?: string | null;
+          text_body?: string | null;
+          headers?: Json | null;
+          is_read?: boolean;
+          read_at?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          bounced_at?: string | null;
+          bounce_reason?: string | null;
+          received_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          agent_id?: string;
+          resend_email_id?: string | null;
+          direction?: "inbound" | "outbound";
+          status?: "pending" | "sent" | "delivered" | "bounced" | "failed" | "received";
+          message_id?: string | null;
+          in_reply_to?: string | null;
+          thread_id?: string | null;
+          references_ids?: string[] | null;
+          from_address?: string;
+          from_name?: string | null;
+          to_addresses?: string[];
+          cc_addresses?: string[] | null;
+          bcc_addresses?: string[] | null;
+          reply_to_address?: string | null;
+          subject?: string;
+          html_body?: string | null;
+          text_body?: string | null;
+          headers?: Json | null;
+          is_read?: boolean;
+          read_at?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          bounced_at?: string | null;
+          bounce_reason?: string | null;
+          received_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
+      // Email attachments for Resend integration
+      email_attachments: {
+        Row: {
+          id: string;
+          email_id: string;
+          resend_attachment_id: string | null;
+          filename: string;
+          content_type: string | null;
+          size_bytes: number | null;
+          storage_path: string | null;
+          download_url: string | null;
+          download_url_expires_at: string | null;
+          is_downloaded: boolean;
+          downloaded_at: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          email_id: string;
+          resend_attachment_id?: string | null;
+          filename: string;
+          content_type?: string | null;
+          size_bytes?: number | null;
+          storage_path?: string | null;
+          download_url?: string | null;
+          download_url_expires_at?: string | null;
+          is_downloaded?: boolean;
+          downloaded_at?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          email_id?: string;
+          resend_attachment_id?: string | null;
+          filename?: string;
+          content_type?: string | null;
+          size_bytes?: number | null;
+          storage_path?: string | null;
+          download_url?: string | null;
+          download_url_expires_at?: string | null;
+          is_downloaded?: boolean;
+          downloaded_at?: string | null;
+          created_at?: string | null;
         };
       };
       // LinkedIn leads tracking for SDR functionality

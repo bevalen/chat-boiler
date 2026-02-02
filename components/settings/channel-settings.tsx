@@ -49,9 +49,10 @@ interface ZapierMCPConfig {
 
 interface ChannelSettingsProps {
   userId: string;
+  agentId?: string;
 }
 
-export function ChannelSettings({ userId }: ChannelSettingsProps) {
+export function ChannelSettings({ userId, agentId }: ChannelSettingsProps) {
   const [slackConfig, setSlackConfig] = useState<SlackConfig | null>(null);
   const [zapierConfig, setZapierConfig] = useState<ZapierMCPConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -775,17 +776,102 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
 
         <Separator />
 
-        {/* Zapier MCP Configuration */}
+        {/* Email Integration (Resend) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                <Mail className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-medium">Email (via Resend)</h3>
+                <p className="text-sm text-muted-foreground">
+                  Maia has a dedicated email address
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-green-600">Active</span>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Email address display */}
+          <div className="rounded-lg border bg-muted/50 p-4 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Maia&apos;s Email Address</Label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 rounded-md bg-background border text-sm font-mono">
+                  {agentId ? `agent-${agentId}@send.maia.madewell.ai` : "Loading..."}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (agentId) navigator.clipboard.writeText(`agent-${agentId}@send.maia.madewell.ai`);
+                    setMessage({ type: "success", text: "Email address copied to clipboard" });
+                    setTimeout(() => setMessage(null), 3000);
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Anyone can email this address to reach Maia. Emails are stored securely and only accessible by you.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email Capabilities</Label>
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
+                  <Check className="h-3 w-3" />
+                  Send Emails
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
+                  <Check className="h-3 w-3" />
+                  Receive Emails
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
+                  <Check className="h-3 w-3" />
+                  Email Threading
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
+                  <Check className="h-3 w-3" />
+                  Auto Signature
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Signature Preview</Label>
+              <div className="p-3 rounded-md border bg-background text-sm">
+                <p className="text-muted-foreground text-xs mb-2">Emails from Maia include a professional signature:</p>
+                <div className="border-t pt-2 mt-2">
+                  <p className="font-medium">Maia</p>
+                  <p className="text-muted-foreground text-xs">Your Executive Assistant</p>
+                  <p className="text-xs text-muted-foreground mt-1">Powered by MAIA</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Calendar Integration (Zapier MCP) */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+                <Calendar className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="font-medium">Zapier MCP (Email & Calendar)</h3>
+                <h3 className="font-medium">Calendar (via Zapier MCP)</h3>
                 <p className="text-sm text-muted-foreground">
-                  {zapierConfig?.configured
+                  {zapierConfig?.configured && zapierConfig.capabilities?.check_calendar
                     ? zapierConfig.active
                       ? "Connected and active"
                       : "Configured but disabled"
@@ -793,7 +879,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
                 </p>
               </div>
             </div>
-            {zapierConfig?.configured && (
+            {zapierConfig?.configured && zapierConfig.capabilities?.check_calendar && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -818,22 +904,20 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
 
           <Separator />
 
-          {/* Setup instructions */}
-          {!zapierConfig?.configured && (
+          {/* Setup instructions for calendar */}
+          {(!zapierConfig?.configured || !zapierConfig.capabilities?.check_calendar) && (
             <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-              <p className="text-sm font-medium">To connect Zapier MCP for email integration:</p>
+              <p className="text-sm font-medium">To connect your calendar:</p>
               <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
-                <li>
-                  Create a Zapier automation with a webhook trigger
-                </li>
-                <li>Configure actions for checking Gmail and sending emails</li>
+                <li>Create a Zapier automation with Google Calendar</li>
+                <li>Configure actions for checking calendar events</li>
                 <li>Copy the webhook URL and paste it below</li>
                 <li>Test the connection to verify it works</li>
               </ol>
             </div>
           )}
 
-          {/* Zapier MCP form */}
+          {/* Calendar config form */}
           <div className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="zapierEndpointUrl">
@@ -847,7 +931,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
                 placeholder={zapierConfig?.configured ? "Enter new URL to update" : "https://hooks.zapier.com/hooks/catch/..."}
               />
               <p className="text-xs text-muted-foreground">
-                The webhook URL from your Zapier automation
+                The webhook URL from your Zapier automation for calendar access
               </p>
             </div>
 
@@ -869,83 +953,6 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
                 >
                   {showZapierApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Optional API key for additional authentication
-              </p>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="zapierDescription">Description (optional)</Label>
-              <Input
-                id="zapierDescription"
-                value={zapierDescription}
-                onChange={(e) => setZapierDescription(e.target.value)}
-                placeholder="e.g., Ben's Gmail via Zapier"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="zapierEmailSignature">Email Signature (HTML)</Label>
-              <textarea
-                id="zapierEmailSignature"
-                value={zapierEmailSignature}
-                onChange={(e) => setZapierEmailSignature(e.target.value)}
-                placeholder={`<p style="margin-top: 20px; color: #666;">Best regards,<br><strong>Maia</strong><br>AI Executive Assistant</p>`}
-                rows={6}
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                HTML signature appended to all outgoing emails. Your assistant is standardized as "Maia".
-              </p>
-            </div>
-
-            {/* Capabilities */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Enabled Capabilities</Label>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="checkEmail"
-                    checked={zapierCheckEmail}
-                    onCheckedChange={(checked) => setZapierCheckEmail(checked === true)}
-                  />
-                  <label
-                    htmlFor="checkEmail"
-                    className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    Check Emails
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="sendEmail"
-                    checked={zapierSendEmail}
-                    onCheckedChange={(checked) => setZapierSendEmail(checked === true)}
-                  />
-                  <label
-                    htmlFor="sendEmail"
-                    className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    Send Emails
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="checkCalendar"
-                    checked={zapierCheckCalendar}
-                    onCheckedChange={(checked) => setZapierCheckCalendar(checked === true)}
-                  />
-                  <label
-                    htmlFor="checkCalendar"
-                    className="flex items-center gap-2 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    Check Calendar
-                  </label>
-                </div>
               </div>
             </div>
 
@@ -998,7 +1005,7 @@ export function ChannelSettings({ userId }: ChannelSettingsProps) {
                 ) : zapierConfig?.configured ? (
                   "Update Configuration"
                 ) : (
-                  "Connect Zapier MCP"
+                  "Connect Calendar"
                 )}
               </Button>
             </div>

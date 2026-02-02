@@ -54,7 +54,7 @@ export default async function SettingsPage() {
               }
             : null
         }
-        channelsComponent={<ChannelSettings userId={user.id} />}
+        channelsComponent={<ChannelSettings userId={user.id} agentId={agent?.id} />}
         linkedInComponent={
           agent ? (
             <LinkedInSDRSettings

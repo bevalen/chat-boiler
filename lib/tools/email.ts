@@ -1,3 +1,21 @@
+/**
+ * @deprecated These Zapier MCP-based email tools are deprecated.
+ * 
+ * Use the new Resend-based email tools from `@/lib/tools/email-resend` instead.
+ * 
+ * The Resend integration provides:
+ * - Dedicated agent email addresses (agent-{userId}@maia.madewell.ai)
+ * - Proper email threading with In-Reply-To and References headers
+ * - Automatic signature injection
+ * - Local inbox storage with RLS
+ * - Better reliability and no external MCP dependencies
+ * 
+ * This file is kept for backwards compatibility with calendar functionality
+ * which still uses Zapier MCP. The email tools here should not be used.
+ * 
+ * Migration: See lib/tools/email-resend.ts for the new implementation.
+ */
+
 import { tool, UIToolInvocation } from "ai";
 import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
