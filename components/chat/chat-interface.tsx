@@ -1058,7 +1058,7 @@ export function ChatInterface({
                             title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
                           >
                             {copiedMessageId === message.id ? (
-                              <CheckCheck className="w-3 h-3 text-green-500" />
+                              <CheckCheck className="w-3 h-3" />
                             ) : (
                               <Copy className="w-3 h-3" />
                             )}
@@ -1088,7 +1088,7 @@ export function ChatInterface({
                             title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
                           >
                             {copiedMessageId === message.id ? (
-                              <CheckCheck className="w-3 h-3 text-green-500" />
+                              <CheckCheck className="w-3 h-3" />
                             ) : (
                               <Copy className="w-3 h-3" />
                             )}
