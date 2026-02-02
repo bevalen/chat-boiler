@@ -1513,3 +1513,23 @@ export interface LinkedInCredentials {
   };
 }
 
+// Common type aliases
+export type ChannelType = "web" | "email" | "linkedin";
+export type TaskStatus = "todo" | "in_progress" | "waiting_on" | "done";
+export type AgentRunState = "idle" | "running" | "completed" | "failed";
+export type CommentType = "note" | "status_change" | "system";
+export type FeedbackType = "bug" | "feature" | "improvement" | "question" | "other";
+export type FeedbackPriority = "low" | "medium" | "high" | "urgent";
+export type FeedbackStatus = "new" | "in_progress" | "resolved" | "closed" | "wont_fix";
+
+// Message metadata structure
+export interface MessageMetadata {
+  email_id?: string;
+  from_address?: string;
+  subject?: string;
+  message_id?: string;
+  in_reply_to?: string;
+  thread_id?: string;
+  [key: string]: any;
+}
+
