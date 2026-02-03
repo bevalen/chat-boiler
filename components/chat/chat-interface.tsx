@@ -455,7 +455,7 @@ export function ChatInterface({
               />
             ) : (
               <>
-                {messages.map((message) => (
+                {messages.map((message, index) => (
                   <MessageBubble
                     key={message.id}
                     message={message}
@@ -465,6 +465,7 @@ export function ChatInterface({
                     userAvatarUrl={userInfo?.avatarUrl}
                     userName={userInfo?.name}
                     status={status}
+                    isLastMessage={index === messages.length - 1}
                     onEdit={message.role === "user" ? handleEditMessage : undefined}
                   />
                 ))}

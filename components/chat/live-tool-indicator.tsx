@@ -103,53 +103,15 @@ export function LiveToolIndicator({ messages, status }: LiveToolIndicatorProps) 
 
   // Check if all tools are complete but no text yet (thinking state)
   const allToolsComplete = completedCount === toolsInfo.length;
-  const isThinking = allToolsComplete && !hasTextContent;
 
   // Don't show if we already have text content streaming (tools are done, response is coming)
   if (hasTextContent && allToolsComplete) return null;
 
+  // Don't show if there's no text content - MessageBubble handles that case now
+  if (!hasTextContent) return null;
+
   // Get query for research tool
   const currentQuery = currentTool?.args?.query as string | undefined;
-
-  // If there's no text content yet, show tool indicator inline (no separate avatar)
-  if (!hasTextContent) {
-    return (
-      <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <div className="w-8 h-8 shrink-0" /> {/* Spacer to align with avatar above */}
-        {/* Tool indicator or thinking state */}
-        <div className="flex flex-col gap-0.5 py-2">
-          {isThinking ? (
-            // Show "Thinking..." when all tools are complete but no text yet
-            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-              <Brain className="w-3.5 h-3.5 animate-pulse text-primary" />
-              <span>Thinking...</span>
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-            </div>
-          ) : (
-            // Show current tool execution
-            <>
-              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
-                <span>{currentTool?.info.label}</span>
-                {!currentTool?.isComplete && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
-                {currentTool?.isComplete && <Check className="w-3.5 h-3.5 text-green-400" />}
-              </div>
-              {currentQuery && !currentTool?.isComplete && (
-                <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
-                  &quot;{currentQuery}&quot;
-                </span>
-              )}
-              {toolsInfo.length > 1 && (
-                <span className="text-[11px] text-muted-foreground/50">
-                  {completedCount}/{toolsInfo.length} tools completed
-                </span>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // If there's text content, use negative margin to pull up below the chat bubble
   return (

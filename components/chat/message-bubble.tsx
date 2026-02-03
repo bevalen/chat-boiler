@@ -5,7 +5,7 @@ import { UIMessage } from "@ai-sdk/react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, User, Pencil, Copy, CheckCheck, Check, X } from "lucide-react";
+import { Bot, User, Pencil, Copy, CheckCheck, Check, X, Brain, Loader2, Search, Save, FolderPlus, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { markdownComponents } from "./markdown-components";
@@ -19,8 +19,27 @@ interface MessageBubbleProps {
   userAvatarUrl?: string | null;
   userName?: string | null;
   status: string;
+  /** Whether this is the last message (used for live streaming indicator) */
+  isLastMessage?: boolean;
   onEdit?: (messageId: string, newContent: string) => void;
 }
+
+// Tool names mapped to display info
+const TOOL_DISPLAY_INFO: Record<string, { label: string; icon: React.ReactNode }> = {
+  searchMemory: { label: "Searching Memory", icon: <Search className="w-3.5 h-3.5" /> },
+  saveToMemory: { label: "Saving to Memory", icon: <Save className="w-3.5 h-3.5" /> },
+  research: { label: "Researching", icon: <Brain className="w-3.5 h-3.5" /> },
+  createProject: { label: "Creating Project", icon: <FolderPlus className="w-3.5 h-3.5" /> },
+  listProjects: { label: "Listing Projects", icon: <FolderPlus className="w-3.5 h-3.5" /> },
+  createTask: { label: "Creating Task", icon: <ListTodo className="w-3.5 h-3.5" /> },
+  listTasks: { label: "Listing Tasks", icon: <ListTodo className="w-3.5 h-3.5" /> },
+  completeTask: { label: "Completing Task", icon: <Check className="w-3.5 h-3.5" /> },
+};
+
+// Convert camelCase to Title Case for fallback
+const formatToolName = (name: string) => {
+  return name.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
+};
 
 export function MessageBubble({
   message,
@@ -30,6 +49,7 @@ export function MessageBubble({
   userAvatarUrl,
   userName,
   status,
+  isLastMessage = false,
   onEdit,
 }: MessageBubbleProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -41,10 +61,42 @@ export function MessageBubble({
     .map((p) => p.text)
     .join("\n");
 
+  const hasTextContent = message.parts.some((part) => part.type === "text" && (part as any).text?.trim());
+
   // Extract tool calls from message metadata (only for assistant messages)
   const toolCalls = !isUser && (message as any).metadata?.tool_calls
     ? (message as any).metadata.tool_calls
     : [];
+
+  // Get live tool invocation info for streaming messages
+  const toolParts = !isUser ? message.parts.filter(
+    (part) => part.type === "tool-invocation" || part.type.startsWith("tool-")
+  ) : [];
+
+  const liveToolsInfo = toolParts.map((part) => {
+    const toolName = part.type === "tool-invocation" 
+      ? (part as any).toolInvocation?.toolName 
+      : part.type.replace("tool-", "");
+    const rawState = part.type === "tool-invocation" 
+      ? (part as any).toolInvocation?.state 
+      : (part as any).state;
+    const args = part.type === "tool-invocation" 
+      ? (part as any).toolInvocation?.args 
+      : (part as any).input;
+    const isComplete = rawState === "result" || rawState === "output-available" || rawState === "output-error";
+    const info = TOOL_DISPLAY_INFO[toolName] || {
+      label: formatToolName(toolName),
+      icon: <Brain className="w-3.5 h-3.5" />,
+    };
+    return { toolName, isComplete, info, args };
+  });
+
+  const isStreaming = status === "streaming" && isLastMessage && !isUser;
+  const showLiveToolIndicator = isStreaming && liveToolsInfo.length > 0;
+  const currentTool = liveToolsInfo.find((t) => !t.isComplete) || liveToolsInfo[liveToolsInfo.length - 1];
+  const completedCount = liveToolsInfo.filter((t) => t.isComplete).length;
+  const allToolsComplete = completedCount === liveToolsInfo.length;
+  const isThinking = allToolsComplete && !hasTextContent && showLiveToolIndicator;
 
   const startEditing = () => {
     setEditValue(textContent);
@@ -118,6 +170,37 @@ export function MessageBubble({
           </div>
         ) : (
           <>
+            {/* Live tool indicator when streaming with no text yet */}
+            {showLiveToolIndicator && !hasTextContent && (
+              <div className="flex flex-col gap-0.5 py-1 animate-in fade-in duration-300">
+                {isThinking ? (
+                  <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                    <Brain className="w-3.5 h-3.5 animate-pulse text-primary" />
+                    <span>Thinking...</span>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
+                      <span>{currentTool?.info.label}</span>
+                      {!currentTool?.isComplete && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
+                      {currentTool?.isComplete && <Check className="w-3.5 h-3.5 text-green-400" />}
+                    </div>
+                    {currentTool?.args?.query && !currentTool?.isComplete && (
+                      <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
+                        &quot;{currentTool.args.query as string}&quot;
+                      </span>
+                    )}
+                    {liveToolsInfo.length > 1 && (
+                      <span className="text-[11px] text-muted-foreground/50">
+                        {completedCount}/{liveToolsInfo.length} tools completed
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             {message.parts.some((part) => part.type === "text") && (
               <div
                 className={`text-sm leading-relaxed ${
