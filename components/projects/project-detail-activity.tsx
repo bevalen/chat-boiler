@@ -19,7 +19,7 @@ interface ProjectDetailActivityProps {
   newComment: string;
   onCommentChange: (comment: string) => void;
   onAddComment: () => void;
-  scrollAreaRef: React.RefObject<HTMLDivElement>;
+  scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   agentName: string;
   agentAvatarUrl?: string | null;
   userName: string;

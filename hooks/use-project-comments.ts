@@ -9,7 +9,7 @@ import type { ActivityItem } from "./use-project-activity";
 export function useProjectComments(
   projectId: string,
   setActivityItems: React.Dispatch<React.SetStateAction<ActivityItem[]>>,
-  scrollAreaRef: React.RefObject<HTMLDivElement>
+  scrollAreaRef: React.RefObject<HTMLDivElement | null>
 ) {
   const [newComment, setNewComment] = useState("");
 
