@@ -110,8 +110,12 @@ export function LiveToolIndicator({ messages, status, agent, agentName }: LiveTo
   const completedCount = toolsInfo.filter((t) => t.isComplete).length;
   const hasTextContent = lastMessage.parts.some((part) => part.type === "text" && (part as any).text?.trim());
 
+  // Check if all tools are complete but no text yet (thinking state)
+  const allToolsComplete = completedCount === toolsInfo.length;
+  const isThinking = allToolsComplete && !hasTextContent;
+
   // Don't show if we already have text content streaming (tools are done, response is coming)
-  if (hasTextContent && completedCount === toolsInfo.length) return null;
+  if (hasTextContent && allToolsComplete) return null;
 
   // Get query for research tool
   const currentQuery = currentTool?.args?.query as string | undefined;
@@ -134,23 +138,35 @@ export function LiveToolIndicator({ messages, status, agent, agentName }: LiveTo
             <Bot className="w-5 h-5 text-primary" />
           )}
         </div>
-        {/* Tool indicator centered with avatar */}
+        {/* Tool indicator or thinking state centered with avatar */}
         <div className="flex flex-col gap-0.5 py-2">
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
-            <span>{currentTool?.info.label}</span>
-            {!currentTool?.isComplete && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
-            {currentTool?.isComplete && <Check className="w-3.5 h-3.5 text-green-400" />}
-          </div>
-          {currentQuery && !currentTool?.isComplete && (
-            <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
-              &quot;{currentQuery}&quot;
-            </span>
-          )}
-          {toolsInfo.length > 1 && (
-            <span className="text-[11px] text-muted-foreground/50">
-              {completedCount}/{toolsInfo.length} tools completed
-            </span>
+          {isThinking ? (
+            // Show "Thinking..." when all tools are complete but no text yet
+            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <Brain className="w-3.5 h-3.5 animate-pulse text-primary" />
+              <span>Thinking...</span>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+            </div>
+          ) : (
+            // Show current tool execution
+            <>
+              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
+                <span>{currentTool?.info.label}</span>
+                {!currentTool?.isComplete && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
+                {currentTool?.isComplete && <Check className="w-3.5 h-3.5 text-green-400" />}
+              </div>
+              {currentQuery && !currentTool?.isComplete && (
+                <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
+                  &quot;{currentQuery}&quot;
+                </span>
+              )}
+              {toolsInfo.length > 1 && (
+                <span className="text-[11px] text-muted-foreground/50">
+                  {completedCount}/{toolsInfo.length} tools completed
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
