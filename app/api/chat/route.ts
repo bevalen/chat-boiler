@@ -185,7 +185,7 @@ export async function POST(request: Request) {
         : gateway("anthropic/claude-sonnet-4.5");
 
     const isBackgroundChannel = channelSource === "cron" || channelSource === "email";
-    const maxSteps = isBackgroundChannel ? 20 : 5;
+    const maxSteps = isBackgroundChannel ? 30 : 20;
 
     if (isBackgroundChannel) {
       console.log(
