@@ -383,9 +383,9 @@ export function TaskDialog({
         </div>
 
         {/* Main Content - Split View */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Left Column: Task Details */}
-          <div className="flex-1 overflow-y-auto min-w-[300px]">
+          <div className="flex-1 min-h-0 overflow-y-auto min-w-[300px]">
             <div className="max-w-3xl mx-auto p-8 space-y-8">
               
               {/* Title */}
@@ -520,8 +520,8 @@ export function TaskDialog({
           </div>
 
           {/* Right Column: Activity & Comments */}
-          <div className="w-[380px] border-l bg-muted/10 flex flex-col shrink-0 overflow-hidden">
-            <div className="p-4 border-b bg-background/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between shrink-0">
+          <div className="w-[380px] border-l bg-muted/10 flex flex-col shrink-0 min-h-0 overflow-hidden">
+            <div className="p-4 border-b bg-background/50 backdrop-blur-sm flex items-center justify-between shrink-0">
               <h3 className="font-semibold flex items-center gap-2">
                 <Activity className="h-4 w-4 text-muted-foreground" />
                 Activity
@@ -530,7 +530,7 @@ export function TaskDialog({
             </div>
 
             <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollAreaRef}>
-              <div className="space-y-6">
+              <div className="space-y-6 pb-4">
                 {timelineItems.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
                         No activity yet

@@ -53,7 +53,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ItemRow } from "@/components/shared/item-row";
 import { TaskDialog, Task, Project, Assignee } from "@/components/shared/task-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -76,6 +76,8 @@ interface ProjectDetailProps {
   allProjects: Project[];
   assignees?: Assignee[];
   agentId: string;
+  agentName?: string;
+  agentAvatarUrl?: string | null;
 }
 
 interface ActivityItem {
@@ -94,6 +96,8 @@ export function ProjectDetail({
   allProjects,
   assignees = [],
   agentId,
+  agentName = "AI Agent",
+  agentAvatarUrl,
 }: ProjectDetailProps) {
   const router = useRouter();
   const [project, setProject] = useState(initialProject);
@@ -339,10 +343,10 @@ export function ProjectDetail({
   const doneCount = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full w-full min-h-0 overflow-hidden">
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-5xl mx-auto space-y-8">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="max-w-5xl mx-auto space-y-8 p-6">
                 {/* Header with Navigation and Actions */}
                 <div className="flex items-start justify-between">
                     <div className="space-y-1">
@@ -486,7 +490,7 @@ export function ProjectDetail({
                                     </Button>
                                 </div>
                             ) : (
-                                <div className="divide-y">
+                                <div className="space-y-3 p-4">
                                     {tasks.map((task) => (
                                         <ItemRow
                                             key={task.id}
@@ -515,16 +519,16 @@ export function ProjectDetail({
         </div>
 
         {/* Right Sidebar - Activity */}
-        <div className="w-[350px] border-l bg-muted/10 flex flex-col">
-            <div className="p-4 border-b bg-background/50 backdrop-blur sticky top-0 z-10">
+        <div className="w-[350px] border-l bg-muted/10 flex flex-col h-full min-h-0">
+            <div className="p-4 border-b bg-background/50 backdrop-blur shrink-0">
                 <h3 className="font-semibold flex items-center gap-2">
                     <Activity className="h-4 w-4" />
                     Project Activity
                 </h3>
             </div>
             
-            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-                 <div className="space-y-6">
+            <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollAreaRef}>
+                 <div className="space-y-6 pb-4">
                     {activityItems.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground text-sm">
                             No activity recorded yet.
@@ -535,10 +539,15 @@ export function ProjectDetail({
                                 <div className="mt-0.5 shrink-0">
                                     {item.type === 'comment' ? (
                                         <Avatar className="h-8 w-8 border">
+                                            {item.author_type === 'agent' && agentAvatarUrl ? (
+                                                <AvatarImage src={agentAvatarUrl} alt={agentName} />
+                                            ) : null}
                                             <AvatarFallback className={cn("text-xs", 
                                                 item.author_type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
                                             )}>
-                                                {item.author_type === 'agent' ? "AI" : "U"}
+                                                {item.author_type === 'agent' 
+                                                    ? (agentName ? agentName.charAt(0).toUpperCase() : "AI") 
+                                                    : "U"}
                                             </AvatarFallback>
                                         </Avatar>
                                     ) : (
@@ -551,7 +560,7 @@ export function ProjectDetail({
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span className="font-medium text-foreground">
                                             {item.type === 'comment' 
-                                                ? (item.author_type === 'user' ? 'You' : 'AI Agent') 
+                                                ? (item.author_type === 'user' ? 'You' : agentName) 
                                                 : (item.source || 'System')}
                                         </span>
                                         <span>•</span>
@@ -579,7 +588,7 @@ export function ProjectDetail({
                  </div>
             </ScrollArea>
 
-            <div className="p-4 bg-background border-t">
+            <div className="p-4 bg-background border-t shrink-0">
                <div className="relative">
                   <Input
                     value={newComment}

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/dashboard/app-sidebar";
+import { AppSidebarClient } from "@/components/dashboard/app-sidebar-client";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { getAgentForUser } from "@/lib/db/agents";
 import { CommandPaletteProvider } from "@/components/command-palette-provider";
@@ -28,17 +28,17 @@ export default async function DashboardLayout({
 
   return (
     <CommandPaletteProvider>
-      <SidebarProvider>
-        <AppSidebar
+      <SidebarProvider className="!h-svh !max-h-svh overflow-hidden">
+        <AppSidebarClient
           user={{
             email: user.email || "",
             name: profileResult.data?.name,
           }}
           agentId={agent?.id}
         />
-        <SidebarInset>
+        <SidebarInset className="!h-svh !max-h-svh !min-h-0 overflow-hidden">
           <DashboardHeader agentId={agent?.id || null} />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </CommandPaletteProvider>

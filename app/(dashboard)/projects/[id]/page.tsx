@@ -20,7 +20,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   // Get user's agent
   const { data: agent } = await supabase
     .from("agents")
-    .select("id")
+    .select("id, name, avatar_url")
     .eq("user_id", user.id)
     .single();
 
@@ -63,7 +63,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   const assignees = [
     { id: user.id, name: "You", type: "user" as const },
-    { id: agent.id, name: "AI Agent", type: "agent" as const },
+    { id: agent.id, name: agent.name || "AI Agent", type: "agent" as const },
   ];
 
   return (
@@ -73,6 +73,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       allProjects={allProjects || []}
       assignees={assignees}
       agentId={agent.id}
+      agentName={agent.name}
+      agentAvatarUrl={agent.avatar_url}
     />
   );
 }

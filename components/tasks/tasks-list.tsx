@@ -149,8 +149,8 @@ export function TasksList({
   const doneCount = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">Tasks</h1>
           <p className="text-muted-foreground">
@@ -261,7 +261,7 @@ export function TasksList({
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-4">
         <Button
           variant={filter === "all" ? "default" : "outline"}
           size="sm"
@@ -306,7 +306,7 @@ export function TasksList({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filteredTasks.map((task) => (
             <ItemRow
               key={task.id}

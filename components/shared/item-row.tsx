@@ -102,7 +102,7 @@ export function ItemRow({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors group",
+        "flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-muted/30 hover:bg-muted/50 transition-colors group",
         onClick && "cursor-pointer",
         isCompleted && "opacity-60",
         className
