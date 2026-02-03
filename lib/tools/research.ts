@@ -1,11 +1,10 @@
 /**
- * Research tool using Perplexity Sonar API
+ * Research tool using AI Gateway with Perplexity Sonar
  * Provides web search and real-time information capabilities
  */
 
-import { tool, UIToolInvocation } from "ai";
+import { tool, UIToolInvocation, generateText, gateway } from "ai";
 import { z } from "zod";
-import OpenAI from "openai";
 
 /**
  * Create the research tool
@@ -23,8 +22,8 @@ export function createResearchTool(agentId: string) {
     }),
     execute: async ({ query, focusArea }: { query: string; focusArea?: string }) => {
       try {
-        // Check if Perplexity API key is configured
-        if (!process.env.PERPLEXITY_API_KEY) {
+        // Check if AI Gateway is configured
+        if (!process.env.AI_GATEWAY_API_KEY) {
           return {
             success: false,
             message: "Research capability is not configured. Please contact the administrator.",
@@ -34,32 +33,18 @@ export function createResearchTool(agentId: string) {
         // Enhance query with focus area if provided
         const enhancedQuery = focusArea ? `${query} (focus: ${focusArea})` : query;
 
-        // Use Perplexity Sonar API via OpenAI-compatible interface
-        const perplexity = new OpenAI({
-          apiKey: process.env.PERPLEXITY_API_KEY,
-          baseURL: "https://api.perplexity.ai",
-        });
-
         console.log(`[research] Searching for: ${enhancedQuery}`);
 
-        const response = await perplexity.chat.completions.create({
-          model: "sonar-pro",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a helpful research assistant. Provide concise, accurate, and well-cited information from reliable sources. Always include source URLs when available.",
-            },
-            {
-              role: "user",
-              content: enhancedQuery,
-            },
-          ],
-          max_tokens: 1000,
+        // Use AI Gateway with Perplexity Sonar Pro
+        const response = await generateText({
+          model: gateway("perplexity/sonar-pro"),
+          system:
+            "You are a helpful research assistant. Provide comprehensive, accurate, and well-cited information from reliable sources. Always include source URLs when available.",
+          prompt: enhancedQuery,
           temperature: 0.2,
         });
 
-        const result = response.choices[0]?.message?.content;
+        const result = response.text;
 
         if (!result) {
           return {
