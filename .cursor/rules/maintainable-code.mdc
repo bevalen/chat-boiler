@@ -1,0 +1,94 @@
+---
+description: Always write clean, maintainable code and watch for refactoring opportunities
+alwaysApply: true
+---
+
+# Maintainable Code & Refactoring Standards
+
+## File Size Limits
+
+**NEVER create files larger than 500 lines.** If approaching this limit:
+- Extract utilities, hooks, or sub-components immediately
+- Split large functions into smaller, focused functions
+- Move related logic to separate files
+
+**Target sizes:**
+- Components: 200-300 lines max
+- Utility files: 100-200 lines max
+- API routes: 150-250 lines max
+- Tool files: 200-300 lines per tool
+
+## Refactoring Awareness
+
+**Always watch for these refactoring opportunities:**
+
+1. **Multiple Responsibilities**: If a file handles more than one concern, extract them
+   - Example: Component doing API calls + state management + rendering → Extract hooks
+
+2. **Repeated Logic**: If code is duplicated 2+ times, extract to a utility function
+   - Example: Date formatting, URL normalization, validation logic
+
+3. **Complex Functions**: Functions over 50 lines should be broken down
+   - Extract helper functions, move logic to utilities
+
+4. **Mixed Concerns**: Separate UI, business logic, and data access
+   - Components should focus on rendering
+   - Extract API calls to service files
+   - Move business logic to utility functions
+
+## Code Organization
+
+**Follow these patterns:**
+
+- **Components**: Extract sub-components when they exceed 50 lines or handle distinct UI concerns
+- **Hooks**: One hook per file for complex hooks; group related simple hooks
+- **Utilities**: Single-purpose utility files (e.g., `email-validation.ts`, not `email-utils.ts`)
+- **Types**: Keep component-specific types inline; move shared types to `lib/types/`
+
+## When Writing New Code
+
+**Before writing:**
+1. Check if similar functionality exists
+2. Consider if this will make a file too large
+3. Plan extraction points proactively
+
+**While writing:**
+1. Extract helpers immediately if function exceeds 30 lines
+2. Create separate files for distinct concerns
+3. Use descriptive names that indicate single responsibility
+
+**After writing:**
+1. Review file size - if >300 lines, identify extraction opportunities
+2. Check for repeated patterns that could be utilities
+3. Ensure each file has a single, clear purpose
+
+## Examples
+
+```typescript
+// ❌ BAD: 600-line component mixing concerns
+export function ProjectDetail() {
+  // 200 lines of state management
+  // 200 lines of API calls
+  // 200 lines of rendering
+}
+
+// ✅ GOOD: Extracted concerns
+// project-detail.tsx (200 lines - rendering only)
+// use-project-data.ts (hook - data fetching)
+// use-project-actions.ts (hook - mutations)
+// project-detail-header.tsx (sub-component)
+```
+
+```typescript
+// ❌ BAD: Large utility file with mixed purposes
+// email-utils.ts (400 lines)
+export function sendEmail() { /* 100 lines */ }
+export function validateEmail() { /* 50 lines */ }
+export function formatEmail() { /* 50 lines */ }
+export function parseEmail() { /* 100 lines */ }
+
+// ✅ GOOD: Single-purpose files
+// send-email.ts (focused on sending)
+// email-validation.ts (focused on validation)
+// email-formatting.ts (focused on formatting)
+```
