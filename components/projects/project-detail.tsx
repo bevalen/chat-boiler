@@ -342,6 +342,10 @@ export function ProjectDetail({
   const activeCount = tasks.filter((t) => t.status !== "done").length;
   const doneCount = tasks.filter((t) => t.status === "done").length;
 
+  // Get user info from assignees
+  const userAssignee = assignees.find(a => a.type === 'user');
+  const userName = userAssignee?.name || 'You';
+
   return (
     <div className="flex h-full w-full min-h-0 overflow-hidden">
         {/* Main Content Area */}
@@ -495,12 +499,16 @@ export function ProjectDetail({
                                         <ItemRow
                                             key={task.id}
                                             title={task.title}
-                                            description={task.description}
                                             status={task.status}
                                             priority={task.priority}
                                             dueDate={task.due_date}
+                                            assigneeType={task.assignee_type}
+                                            assigneeId={task.assignee_id}
+                                            assignees={assignees}
+                                            commentCount={(task as any).task_comments?.[0]?.count || 0}
                                             isCompleted={task.status === "done"}
                                             showCheckbox
+                                            showDescription={false}
                                             onCheckboxChange={() => handleToggleComplete(task)}
                                             onClick={() => {
                                                 setSelectedTask(task);
@@ -541,13 +549,15 @@ export function ProjectDetail({
                                         <Avatar className="h-8 w-8 border">
                                             {item.author_type === 'agent' && agentAvatarUrl ? (
                                                 <AvatarImage src={agentAvatarUrl} alt={agentName} />
+                                            ) : item.author_type === 'user' && userAssignee?.avatar_url ? (
+                                                <AvatarImage src={userAssignee.avatar_url} alt={userName} />
                                             ) : null}
                                             <AvatarFallback className={cn("text-xs", 
                                                 item.author_type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
                                             )}>
                                                 {item.author_type === 'agent' 
                                                     ? (agentName ? agentName.charAt(0).toUpperCase() : "AI") 
-                                                    : "U"}
+                                                    : (userName ? userName.charAt(0).toUpperCase() : "U")}
                                             </AvatarFallback>
                                         </Avatar>
                                     ) : (
@@ -557,15 +567,15 @@ export function ProjectDetail({
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0 space-y-1">
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <span className="font-medium text-foreground">
-                                            {item.type === 'comment' 
-                                                ? (item.author_type === 'user' ? 'You' : agentName) 
-                                                : (item.source || 'System')}
-                                        </span>
-                                        <span>•</span>
-                                        <span>{formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}</span>
-                                    </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="font-medium text-foreground">
+                                        {item.type === 'comment' 
+                                            ? (item.author_type === 'user' ? userName : agentName) 
+                                            : (item.source || 'System')}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}</span>
+                                </div>
                                     
                                     {item.type === 'comment' ? (
                                         <div className="text-sm bg-background border rounded-r-lg rounded-bl-lg p-3 shadow-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-strong:font-semibold">

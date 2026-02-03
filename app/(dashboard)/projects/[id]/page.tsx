@@ -17,6 +17,13 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     return null;
   }
 
+  // Get user profile
+  const { data: userProfile } = await supabase
+    .from("users")
+    .select("name, avatar_url")
+    .eq("id", user.id)
+    .single();
+
   // Get user's agent
   const { data: agent } = await supabase
     .from("agents")
@@ -46,10 +53,14 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     notFound();
   }
 
-  // Get tasks for this project
+  // Get tasks for this project with comment counts
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("*, projects(id, title)")
+    .select(`
+      *,
+      projects(id, title),
+      task_comments(count)
+    `)
     .eq("project_id", id)
     .eq("agent_id", agent.id)
     .order("created_at", { ascending: false });
@@ -62,8 +73,18 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .order("title", { ascending: true });
 
   const assignees = [
-    { id: user.id, name: "You", type: "user" as const },
-    { id: agent.id, name: agent.name || "AI Agent", type: "agent" as const },
+    { 
+      id: user.id, 
+      name: userProfile?.name || user.email?.split('@')[0] || "User", 
+      type: "user" as const,
+      avatar_url: userProfile?.avatar_url
+    },
+    { 
+      id: agent.id, 
+      name: agent.name, 
+      type: "agent" as const, 
+      avatar_url: agent.avatar_url 
+    },
   ];
 
   return (

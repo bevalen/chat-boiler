@@ -311,13 +311,17 @@ export function TasksList({
             <ItemRow
               key={task.id}
               title={task.title}
-              description={task.description}
               status={task.status}
               priority={task.priority}
               dueDate={task.due_date}
               projectName={task.projects?.title}
+              assigneeType={task.assignee_type}
+              assigneeId={task.assignee_id}
+              assignees={assignees}
+              commentCount={(task as any).task_comments?.[0]?.count || 0}
               isCompleted={task.status === "done"}
               showCheckbox
+              showDescription={false}
               onCheckboxChange={() => handleToggleComplete(task)}
               onClick={() => {
                 setSelectedTask(task);

@@ -3,8 +3,16 @@
 import { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Clock, Calendar, FolderKanban, ChevronRight } from "lucide-react";
+import { Clock, Calendar, FolderKanban, ChevronRight, MessageSquare } from "lucide-react";
+
+interface Assignee {
+  id: string;
+  name: string;
+  type: "user" | "agent";
+  avatar_url?: string | null;
+}
 
 interface ItemRowProps {
   title: string;
@@ -13,6 +21,10 @@ interface ItemRowProps {
   priority: string | null;
   dueDate?: string | null;
   projectName?: string | null;
+  assigneeType?: string | null;
+  assigneeId?: string | null;
+  assignees?: Assignee[];
+  commentCount?: number;
   isCompleted?: boolean;
   showCheckbox?: boolean;
   onCheckboxChange?: () => void;
@@ -20,6 +32,7 @@ interface ItemRowProps {
   actions?: ReactNode;
   variant?: "task" | "project";
   className?: string;
+  showDescription?: boolean;
 }
 
 export function ItemRow({
@@ -29,6 +42,10 @@ export function ItemRow({
   priority,
   dueDate,
   projectName,
+  assigneeType,
+  assigneeId,
+  assignees = [],
+  commentCount,
   isCompleted = false,
   showCheckbox = false,
   onCheckboxChange,
@@ -36,6 +53,7 @@ export function ItemRow({
   actions,
   variant = "task",
   className,
+  showDescription = true,
 }: ItemRowProps) {
   const getPriorityColor = (priority: string | null) => {
     switch (priority) {
@@ -99,6 +117,10 @@ export function ItemRow({
   const isOverdue =
     dueDate && new Date(dueDate) < new Date() && status !== "done";
 
+  const assignee = assigneeType && assigneeId 
+    ? assignees.find(a => a.id === assigneeId && a.type === assigneeType)
+    : null;
+
   return (
     <div
       className={cn(
@@ -144,7 +166,28 @@ export function ItemRow({
             </Badge>
           )}
         </div>
-        {(description || dueDate) && (
+        {variant === "task" && (dueDate || commentCount !== undefined) && (
+          <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+            {dueDate && (
+              <span
+                className={cn(
+                  "flex items-center gap-1",
+                  isOverdue && "text-red-500"
+                )}
+              >
+                <Calendar className="h-3 w-3" />
+                {formatDate(dueDate)}
+              </span>
+            )}
+            {commentCount !== undefined && commentCount > 0 && (
+              <span className="flex items-center gap-1">
+                <MessageSquare className="h-3 w-3" />
+                {commentCount}
+              </span>
+            )}
+          </div>
+        )}
+        {variant === "project" && (description || dueDate) && showDescription && (
           <div className="flex items-center gap-3 mt-0.5 text-sm text-muted-foreground">
             {description && (
               <span className="truncate max-w-[200px]">{description}</span>
@@ -165,6 +208,20 @@ export function ItemRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {assignee && (
+          <div className="flex items-center gap-1.5 mr-1" title={assignee.name}>
+            <Avatar className="h-6 w-6 border">
+              {assignee.avatar_url && (
+                <AvatarImage src={assignee.avatar_url} alt={assignee.name} />
+              )}
+              <AvatarFallback className={cn("text-[10px]", 
+                assignee.type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+              )}>
+                {assignee.name.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+        )}
         <Badge
           variant="outline"
           className={cn("text-xs capitalize", getStatusColor(status))}

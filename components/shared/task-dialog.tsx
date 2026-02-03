@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { TaskDialogSkeleton } from "./task-dialog-skeleton";
 
 export interface Task {
   id: string;
@@ -135,18 +136,21 @@ export function TaskDialog({
   onNavigateToProject,
 }: TaskDialogProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editedTask, setEditedTask] = useState<Partial<Task>>({});
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [agent, setAgent] = useState<{ name: string; avatarUrl: string | null } | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Initialize edited task when task opens
   useEffect(() => {
-    if (task) {
+    if (task && open) {
+      setIsInitialLoading(true);
       setEditedTask({
         title: task.title,
         description: task.description,
@@ -158,9 +162,15 @@ export function TaskDialog({
         assignee_id: task.assignee_id,
       });
       // Start in "view" mode, but fields are editable directly in this new UI
-      setIsEditing(true); 
+      setIsEditing(true);
+      // Small delay to show loading skeleton
+      setTimeout(() => setIsInitialLoading(false), 300);
     }
-  }, [task]);
+  }, [task, open]);
+
+  // Get user info from assignees
+  const userAssignee = assignees.find(a => a.type === 'user');
+  const userName = userAssignee?.name || 'You';
 
   // Fetch agent info
   useEffect(() => {
@@ -327,7 +337,11 @@ export function TaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[1000px] h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-background">
         <DialogTitle className="sr-only">Task Details</DialogTitle>
-        {/* Header */}
+        {isInitialLoading ? (
+          <TaskDialogSkeleton />
+        ) : (
+        <>
+          {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between bg-background shrink-0 z-10">
           <div className="flex items-center gap-3 flex-1 min-w-0">
              {/* Project Breadcrumb */}
@@ -475,21 +489,42 @@ export function TaskDialog({
                     }}
                   >
                     <SelectTrigger className="h-8 bg-transparent border-transparent hover:bg-muted/50 px-2 -ml-2 w-full justify-start shadow-none">
-                       {editedTask.assignee_id ? (
+                       {(() => {
+                         const currentAssignee = getAssignee(editedTask.assignee_type, editedTask.assignee_id, assignees);
+                         return currentAssignee ? (
                           <div className="flex items-center gap-2">
-                             {editedTask.assignee_type === "agent" ? <Bot className="h-3.5 w-3.5 text-purple-500" /> : <User className="h-3.5 w-3.5 text-blue-500" />}
-                             <span className="truncate">{getAssigneeName(editedTask.assignee_type, editedTask.assignee_id, assignees)}</span>
+                             <Avatar className="h-5 w-5 border">
+                               {currentAssignee.avatar_url && (
+                                 <AvatarImage src={currentAssignee.avatar_url} alt={currentAssignee.name} />
+                               )}
+                               <AvatarFallback className={cn("text-[10px]", 
+                                 currentAssignee.type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                               )}>
+                                 {currentAssignee.name.charAt(0).toUpperCase()}
+                               </AvatarFallback>
+                             </Avatar>
+                             <span className="truncate">{currentAssignee.name}</span>
                           </div>
-                       ) : (
+                         ) : (
                           <span className="text-muted-foreground">Unassigned</span>
-                       )}
+                         );
+                       })()}
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="w-[200px]">
                       <SelectItem value="none">Unassigned</SelectItem>
                       {assignees.map((assignee) => (
                         <SelectItem key={`${assignee.type}:${assignee.id}`} value={`${assignee.type}:${assignee.id}`}>
                           <div className="flex items-center gap-2">
-                            {assignee.type === "agent" ? <Bot className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                            <Avatar className="h-5 w-5 border">
+                              {assignee.avatar_url && (
+                                <AvatarImage src={assignee.avatar_url} alt={assignee.name} />
+                              )}
+                              <AvatarFallback className={cn("text-[10px]", 
+                                assignee.type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                              )}>
+                                {assignee.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
                             {assignee.name}
                           </div>
                         </SelectItem>
@@ -506,13 +541,30 @@ export function TaskDialog({
                   Description
                 </Label>
                 <div className="relative min-h-[200px] group">
-                   <Textarea
-                    value={editedTask.description || ""}
-                    onChange={(e) => setEditedTask({ ...editedTask, description: e.target.value })}
-                    onBlur={() => saveField({ description: editedTask.description })}
-                    placeholder="Add a detailed description..."
-                    className="min-h-[200px] resize-none border-transparent hover:border-border focus:border-ring p-4 text-base leading-relaxed bg-muted/10 rounded-lg"
-                  />
+                  {isEditingDescription ? (
+                    <Textarea
+                      value={editedTask.description || ""}
+                      onChange={(e) => setEditedTask({ ...editedTask, description: e.target.value })}
+                      onBlur={() => {
+                        saveField({ description: editedTask.description });
+                        setIsEditingDescription(false);
+                      }}
+                      placeholder="Add a detailed description..."
+                      className="min-h-[200px] resize-none border-transparent hover:border-border focus:border-ring p-4 text-base leading-relaxed bg-muted/10 rounded-lg"
+                      autoFocus
+                    />
+                  ) : (
+                    <div 
+                      onClick={() => setIsEditingDescription(true)}
+                      className="min-h-[200px] p-4 text-base leading-relaxed bg-muted/10 rounded-lg border border-transparent hover:border-border cursor-text prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-strong:font-semibold prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                    >
+                      {editedTask.description ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{editedTask.description}</ReactMarkdown>
+                      ) : (
+                        <p className="text-muted-foreground">Add a detailed description...</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -543,13 +595,15 @@ export function TaskDialog({
                                     <Avatar className="h-8 w-8 border">
                                         {item.data.author_type === 'agent' && agent?.avatarUrl ? (
                                             <AvatarImage src={agent.avatarUrl} alt={agent.name} />
+                                        ) : item.data.author_type === 'user' && userAssignee?.avatar_url ? (
+                                            <AvatarImage src={userAssignee.avatar_url} alt={userName} />
                                         ) : null}
                                         <AvatarFallback className={cn("text-xs", 
                                             item.data.author_type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
                                         )}>
                                             {item.data.author_type === 'agent' 
                                                 ? (agent?.name ? agent.name.charAt(0).toUpperCase() : "AI")
-                                                : "U"}
+                                                : (userName ? userName.charAt(0).toUpperCase() : "U")}
                                         </AvatarFallback>
                                     </Avatar>
                                 ) : (
@@ -562,7 +616,7 @@ export function TaskDialog({
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <span className="font-medium text-foreground">
                                         {item.type === 'comment' 
-                                            ? (item.data.author_type === 'user' ? 'You' : (agent?.name || 'AI Agent')) 
+                                            ? (item.data.author_type === 'user' ? userName : (agent?.name || 'AI Agent')) 
                                             : (item.data.source || 'System')}
                                     </span>
                                     <span>•</span>
@@ -621,6 +675,8 @@ export function TaskDialog({
             </div>
           </div>
         </div>
+        </>
+        )}
       </DialogContent>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -646,8 +702,7 @@ export function TaskDialog({
   );
 }
 
-function getAssigneeName(type: string | null | undefined, id: string | null | undefined, assignees: Assignee[]) {
-  if (!type) return "Unassigned";
-  const assignee = assignees.find(a => a.id === id && a.type === type);
-  return assignee?.name || (type === "agent" ? "AI Agent" : "User");
+function getAssignee(type: string | null | undefined, id: string | null | undefined, assignees: Assignee[]) {
+  if (!type || !id) return null;
+  return assignees.find(a => a.id === id && a.type === type) || null;
 }
