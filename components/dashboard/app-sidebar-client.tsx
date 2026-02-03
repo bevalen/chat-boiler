@@ -28,5 +28,5 @@ export function AppSidebarClient({ user, agentId }: AppSidebarClientProps) {
     );
   }
 
-  return <AppSidebar user={user} agentId={agentId} />;
+  return <AppSidebar user={{ ...user, name: user.name ?? undefined }} agentId={agentId} />;
 }
