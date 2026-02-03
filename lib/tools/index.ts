@@ -23,6 +23,9 @@ export {
   createGetEmailThreadTool,
 } from "./email-resend";
 
+// Export email agent tools (email-specific linking and task management)
+export { createEmailAgentTools, type EmailAgentToolContext } from "./email-agent-tools";
+
 // Export tool registry (main entry point for chat route)
 export { createToolRegistry, type ToolRegistry, type ToolRegistryContext } from "./registry";
 
