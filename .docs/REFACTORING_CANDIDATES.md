@@ -4,47 +4,58 @@ This document lists all files in the codebase that need refactoring based on siz
 
 **Last Updated:** February 3, 2026
 
+## ✅ Completed Refactorings
+
+### `lib/inngest/functions/process-email.ts` ✅
+**Status:** ✅ Complete (Feb 3, 2026)  
+**Before:** 875 lines  
+**After:** 272 lines (69% reduction)
+
+**Extracted Files:**
+- ✅ `lib/inngest/functions/email-context-prompt.ts` (140 lines) - Email context prompt builder
+- ✅ `lib/inngest/functions/email-conversation.ts` (98 lines) - Conversation management
+- ✅ `lib/tools/email-agent-tools.ts` (306 lines) - Email-specific linking tools
+
+**Improvements:**
+- Now uses tool registry pattern (consistent with chat endpoint)
+- Clear separation of concerns: prompt building, conversation management, and tool orchestration
+- All functionality preserved, no breaking changes
+- No linter errors
+
+---
+
+### `components/projects/project-detail.tsx` ✅
+**Status:** ✅ Complete (Feb 3, 2026)  
+**Before:** 741 lines  
+**After:** 372 lines (50% reduction)
+
+**Extracted Hooks:**
+- ✅ `hooks/use-project-activity.ts` (81 lines) - Activity fetching and management
+- ✅ `hooks/use-project-comments.ts` (57 lines) - Comment creation and updates
+- ✅ `hooks/use-create-task.ts` (65 lines) - Task creation logic
+
+**Extracted Sub-Components:**
+- ✅ `components/projects/project-detail-header.tsx` (162 lines) - Header with edit controls
+- ✅ `components/projects/project-detail-description.tsx` (47 lines) - Description display/editing
+- ✅ `components/projects/project-detail-tasks.tsx` (91 lines) - Task list section
+- ✅ `components/projects/project-detail-activity.tsx` (154 lines) - Activity sidebar
+
+**Improvements:**
+- Clean separation of UI concerns
+- Reusable hooks for activity, comments, and task creation
+- Each sub-component has a single responsibility
+- All functionality preserved, no breaking changes
+- No linter errors
+
+---
+
 ## Priority 1: Critical Refactoring (Very Large Files)
 
-### `lib/inngest/functions/process-email.ts` (875 lines)
-**Status:** 🔴 Critical  
-**Issues:**
-- Extremely large file handling multiple responsibilities
-- Mixes email context gathering, conversation management, agent execution, and tool creation
-- Contains inline tool definitions that should be extracted
-- Complex prompt building logic mixed with execution logic
-
-**Refactoring Plan:**
-- Extract email context prompt building → `lib/inngest/functions/email-context-prompt.ts`
-- Extract email agent tools → `lib/tools/email-agent-tools.ts`
-- Extract conversation creation logic → `lib/inngest/functions/email-conversation.ts`
-- Keep main function focused on orchestration only
-
-**Estimated Effort:** High (4-6 hours)
+_No critical refactorings remaining!_
 
 ---
 
 ## Priority 2: High Priority (Large Components & Complex Logic)
-
-### `components/projects/project-detail.tsx` (741 lines)
-**Status:** 🟠 High Priority  
-**Issues:**
-- Large component mixing UI rendering, state management, and API calls
-- Activity fetching and comment management logic embedded in component
-- Task creation dialog logic mixed with project detail logic
-- Multiple responsibilities: editing, deleting, task management, activity feed
-
-**Refactoring Plan:**
-- Extract activity fetching → `hooks/use-project-activity.ts`
-- Extract comment management → `hooks/use-project-comments.ts`
-- Extract task creation logic → `hooks/use-create-task.ts`
-- Split into sub-components:
-  - `project-detail-header.tsx`
-  - `project-detail-description.tsx`
-  - `project-detail-tasks.tsx`
-  - `project-detail-activity.tsx`
-
-**Estimated Effort:** Medium-High (3-4 hours)
 
 ### `components/shared/task-dialog.tsx` (709 lines)
 **Status:** 🟠 High Priority  
@@ -202,13 +213,17 @@ This document lists all files in the codebase that need refactoring based on siz
 
 ## Summary Statistics
 
-- **Total Files Needing Refactoring:** 11
-- **Critical Priority:** 1 file
-- **High Priority:** 3 files
+- **Total Files Needing Refactoring:** 9 remaining (2 completed ✅)
+- **Completed:** 2 files ✅
+- **Critical Priority:** 0 files (all complete!)
+- **High Priority:** 2 files
 - **Medium Priority:** 4 files
 - **Lower Priority:** 3 files
 
-**Estimated Total Effort:** 20-30 hours
+**Progress:**
+- ✅ Completed: 2 files (~1,600 lines refactored)
+- ⏳ Remaining: 9 files
+- 🎯 Estimated Remaining Effort: 12-18 hours
 
 ---
 

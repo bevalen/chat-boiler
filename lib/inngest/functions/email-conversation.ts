@@ -77,22 +77,23 @@ export async function getOrCreateEmailConversation(
 
     return {
       id: conv.id,
-      agentId: conv.agent_id,
-      title: conv.title,
+      agentId: conv.agentId,
+      title: conv.title || "",
       channelType: "email",
-      status: conv.status,
-      createdAt: conv.created_at,
-      updatedAt: conv.updated_at,
+      status: conv.status || "active",
+      createdAt: conv.createdAt || new Date().toISOString(),
+      updatedAt: conv.updatedAt || new Date().toISOString(),
     };
   }
 
+  // Map the database row to the EmailConversation interface
   return {
     id: existingConv.id,
     agentId: existingConv.agent_id,
-    title: existingConv.title,
-    channelType: existingConv.channel_type,
-    status: existingConv.status,
-    createdAt: existingConv.created_at,
-    updatedAt: existingConv.updated_at,
+    title: existingConv.title || "",
+    channelType: existingConv.channel_type || "email",
+    status: existingConv.status || "active",
+    createdAt: existingConv.created_at || new Date().toISOString(),
+    updatedAt: existingConv.updated_at || new Date().toISOString(),
   };
 }
