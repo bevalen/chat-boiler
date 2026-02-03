@@ -4,11 +4,6 @@ import { useChat, UIMessage } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,12 +14,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Send, Bot, User, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Trash2, Search, Brain, FolderPlus, ListTodo, Save, Copy, CheckCheck, Square } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Bot, User } from "lucide-react";
 import Image from "next/image";
-import { ExternalLink } from "lucide-react";
+import { ConversationSidebar } from "./conversation-sidebar";
+import { ChatHeader } from "./chat-header";
+import { MessageBubble } from "./message-bubble";
+import { MessageInput } from "./message-input";
+import { WelcomeScreen } from "./welcome-screen";
+import { MessageSkeleton } from "./message-skeleton";
+import { LiveToolIndicator } from "./live-tool-indicator";
+import { TypingDots } from "./typing-dots";
+import { useConversation } from "@/hooks/use-conversation";
+import { useScrollManagement } from "@/hooks/use-scroll-management";
+import { useRealtimeUpdates } from "@/hooks/use-realtime-updates";
 
 interface Conversation {
   id: string;
@@ -65,8 +67,8 @@ interface ChatInterfaceProps {
 
 const DEFAULT_STORAGE_KEY = "maia_active_conversation_id";
 
-export function ChatInterface({ 
-  agent, 
+export function ChatInterface({
+  agent,
   agentId,
   user: userInfo,
   apiEndpoint = "/api/chat",
@@ -75,23 +77,19 @@ export function ChatInterface({
   welcomeMessage,
 }: ChatInterfaceProps) {
   const searchParams = useSearchParams();
-  
-  // Initialize from URL param first, then fall back to localStorage
-  const [conversationId, setConversationId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      // Check URL param first
-      const urlConvId = new URLSearchParams(window.location.search).get("conversation");
-      if (urlConvId) return urlConvId;
-      // Fall back to localStorage
-      if (storageKey) return localStorage.getItem(storageKey);
-    }
-    return null;
-  });
-  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+
   const [showSidebar, setShowSidebar] = useState(false);
-  const [loadingConversations, setLoadingConversations] = useState(true);
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [pendingTitleGeneration, setPendingTitleGeneration] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+  const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [input, setInput] = useState("");
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+  const hasInitialLoadRunRef = useRef(false);
+  const initialLoadCompleteRef = useRef(false);
 
   // Auto-open sidebar on desktop
   useEffect(() => {
@@ -99,24 +97,6 @@ export function ChatInterface({
       setShowSidebar(true);
     }
   }, []);
-  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
-  const [editingTitleValue, setEditingTitleValue] = useState("");
-  const [pendingTitleGeneration, setPendingTitleGeneration] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
-  // Optimistic message shown while creating first conversation
-  const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
-  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingMessageValue, setEditingMessageValue] = useState("");
-
-  // Use a ref to always have the latest conversationId in the transport
-  const conversationIdRef = useRef<string | null>(null);
-  conversationIdRef.current = conversationId;
-  
-  // Track which conversation is currently being loaded to prevent race conditions
-  const loadingConversationIdRef = useRef<string | null>(null);
 
   // Memoize transport to avoid unnecessary recreations but use ref for latest ID
   const transport = useMemo(
@@ -130,110 +110,38 @@ export function ChatInterface({
 
   const { messages, sendMessage, status, setMessages, stop } = useChat({ transport });
 
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  // Sticky scroll refs - allow user to scroll up during streaming without being forced back down
-  const isUserScrollingRef = useRef(false); // true = user has scrolled up, don't auto-scroll
-  const lastScrollTopRef = useRef(0);
-  const isAutoScrollingRef = useRef(false); // prevent scroll handler from detecting our own scrolls
+  // Custom hooks for conversation management
+  const {
+    conversationId,
+    setConversationId,
+    conversations,
+    isLoadingConversation,
+    loadingConversations,
+    loadingConversationIdRef,
+    loadConversations,
+    loadConversation,
+    generateTitle,
+    updateTitle,
+    deleteConversation,
+  } = useConversation({ storageKey, setMessages });
+
+  // Sync conversationId with ref
+  conversationIdRef.current = conversationId;
+
+  // Custom hook for scroll management
+  const { scrollRef, handleScroll, resetScrollOnSend } = useScrollManagement(messages, status);
+
+  // Custom hook for realtime updates
+  useRealtimeUpdates({
+    conversationId,
+    agentId,
+    setMessages,
+    loadConversations,
+  });
 
   const isLoading = status === "submitted" || status === "streaming";
-
-  // Load conversations list
-  const loadConversations = useCallback(async () => {
-    try {
-      setLoadingConversations(true);
-      const res = await fetch(`/api/conversations?channel=app`);
-      const data = await res.json();
-      setConversations(data.conversations || []);
-    } catch (error) {
-      console.error("Failed to load conversations:", error);
-    } finally {
-      setLoadingConversations(false);
-    }
-  }, []);
-
-  // Load messages for a conversation
-  const loadConversation = useCallback(async (id: string) => {
-    // Skip if already loading this conversation
-    if (loadingConversationIdRef.current === id) {
-      return;
-    }
-    
-    // Track which conversation we're loading to prevent race conditions
-    loadingConversationIdRef.current = id;
-    
-    // Optimistically switch to the new conversation immediately
-    // This shows the loading skeleton right away for a snappy feel
-    setIsLoadingConversation(true);
-    setConversationId(id);
-    setMessages([]); // Clear messages so skeleton shows
-    
-    if (window.innerWidth < 768) {
-      setShowSidebar(false);
-    }
-    
-    try {
-      const res = await fetch(`/api/conversations/${id}/messages`);
-      
-      // Check if we're still loading this conversation (user might have switched)
-      if (loadingConversationIdRef.current !== id) {
-        return; // Abort - user switched to a different conversation
-      }
-      
-      if (!res.ok) {
-        // Conversation no longer exists, reset state
-        console.warn(`Conversation ${id} not found, clearing state`);
-        setConversationId(null);
-        if (storageKey) localStorage.removeItem(storageKey);
-        return;
-      }
-      
-      const data = await res.json();
-      
-      // Double-check we're still on this conversation before updating messages
-      if (loadingConversationIdRef.current !== id) {
-        return; // Abort - user switched to a different conversation
-      }
-
-      if (data.messages) {
-        // Convert database messages to UIMessage format
-        const uiMessages: UIMessage[] = data.messages.map(
-          (msg: { id: string; role: "user" | "assistant"; content: string; createdAt: string }) => ({
-            id: msg.id,
-            role: msg.role,
-            parts: [{ type: "text" as const, text: msg.content }],
-            createdAt: new Date(msg.createdAt || Date.now()),
-          })
-        );
-        setMessages(uiMessages);
-      }
-      
-      // Auto-mark notifications as read for this conversation
-      fetch("/api/notifications/mark-by-conversation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: id }),
-      }).catch((err) => {
-        console.error("Failed to mark notifications as read:", err);
-      });
-    } catch (error) {
-      console.error("Failed to load conversation:", error);
-      // Only reset if we're still trying to load this conversation
-      if (loadingConversationIdRef.current === id) {
-        setConversationId(null);
-        if (storageKey) localStorage.removeItem(storageKey);
-      }
-    } finally {
-      // Only clear loading state if this is still the active load
-      if (loadingConversationIdRef.current === id) {
-        loadingConversationIdRef.current = null;
-        setIsLoadingConversation(false);
-      }
-    }
-  }, [setMessages, storageKey]);
+  const agentName = agent?.name || "Maia";
+  const agentTitle = agent?.title || "AI Assistant";
 
   // Start a new conversation (just clear state, create in DB on first message)
   const startNewConversation = useCallback(() => {
@@ -246,7 +154,7 @@ export function ChatInterface({
     if (storageKey) localStorage.removeItem(storageKey);
     // Focus the textarea after starting new conversation
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, [setMessages, storageKey]);
+  }, [setMessages, storageKey, setConversationId]);
 
   // Keyboard shortcut: CMD+J to start new conversation
   useEffect(() => {
@@ -261,401 +169,9 @@ export function ChatInterface({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [startNewConversation]);
 
-  // Generate title for conversation
-  const generateTitle = useCallback(
-    async (convId: string, msgs: UIMessage[]) => {
-      try {
-        const messageData = msgs.map((m) => ({
-          role: m.role,
-          content: m.parts
-            .filter((p): p is { type: "text"; text: string } => p.type === "text")
-            .map((p) => p.text)
-            .join("\n"),
-        }));
-
-        await fetch(`/api/conversations/${convId}/title`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: messageData }),
-        });
-
-        // Refresh conversations to show new title
-        loadConversations();
-      } catch (error) {
-        console.error("Failed to generate title:", error);
-      }
-    },
-    [loadConversations]
-  );
-
-  // Update title manually
-  const updateTitle = useCallback(
-    async (convId: string, newTitle: string) => {
-      try {
-        await fetch(`/api/conversations/${convId}/title`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: newTitle }),
-        });
-
-        loadConversations();
-        setEditingTitleId(null);
-      } catch (error) {
-        console.error("Failed to update title:", error);
-      }
-    },
-    [loadConversations]
-  );
-
-  // Delete conversation
-  const deleteConversation = useCallback(
-    async (convId: string) => {
-      try {
-        await fetch(`/api/conversations/${convId}`, {
-          method: "DELETE",
-        });
-
-        // If we deleted the current conversation, clear the chat and localStorage
-        if (conversationId === convId) {
-          setConversationId(null);
-          setMessages([]);
-          if (storageKey) localStorage.removeItem(storageKey);
-        }
-
-        loadConversations();
-      } catch (error) {
-        console.error("Failed to delete conversation:", error);
-      } finally {
-        setDeleteDialogOpen(false);
-        setConversationToDelete(null);
-      }
-    },
-    [conversationId, loadConversations, setMessages]
-  );
-
-  const confirmDelete = (conv: Conversation) => {
-    setConversationToDelete(conv);
-    setDeleteDialogOpen(true);
-  };
-
-  // Ref to track if initial load has run (prevents double load on navigation)
-  const hasInitialLoadRunRef = useRef(false);
-  
-  // Initial load - load conversations list and restore active conversation
-  // Only runs once on mount
-  useEffect(() => {
-    // Prevent double load (React Strict Mode or navigation edge cases)
-    if (hasInitialLoadRunRef.current) {
-      return;
-    }
-    hasInitialLoadRunRef.current = true;
-    
-    const init = async () => {
-      await loadConversations();
-      
-      // Check for "new chat" request first
-      const urlParams = new URLSearchParams(window.location.search);
-      const isNewChat = urlParams.get("new") === "true";
-      
-      if (isNewChat) {
-        // Clear any stored conversation and start fresh
-        if (storageKey) localStorage.removeItem(storageKey);
-        setConversationId(null);
-        setMessages([]);
-        // Clean up the URL by removing the ?new=true param
-        const url = new URL(window.location.href);
-        url.searchParams.delete("new");
-        window.history.replaceState(null, "", url.pathname + url.search);
-        return;
-      }
-      
-      // Check for conversation ID from URL or localStorage (already set in state init)
-      const urlConvId = urlParams.get("conversation");
-      const savedId = urlConvId || (storageKey ? localStorage.getItem(storageKey) : null);
-      
-      if (savedId) {
-        // loadConversation handles its own loading state
-        await loadConversation(savedId);
-      }
-    };
-    init();
-    // Empty deps - only run on mount. Use refs for values needed inside.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-
-  // Realtime subscription for conversations list updates
-  // Only listen to INSERT and DELETE events (not UPDATE) to avoid excessive refreshes
-  // when updated_at timestamps change. Debounce to prevent rapid fire updates.
-  // Filter by agentId to only receive updates for this user's conversations.
-  useEffect(() => {
-    // Skip subscription if we don't have an agentId to filter by
-    if (!agentId) return;
-    
-    const supabase = createClient();
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    
-    const debouncedLoadConversations = () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      debounceTimer = setTimeout(() => {
-        loadConversations();
-      }, 500); // 500ms debounce
-    };
-    
-    const channel = supabase
-      .channel(`conversations-list:${agentId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "conversations",
-          filter: `agent_id=eq.${agentId}`,
-        },
-        debouncedLoadConversations
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "conversations",
-          filter: `agent_id=eq.${agentId}`,
-        },
-        debouncedLoadConversations
-      )
-      .subscribe();
-
-    return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      supabase.removeChannel(channel);
-    };
-  }, [agentId, loadConversations]);
-
-  // Persist conversationId to localStorage and URL when it changes
-  // Use History API directly to avoid Next.js router overhead and potential navigation issues
-  useEffect(() => {
-    if (conversationId) {
-      // Update localStorage
-      if (storageKey) {
-        localStorage.setItem(storageKey, conversationId);
-      }
-      // Update URL without triggering navigation - use History API directly
-      const url = new URL(window.location.href);
-      if (url.searchParams.get("conversation") !== conversationId) {
-        url.searchParams.set("conversation", conversationId);
-        window.history.replaceState(null, "", url.pathname + url.search);
-      }
-    } else {
-      // Clear URL param when no conversation
-      const url = new URL(window.location.href);
-      if (url.searchParams.has("conversation")) {
-        url.searchParams.delete("conversation");
-        window.history.replaceState(null, "", url.pathname + url.search);
-      }
-    }
-  }, [conversationId, storageKey]);
-
-  // Ref to track if initial load has completed (to avoid duplicate loads)
-  const initialLoadCompleteRef = useRef(false);
-  
-  // Watch for URL changes (e.g., from notifications, browser back/forward)
-  // Skip the first run since initial load effect handles that
-  // Only react to searchParams changes - not conversationId changes
-  useEffect(() => {
-    // Skip first run - initial load effect handles the mount case
-    if (!initialLoadCompleteRef.current) {
-      initialLoadCompleteRef.current = true;
-      return;
-    }
-    
-    const urlConvId = searchParams.get("conversation");
-    const isNewChat = searchParams.get("new") === "true";
-    
-    // Handle "new chat" request - clear state and remove the query param
-    if (isNewChat) {
-      startNewConversation();
-      // Clean up the URL by removing the ?new=true param
-      const url = new URL(window.location.href);
-      url.searchParams.delete("new");
-      window.history.replaceState(null, "", url.pathname + url.search);
-      return;
-    }
-    
-    // Skip if we're already loading this conversation (prevents race conditions)
-    if (loadingConversationIdRef.current === urlConvId) {
-      return;
-    }
-    
-    // Skip if the current conversation already matches (our own URL update)
-    if (urlConvId === conversationIdRef.current) {
-      return;
-    }
-    
-    // If URL has a different conversation than current, load it
-    if (urlConvId) {
-      loadConversation(urlConvId);
-    } else if (conversationIdRef.current) {
-      // URL param cleared (e.g., navigated away), clear the conversation
-      loadingConversationIdRef.current = null;
-      setConversationId(null);
-      setMessages([]);
-    }
-    // Only depend on searchParams and stable function refs - use refs for state values to avoid loops
-  }, [searchParams, loadConversation, setMessages, startNewConversation]);
-
-  // Track scroll position to implement "sticky scroll" - only auto-scroll if user hasn't scrolled up
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    
-    // Ignore scroll events triggered by our own auto-scrolling
-    if (isAutoScrollingRef.current) {
-      return;
-    }
-    
-    const currentScrollTop = target.scrollTop;
-    const maxScrollTop = target.scrollHeight - target.clientHeight;
-    const threshold = 50; // threshold for "at bottom" detection
-    const isAtBottom = maxScrollTop - currentScrollTop <= threshold;
-    
-    // Detect user scroll direction: if they scrolled UP, disable auto-scroll
-    if (currentScrollTop < lastScrollTopRef.current && !isAtBottom) {
-      isUserScrollingRef.current = true;
-    }
-    
-    // If user scrolled to bottom, re-enable auto-scroll
-    if (isAtBottom) {
-      isUserScrollingRef.current = false;
-    }
-    
-    lastScrollTopRef.current = currentScrollTop;
-  }, []);
-
-  // Scroll to bottom helper - uses instant scroll during streaming to avoid animation conflicts
-  const scrollToBottom = useCallback(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) return;
-    
-    isAutoScrollingRef.current = true;
-    
-    // Use instant scroll (no animation) - much smoother during rapid updates
-    viewport.scrollTop = viewport.scrollHeight;
-    
-    // Reset the flag after a frame to allow user scroll detection
-    requestAnimationFrame(() => {
-      isAutoScrollingRef.current = false;
-      lastScrollTopRef.current = viewport.scrollTop;
-    });
-  }, []);
-
-  // Auto-scroll to bottom only when user hasn't scrolled up (sticky scroll behavior)
-  useEffect(() => {
-    if (!isUserScrollingRef.current) {
-      scrollToBottom();
-    }
-  }, [messages, status, scrollToBottom]);
-  
-  // Reset user scrolling when a new message is sent (user wants to see the response)
-  const resetScrollOnSend = useCallback(() => {
-    isUserScrollingRef.current = false;
-    scrollToBottom();
-  }, [scrollToBottom]);
-
-  // Realtime subscription for new messages (e.g., from cron jobs, other sessions)
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const supabase = createClient();
-    
-    const channel = supabase
-      .channel(`messages:${conversationId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const newMessage = payload.new as {
-            id: string;
-            role: "user" | "assistant" | "system";
-            content: string;
-            created_at: string;
-            metadata?: Record<string, unknown>;
-          };
-
-          // Only add if not already in messages (avoid duplicates from local sends)
-          setMessages((prev) => {
-            // Check by ID first
-            const existsById = prev.some((m) => m.id === newMessage.id);
-            if (existsById) return prev;
-
-            // For user messages, check by content to avoid duplicates
-            // User messages are already added by useChat, so we should skip them
-            // unless they came from an external source (like Email)
-            if (newMessage.role === "user") {
-              const isExternalMessage = newMessage.metadata?.channel_source && 
-                newMessage.metadata.channel_source !== "app";
-              
-              if (!isExternalMessage) {
-                // This is a local user message - already handled by useChat
-                // Check if we have a message with the same content recently
-                const recentUserMessages = prev.filter((m) => m.role === "user").slice(-3);
-                const isDuplicate = recentUserMessages.some(
-                  (m) => m.parts.some((p) => p.type === "text" && (p as { text: string }).text === newMessage.content)
-                );
-                if (isDuplicate) return prev;
-              }
-            }
-
-            // Check if this is a scheduled notification (from cron)
-            const isScheduledMessage = newMessage.metadata?.type === "scheduled_notification" ||
-              newMessage.metadata?.type === "daily_brief" ||
-              newMessage.metadata?.type === "scheduled_agent_task";
-
-            // For assistant messages, check for duplicates from streaming response
-            if (!isScheduledMessage && newMessage.role === "assistant") {
-              // This might be a duplicate from the streaming response
-              // Check if we recently added a similar message
-              const recentMessages = prev.slice(-3);
-              const isDuplicate = recentMessages.some(
-                (m) => m.role === "assistant" && 
-                m.parts.some((p) => p.type === "text" && (p as { text: string }).text === newMessage.content)
-              );
-              if (isDuplicate) return prev;
-            }
-
-            const uiMessage: UIMessage = {
-              id: newMessage.id,
-              role: newMessage.role === "system" ? "assistant" : newMessage.role,
-              parts: [{ type: "text" as const, text: newMessage.content }],
-            };
-
-            return [...prev, uiMessage];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [conversationId, setMessages]);
-
   // Trigger title generation after first exchange
   useEffect(() => {
-    if (
-      status === "ready" &&
-      pendingTitleGeneration &&
-      conversationId &&
-      messages.length >= 2
-    ) {
+    if (status === "ready" && pendingTitleGeneration && conversationId && messages.length >= 2) {
       setPendingTitleGeneration(false);
       generateTitle(conversationId, messages);
     }
@@ -677,6 +193,110 @@ export function ChatInterface({
     }
   }, [input]);
 
+  // Initial load - load conversations list and restore active conversation
+  useEffect(() => {
+    // Prevent double load (React Strict Mode or navigation edge cases)
+    if (hasInitialLoadRunRef.current) {
+      return;
+    }
+    hasInitialLoadRunRef.current = true;
+
+    const init = async () => {
+      await loadConversations();
+
+      // Check for "new chat" request first
+      const urlParams = new URLSearchParams(window.location.search);
+      const isNewChat = urlParams.get("new") === "true";
+
+      if (isNewChat) {
+        // Clear any stored conversation and start fresh
+        if (storageKey) localStorage.removeItem(storageKey);
+        setConversationId(null);
+        setMessages([]);
+        // Clean up the URL by removing the ?new=true param
+        const url = new URL(window.location.href);
+        url.searchParams.delete("new");
+        window.history.replaceState(null, "", url.pathname + url.search);
+        return;
+      }
+
+      // Check for conversation ID from URL or localStorage
+      const urlConvId = urlParams.get("conversation");
+      const savedId = urlConvId || (storageKey ? localStorage.getItem(storageKey) : null);
+
+      if (savedId) {
+        await loadConversation(savedId);
+      }
+    };
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist conversationId to localStorage and URL when it changes
+  useEffect(() => {
+    if (conversationId) {
+      // Update localStorage
+      if (storageKey) {
+        localStorage.setItem(storageKey, conversationId);
+      }
+      // Update URL without triggering navigation
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("conversation") !== conversationId) {
+        url.searchParams.set("conversation", conversationId);
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+    } else {
+      // Clear URL param when no conversation
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("conversation")) {
+        url.searchParams.delete("conversation");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+    }
+  }, [conversationId, storageKey]);
+
+  // Watch for URL changes (e.g., from notifications, browser back/forward)
+  useEffect(() => {
+    // Skip first run - initial load effect handles that
+    if (!initialLoadCompleteRef.current) {
+      initialLoadCompleteRef.current = true;
+      return;
+    }
+
+    const urlConvId = searchParams.get("conversation");
+    const isNewChat = searchParams.get("new") === "true";
+
+    // Handle "new chat" request
+    if (isNewChat) {
+      startNewConversation();
+      // Clean up the URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("new");
+      window.history.replaceState(null, "", url.pathname + url.search);
+      return;
+    }
+
+    // Skip if we're already loading this conversation
+    if (loadingConversationIdRef.current === urlConvId) {
+      return;
+    }
+
+    // Skip if the current conversation already matches
+    if (urlConvId === conversationIdRef.current) {
+      return;
+    }
+
+    // If URL has a different conversation, load it
+    if (urlConvId) {
+      loadConversation(urlConvId);
+    } else if (conversationIdRef.current) {
+      // URL param cleared, clear the conversation
+      loadingConversationIdRef.current = null;
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [searchParams, loadConversation, setMessages, startNewConversation, loadingConversationIdRef, setConversationId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || status !== "ready" || isCreatingConversation) return;
@@ -687,10 +307,9 @@ export function ChatInterface({
 
     // If no conversation yet, create one first
     if (!conversationId) {
-      // Show optimistic message immediately while creating conversation
       setOptimisticMessage(messageText);
       setIsCreatingConversation(true);
-      
+
       try {
         const res = await fetch("/api/conversations", {
           method: "POST",
@@ -704,7 +323,7 @@ export function ChatInterface({
           setPendingTitleGeneration(true);
           // Small delay to ensure state is set before sending
           setTimeout(() => {
-            setOptimisticMessage(null); // Clear optimistic message
+            setOptimisticMessage(null);
             sendMessage({ text: messageText });
             loadConversations();
           }, 0);
@@ -724,464 +343,119 @@ export function ChatInterface({
     }
   };
 
-  const startEditingTitle = (conv: Conversation) => {
-    setEditingTitleId(conv.id);
-    setEditingTitleValue(conv.title || "");
-  };
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (status !== "ready") return;
 
-  const cancelEditingTitle = () => {
-    setEditingTitleId(null);
-    setEditingTitleValue("");
-  };
-
-  const saveTitle = () => {
-    if (editingTitleId && editingTitleValue.trim()) {
-      updateTitle(editingTitleId, editingTitleValue.trim());
-    }
-  };
-
-  const startEditingMessage = (message: UIMessage) => {
-    const textContent = message.parts
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("\n");
-    setEditingMessageId(message.id);
-    setEditingMessageValue(textContent);
-  };
-
-  const cancelEditingMessage = () => {
-    setEditingMessageId(null);
-    setEditingMessageValue("");
-  };
-
-  const saveEditedMessage = async () => {
-    if (!editingMessageId || !editingMessageValue.trim() || status !== "ready") return;
-    
     // Find the index of the message being edited
-    const messageIndex = messages.findIndex((m) => m.id === editingMessageId);
+    const messageIndex = messages.findIndex((m) => m.id === messageId);
     if (messageIndex === -1) return;
-    
+
     // Truncate messages to include only up to (and including) the edited message
     const truncatedMessages = messages.slice(0, messageIndex);
-    
-    // Clear editing state
-    const newMessageText = editingMessageValue.trim();
-    setEditingMessageId(null);
-    setEditingMessageValue("");
-    
+
     // Update the messages array with truncated version
     setMessages(truncatedMessages);
-    
+
     // If we have a conversation, delete the messages after this point from the database
     if (conversationId) {
       try {
         await fetch(`/api/conversations/${conversationId}/messages`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fromMessageId: editingMessageId }),
+          body: JSON.stringify({ fromMessageId: messageId }),
         });
       } catch (error) {
         console.error("Failed to delete messages after edited message:", error);
       }
     }
-    
+
     // Send the edited message
-    sendMessage({ text: newMessageText });
+    sendMessage({ text: newContent });
   };
 
-  const agentName = agent?.name || "Maia";
-  const agentTitle = agent?.title || "AI Assistant";
+  const confirmDelete = (conv: Conversation) => {
+    setConversationToDelete(conv);
+    setDeleteDialogOpen(true);
+  };
 
-  // Filter conversations by search query
-  const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return conversations;
+  const handleDeleteConversation = async () => {
+    if (conversationToDelete) {
+      await deleteConversation(conversationToDelete.id);
+      setDeleteDialogOpen(false);
+      setConversationToDelete(null);
     }
-    const query = searchQuery.toLowerCase().trim();
-    return conversations.filter((conv) =>
-      (conv.title || "New conversation").toLowerCase().includes(query)
-    );
-  }, [conversations, searchQuery]);
+  };
+
+  const handleSelectConversation = (id: string) => {
+    loadConversation(id);
+    if (window.innerWidth < 768) {
+      setShowSidebar(false);
+    }
+  };
 
   return (
     <div className="flex h-full bg-background/50 relative overflow-hidden">
-      {/* Conversation Sidebar - hidden when hideSidebar prop is true */}
+      {/* Conversation Sidebar */}
       {!hideSidebar && (
-      <div
-        className={`absolute md:relative z-30 h-full bg-background/95 backdrop-blur-md border-r border-white/5 transition-all duration-300 ${
-          showSidebar ? "w-80 opacity-100" : "w-0 opacity-0 md:w-0"
-        } overflow-hidden`}
-      >
-        <div className="w-80 h-full flex flex-col">
-          <div className="h-14 border-b border-white/5 flex items-center justify-between px-4 shrink-0">
-            <h3 className="font-semibold">Conversations</h3>
-            <Button variant="ghost" size="icon" onClick={() => setShowSidebar(false)} className="md:hidden">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="p-2 space-y-2 shrink-0">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search conversations..."
-                className="w-full h-9 pl-8 text-sm"
-              />
-            </div>
-            <Button onClick={startNewConversation} className="w-full justify-start gap-2" variant="outline">
-              <Plus className="h-4 w-4" />
-              New conversation
-            </Button>
-          </div>
-          <ScrollArea className="flex-1 min-h-0 px-2">
-            {loadingConversations ? (
-              <div className="space-y-1 py-2">
-                {/* Skeleton items for loading state */}
-                {[85, 70, 95, 60, 75].map((width, i) => (
-                  <div key={i} className="px-3 py-2">
-                    <Skeleton className="h-4" style={{ width: `${width}%` }} />
-                  </div>
-                ))}
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">
-                {searchQuery.trim() ? "No conversations match your search" : "No conversations yet"}
-              </div>
-            ) : (
-              <div className="space-y-1 py-2">
-                {filteredConversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`group w-full text-left px-2 py-2 rounded-lg text-sm transition-colors ${
-                      conversationId === conv.id
-                        ? "bg-primary/10 text-primary"
-                        : "hover:bg-secondary/50 text-muted-foreground"
-                    }`}
-                  >
-                    {editingTitleId === conv.id ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          value={editingTitleValue}
-                          onChange={(e) => setEditingTitleValue(e.target.value)}
-                          className="h-7 text-sm px-2"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveTitle();
-                            if (e.key === "Escape") cancelEditingTitle();
-                          }}
-                        />
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={saveTitle}>
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={cancelEditingTitle}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 min-w-0 w-full">
-                        <button
-                          onClick={() => loadConversation(conv.id)}
-                          className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left overflow-hidden"
-                        >
-                          <span className="truncate flex-1 min-w-0">{conv.title || "New conversation"}</span>
-                        </button>
-                        <div className="flex items-center shrink-0 gap-1 flex-nowrap ml-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEditingTitle(conv);
-                            }}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              confirmDelete(conv);
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-      </div>
+        <ConversationSidebar
+          conversations={conversations}
+          currentConversationId={conversationId}
+          loading={loadingConversations}
+          showSidebar={showSidebar}
+          onToggleSidebar={() => setShowSidebar(!showSidebar)}
+          onSelectConversation={handleSelectConversation}
+          onNewConversation={startNewConversation}
+          onUpdateTitle={updateTitle}
+          onDeleteConversation={confirmDelete}
+        />
       )}
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <div className="h-14 border-b border-white/5 bg-background/80 backdrop-blur-md px-4 flex items-center gap-3 z-20 shrink-0">
-          {!hideSidebar && (
-            <Button variant="ghost" size="icon" onClick={() => setShowSidebar(!showSidebar)} className="shrink-0">
-              <MessageSquare className="h-4 w-4" />
-            </Button>
-          )}
-          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
-            {agent?.avatarUrl ? (
-              <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
-            ) : (
-              <Bot className="w-5 h-5 text-primary" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <h2 className="font-semibold text-sm truncate">{agentName}</h2>
-            <p className="text-xs text-muted-foreground truncate">{agentTitle}</p>
-          </div>
-        </div>
+        <ChatHeader
+          agentName={agentName}
+          agentTitle={agentTitle}
+          agentAvatarUrl={agent?.avatarUrl}
+          hideSidebar={hideSidebar}
+          onToggleSidebar={() => setShowSidebar(!showSidebar)}
+        />
 
-        {/* Background Glow (Very Subtle) */}
+        {/* Background Glow */}
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-primary/5 blur-[120px] opacity-20" />
 
         {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-4 z-10 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent" ref={scrollRef} onScroll={handleScroll}>
+        <div
+          className="flex-1 overflow-y-auto px-4 z-10 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent"
+          ref={scrollRef}
+          onScroll={handleScroll}
+        >
           <div className="max-w-3xl mx-auto py-8 space-y-8">
             {isLoadingConversation ? (
-              /* Loading skeleton for conversation */
-              <div className="space-y-6">
-                <div className="flex gap-4 justify-start">
-                  <Skeleton className="w-8 h-8 rounded-full shrink-0" />
-                  <div className="space-y-2 flex-1 max-w-[70%]">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </div>
-                </div>
-                <div className="flex gap-4 justify-end">
-                  <div className="space-y-2 flex-1 max-w-[60%]">
-                    <Skeleton className="h-4 w-full ml-auto" />
-                    <Skeleton className="h-4 w-2/3 ml-auto" />
-                  </div>
-                </div>
-                <div className="flex gap-4 justify-start">
-                  <Skeleton className="w-8 h-8 rounded-full shrink-0" />
-                  <div className="space-y-2 flex-1 max-w-[70%]">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-5/6" />
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </div>
-                </div>
-              </div>
+              <MessageSkeleton />
             ) : messages.length === 0 && !optimisticMessage ? (
-              <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-6 opacity-0 animate-fade-in-up [animation-delay:200ms] fill-mode-forwards">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10 overflow-hidden">
-                  {agent?.avatarUrl ? (
-                    <Image src={agent.avatarUrl} alt={agentName} width={80} height={80} className="w-full h-full object-cover" />
-                  ) : (
-                    <Bot className="w-10 h-10 text-primary" />
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold tracking-tight">
-                    {welcomeMessage?.title || "How can I help you today?"}
-                  </h2>
-                  <p className="text-muted-foreground text-lg max-w-md mx-auto">
-                    {welcomeMessage?.subtitle || `I'm ${agentName}, your ${agentTitle}. I can help with tasks, scheduling, and project management.`}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg mt-8">
-                  <button
-                    className="text-sm bg-secondary/50 hover:bg-secondary/80 border border-white/5 rounded-xl p-4 text-left transition-colors cursor-pointer"
-                    onClick={() => {
-                      setInput("What's on my schedule today?");
-                      textareaRef.current?.focus();
-                    }}
-                  >
-                    <span className="font-medium block mb-1">Check Schedule</span>
-                    <span className="text-muted-foreground text-xs">&quot;What&apos;s on my schedule today?&quot;</span>
-                  </button>
-                  <button
-                    className="text-sm bg-secondary/50 hover:bg-secondary/80 border border-white/5 rounded-xl p-4 text-left transition-colors cursor-pointer"
-                    onClick={() => {
-                      setInput("Create a new project for Q1 Marketing");
-                      textareaRef.current?.focus();
-                    }}
-                  >
-                    <span className="font-medium block mb-1">New Project</span>
-                    <span className="text-muted-foreground text-xs">&quot;Create a new project...&quot;</span>
-                  </button>
-                </div>
-              </div>
+              <WelcomeScreen
+                agentName={agentName}
+                agentTitle={agentTitle}
+                agentAvatarUrl={agent?.avatarUrl}
+                welcomeMessage={welcomeMessage}
+                onSuggestedPrompt={setInput}
+                textareaRef={textareaRef}
+              />
             ) : (
               <>
                 {messages.map((message) => (
-                  <div key={message.id} className={`flex gap-4 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                    {message.role === "assistant" && (
-                      <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
-                        {agent?.avatarUrl ? (
-                          <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
-                        ) : (
-                          <Bot className="w-5 h-5 text-primary" />
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-1 max-w-[80%] group relative">
-                      {editingMessageId === message.id && message.role === "user" ? (
-                        // Editing mode for user messages
-                        <div className="space-y-2 w-full">
-                          <Textarea
-                            value={editingMessageValue}
-                            onChange={(e) => setEditingMessageValue(e.target.value)}
-                            className="min-h-[100px] bg-secondary/50 border border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                                e.preventDefault();
-                                saveEditedMessage();
-                              }
-                              if (e.key === "Escape") {
-                                cancelEditingMessage();
-                              }
-                            }}
-                          />
-                          <div className="flex items-center gap-2 justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={cancelEditingMessage}
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Cancel
-                            </Button>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={saveEditedMessage}
-                              disabled={!editingMessageValue.trim() || status !== "ready"}
-                            >
-                              <Check className="h-4 w-4 mr-1" />
-                              Save & Regenerate
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Message bubble - text content only */}
-                          {message.parts.some((part) => part.type === "text") && (
-                            <div
-                              className={`text-sm leading-relaxed ${
-                                message.role === "user"
-                                  ? "px-5 py-3 rounded-2xl bg-secondary/50 border border-white/5 rounded-tr-sm"
-                                  : ""
-                              }`}
-                            >
-                              {message.parts.map((part, index) => {
-                                if (part.type === "text") {
-                                  return message.role === "user" ? (
-                                    <p key={index} className="whitespace-pre-wrap">
-                                      {part.text}
-                                    </p>
-                                  ) : (
-                                    <div
-                                      key={index}
-                                      className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:my-3 prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10 prose-strong:text-primary-foreground prose-strong:font-semibold"
-                                    >
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })}
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {/* Timestamp, Edit, and Copy button row */}
-                      {editingMessageId !== message.id && (
-                        <div className={`flex items-center gap-2 px-1 ${
-                          message.role === "user" ? "justify-end" : "justify-start"
-                        }`}>
-                          {message.role === "user" && (
-                            <>
-                              <button
-                                onClick={() => startEditingMessage(message)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
-                                title="Edit message"
-                                disabled={status !== "ready"}
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const textContent = message.parts
-                                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                                    .map((p) => p.text)
-                                    .join("\n");
-                                  navigator.clipboard.writeText(textContent);
-                                  setCopiedMessageId(message.id);
-                                  setTimeout(() => setCopiedMessageId(null), 2000);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
-                                title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
-                              >
-                                {copiedMessageId === message.id ? (
-                                  <CheckCheck className="w-3 h-3" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
-                            </>
-                          )}
-                        {(message as any).createdAt && (
-                          <span className="text-[10px] text-muted-foreground/50">
-                            {new Date((message as any).createdAt).toLocaleTimeString([], { 
-                              hour: 'numeric', 
-                              minute: '2-digit',
-                              hour12: true 
-                            })}
-                          </span>
-                        )}
-                        {message.role === "assistant" && (
-                          <button
-                            onClick={() => {
-                              const textContent = message.parts
-                                .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                                .map((p) => p.text)
-                                .join("\n");
-                              navigator.clipboard.writeText(textContent);
-                              setCopiedMessageId(message.id);
-                              setTimeout(() => setCopiedMessageId(null), 2000);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
-                            title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
-                          >
-                            {copiedMessageId === message.id ? (
-                              <CheckCheck className="w-3 h-3" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {message.role === "user" && (
-                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 mt-1 overflow-hidden">
-                        {userInfo?.avatarUrl ? (
-                          <Image src={userInfo.avatarUrl} alt={userInfo.name || "You"} width={32} height={32} className="w-full h-full object-cover" />
-                        ) : (
-                          <User className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    isUser={message.role === "user"}
+                    agentName={agentName}
+                    agentAvatarUrl={agent?.avatarUrl}
+                    userAvatarUrl={userInfo?.avatarUrl}
+                    userName={userInfo?.name}
+                    status={status}
+                    onEdit={message.role === "user" ? handleEditMessage : undefined}
+                  />
                 ))}
                 {/* Optimistic message shown while creating first conversation */}
                 {optimisticMessage && (
@@ -1191,7 +465,13 @@ export function ChatInterface({
                     </div>
                     <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-1 overflow-hidden">
                       {userInfo?.avatarUrl ? (
-                        <Image src={userInfo.avatarUrl} alt="You" width={32} height={32} className="w-full h-full object-cover" />
+                        <Image
+                          src={userInfo.avatarUrl}
+                          alt="You"
+                          width={32}
+                          height={32}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <User className="w-4 h-4 text-muted-foreground" />
                       )}
@@ -1199,23 +479,24 @@ export function ChatInterface({
                   </div>
                 )}
                 {/* Live tool indicator during streaming */}
-                <LiveToolIndicator 
-                  messages={messages} 
-                  status={status} 
-                  agent={agent}
-                  agentName={agentName}
-                />
-                {/* Loading indicator for agent response (before streaming starts) */}
+                <LiveToolIndicator messages={messages} status={status} agent={agent} agentName={agentName} />
+                {/* Loading indicator for agent response */}
                 {(status === "submitted" || isCreatingConversation) && (
                   <div className="flex gap-4">
                     <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
                       {agent?.avatarUrl ? (
-                        <Image src={agent.avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
+                        <Image
+                          src={agent.avatarUrl}
+                          alt={agentName}
+                          width={32}
+                          height={32}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <Bot className="w-5 h-5 text-primary" />
                       )}
                     </div>
-                    <div className="bg-secondary/50 border border-white/5 rounded-2xl rounded-tl-sm px-5 py-4">
+                    <div className="py-2">
                       <TypingDots />
                     </div>
                   </div>
@@ -1226,56 +507,17 @@ export function ChatInterface({
         </div>
 
         {/* Input area */}
-        <div className="border-t border-white/5 bg-background/80 backdrop-blur-md p-4 z-20 shrink-0">
-          <div className="max-w-3xl mx-auto relative">
-            <form
-              onSubmit={handleSubmit}
-              className="relative rounded-2xl bg-secondary/50 border border-white/10 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all"
-            >
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={`Ask ${agentName} anything...`}
-                className="min-h-[56px] max-h-[200px] w-full bg-transparent border-0 focus-visible:ring-0 resize-none py-4 pl-4 pr-14 text-base placeholder:text-muted-foreground/50"
-                rows={1}
-                onKeyDown={(e) => {
-                  // On mobile, Enter key should add line break (only Send button sends message)
-                  // On desktop, Enter sends message, Shift+Enter adds line break
-                  const isMobile = window.innerWidth < 768;
-                  
-                  if (e.key === "Enter" && !isMobile && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit(e);
-                  }
-                }}
-              />
-              {isLoading ? (
-                <Button
-                  type="button"
-                  size="icon"
-                  onClick={() => stop()}
-                  className="absolute right-2 bottom-2 h-10 w-10 rounded-xl transition-all hover:scale-105 active:scale-95 bg-destructive hover:bg-destructive/90"
-                  title="Stop generating"
-                >
-                  <Square className="h-5 w-5" />
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!input.trim() || status !== "ready" || isCreatingConversation}
-                  className="absolute right-2 bottom-2 h-10 w-10 rounded-xl transition-all hover:scale-105 active:scale-95"
-                >
-                  {isCreatingConversation ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                </Button>
-              )}
-            </form>
-            <p className="text-[10px] text-muted-foreground/40 text-center mt-3 uppercase tracking-wider font-medium">
-              MAIA Internal System • Confidential
-            </p>
-          </div>
-        </div>
+        <MessageInput
+          input={input}
+          onInputChange={setInput}
+          onSubmit={handleSubmit}
+          onStop={stop}
+          isLoading={isLoading}
+          isCreating={isCreatingConversation}
+          status={status}
+          agentName={agentName}
+          textareaRef={textareaRef}
+        />
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -1284,13 +526,14 @@ export function ChatInterface({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete &quot;{conversationToDelete?.title || "this conversation"}&quot; and all its messages. This action cannot be undone.
+              This will permanently delete &quot;{conversationToDelete?.title || "this conversation"}&quot; and all its
+              messages. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => conversationToDelete && deleteConversation(conversationToDelete.id)}
+              onClick={handleDeleteConversation}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
@@ -1298,262 +541,6 @@ export function ChatInterface({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function TypingDots() {
-  return (
-    <div className="flex items-center gap-2 h-full">
-      <div className="flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.3s]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.15s]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
-      </div>
-    </div>
-  );
-}
-
-// Custom markdown components for better link rendering
-const markdownComponents = {
-  a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-    if (!href) return <span>{children}</span>;
-    
-    // Handle mailto and tel links differently (no external icon, no target blank)
-    const isMailto = href.startsWith('mailto:');
-    const isTel = href.startsWith('tel:');
-    const isAnchor = href.startsWith('#');
-    const isInternal = href.startsWith('/');
-    
-    // Internal links and special links (mailto, tel, anchor) open in same window
-    if (isMailto || isTel || isAnchor || isInternal) {
-      return (
-        <a
-          href={href}
-          className="text-primary hover:text-primary/80 underline underline-offset-2 decoration-primary/40 hover:decoration-primary/60 transition-all font-medium"
-          {...props}
-        >
-          {children}
-        </a>
-      );
-    }
-    
-    // External links: Extract domain for display if link text is a URL
-    const childText = typeof children === 'string' ? children : '';
-    const isUrlText = childText.startsWith('http://') || childText.startsWith('https://');
-    let displayText: React.ReactNode = children;
-    
-    if (isUrlText) {
-      try {
-        const url = new URL(href);
-        // Show clean domain instead of full URL
-        displayText = url.hostname.replace('www.', '');
-      } catch {
-        // Keep original if URL parsing fails
-        displayText = children;
-      }
-    }
-    
-    // External links open in new tab with icon
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-baseline gap-1 text-primary hover:text-primary/80 underline underline-offset-2 decoration-primary/40 hover:decoration-primary/60 transition-all font-medium"
-        {...props}
-      >
-        <span>{displayText}</span>
-        <ExternalLink className="w-3 h-3 inline-block opacity-50 flex-shrink-0" />
-      </a>
-    );
-  },
-  // Enhanced blockquote styling for citations and important notes
-  blockquote: ({ children, ...props }: React.BlockquoteHTMLAttributes<HTMLQuoteElement>) => {
-    return (
-      <blockquote
-        className="border-l-2 border-primary/50 bg-primary/5 py-2 px-4 my-3 rounded-r-md italic"
-        {...props}
-      >
-        {children}
-      </blockquote>
-    );
-  },
-  // Enhanced code block styling
-  code: ({ inline, className, children, ...props }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => {
-    if (inline) {
-      return (
-        <code
-          className="bg-black/30 px-1.5 py-0.5 rounded text-primary/90 font-mono text-xs"
-          {...props}
-        >
-          {children}
-        </code>
-      );
-    }
-    return (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    );
-  },
-  // Style headers appropriately
-  h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h1 className="text-xl font-semibold mt-4 mb-2" {...props}>{children}</h1>
-  ),
-  h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>
-  ),
-  h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h3 className="text-base font-semibold mt-2 mb-1" {...props}>{children}</h3>
-  ),
-  // Add horizontal scroll for wide tables
-  table: ({ children, ...props }: React.HTMLAttributes<HTMLTableElement>) => (
-    <div className="overflow-x-auto my-3">
-      <table className="border-collapse" {...props}>{children}</table>
-    </div>
-  ),
-};
-
-// Tool names mapped to display info
-const TOOL_DISPLAY_INFO: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
-  searchMemory: {
-    label: "Searching Memory",
-    icon: <Search className="w-3.5 h-3.5" />,
-    description: "Looking through past conversations and context...",
-  },
-  saveToMemory: {
-    label: "Saving to Memory",
-    icon: <Save className="w-3.5 h-3.5" />,
-    description: "Storing this information for later...",
-  },
-  research: {
-    label: "Researching",
-    icon: <Brain className="w-3.5 h-3.5" />,
-    description: "Searching the web for information...",
-  },
-  createProject: {
-    label: "Creating Project",
-    icon: <FolderPlus className="w-3.5 h-3.5" />,
-    description: "Setting up a new project...",
-  },
-  listProjects: {
-    label: "Listing Projects",
-    icon: <FolderPlus className="w-3.5 h-3.5" />,
-    description: "Fetching your projects...",
-  },
-  createTask: {
-    label: "Creating Task",
-    icon: <ListTodo className="w-3.5 h-3.5" />,
-    description: "Adding a new task...",
-  },
-  listTasks: {
-    label: "Listing Tasks",
-    icon: <ListTodo className="w-3.5 h-3.5" />,
-    description: "Fetching your tasks...",
-  },
-  completeTask: {
-    label: "Completing Task",
-    icon: <Check className="w-3.5 h-3.5" />,
-    description: "Marking task as done...",
-  },
-};
-
-// Live tool indicator component - shows ephemeral tool progress during streaming
-interface LiveToolIndicatorProps {
-  messages: UIMessage[];
-  status: string;
-  agent?: AgentInfo;
-  agentName: string;
-}
-
-function LiveToolIndicator({ messages, status, agent, agentName }: LiveToolIndicatorProps) {
-  // Only show during streaming
-  if (status !== "streaming") return null;
-  
-  // Get the last assistant message (the one being streamed)
-  const lastMessage = messages[messages.length - 1];
-  if (!lastMessage || lastMessage.role !== "assistant") return null;
-  
-  // Extract tool invocations from the message
-  const toolParts = lastMessage.parts.filter(
-    (part) => part.type === "tool-invocation" || part.type.startsWith("tool-")
-  );
-  
-  if (toolParts.length === 0) return null;
-  
-  // Get tool info for each tool
-  const toolsInfo = toolParts.map((part) => {
-    const toolName = part.type === "tool-invocation" 
-      ? (part as any).toolInvocation?.toolName 
-      : part.type.replace("tool-", "");
-      
-    const rawState = part.type === "tool-invocation"
-      ? (part as any).toolInvocation?.state
-      : (part as any).state;
-      
-    const args = part.type === "tool-invocation" 
-      ? (part as any).toolInvocation?.args 
-      : (part as any).input;
-      
-    const isComplete = rawState === "result" || rawState === "output-available" || rawState === "output-error";
-    
-    // Convert camelCase to Title Case for fallback (e.g., "sendEmail" -> "Send Email")
-    const formatToolName = (name: string) => {
-      return name
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, str => str.toUpperCase())
-        .trim();
-    };
-    
-    const info = TOOL_DISPLAY_INFO[toolName] || {
-      label: formatToolName(toolName),
-      icon: <Brain className="w-3.5 h-3.5" />,
-      description: "Processing...",
-    };
-    
-    return { toolName, isComplete, info, args };
-  });
-  
-  // Find the currently running tool (last incomplete one) or show the last completed one
-  const currentTool = toolsInfo.find(t => !t.isComplete) || toolsInfo[toolsInfo.length - 1];
-  const completedCount = toolsInfo.filter(t => t.isComplete).length;
-  const hasTextContent = lastMessage.parts.some((part) => part.type === "text" && (part as any).text?.trim());
-  
-  // Don't show if we already have text content streaming (tools are done, response is coming)
-  if (hasTextContent && completedCount === toolsInfo.length) return null;
-  
-  // Get query for research tool
-  const currentQuery = currentTool?.args?.query as string | undefined;
-  
-  return (
-    <div className="flex gap-4 -mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="w-8 h-8 shrink-0" /> {/* Spacer to align with avatar above */}
-      <div className="flex flex-col gap-0.5">
-        {/* Current/recent tool indicator - no background */}
-        <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
-          <span>{currentTool?.info.label}</span>
-          {!currentTool?.isComplete && (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-          )}
-          {currentTool?.isComplete && (
-            <Check className="w-3.5 h-3.5 text-green-400" />
-          )}
-        </div>
-        {/* Show query for research/search tools */}
-        {currentQuery && !currentTool?.isComplete && (
-          <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
-            &quot;{currentQuery}&quot;
-          </span>
-        )}
-        {/* Tool count if more than one */}
-        {toolsInfo.length > 1 && (
-          <span className="text-[11px] text-muted-foreground/50">
-            {completedCount}/{toolsInfo.length} tools completed
-          </span>
-        )}
-      </div>
     </div>
   );
 }

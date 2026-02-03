@@ -115,6 +115,7 @@ interface TaskDialogProps {
   task: Task | null;
   projects: Project[];
   assignees?: Assignee[];
+  agentId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate?: (task: Task) => void;
@@ -126,6 +127,7 @@ export function TaskDialog({
   task,
   projects,
   assignees = [],
+  agentId,
   open,
   onOpenChange,
   onUpdate,
@@ -139,6 +141,7 @@ export function TaskDialog({
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const [agent, setAgent] = useState<{ name: string; avatarUrl: string | null } | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Initialize edited task when task opens
@@ -158,6 +161,25 @@ export function TaskDialog({
       setIsEditing(true); 
     }
   }, [task]);
+
+  // Fetch agent info
+  useEffect(() => {
+    if (agentId && open) {
+      const fetchAgent = async () => {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("agents")
+          .select("name, avatar_url")
+          .eq("id", agentId)
+          .single();
+        
+        if (data) {
+          setAgent({ name: data.name, avatarUrl: data.avatar_url });
+        }
+      };
+      fetchAgent();
+    }
+  }, [agentId, open]);
 
   // Fetch comments and activity
   useEffect(() => {
@@ -198,7 +220,10 @@ export function TaskDialog({
     // Scroll to bottom after load
     setTimeout(() => {
       if (scrollAreaRef.current) {
-        scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        const viewport = scrollAreaRef.current.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement;
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
       }
     }, 100);
   };
@@ -225,7 +250,10 @@ export function TaskDialog({
       // Scroll to bottom
       setTimeout(() => {
         if (scrollAreaRef.current) {
-          scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+          const viewport = scrollAreaRef.current.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement;
+          if (viewport) {
+            viewport.scrollTop = viewport.scrollHeight;
+          }
         }
       }, 100);
     }
@@ -324,7 +352,7 @@ export function TaskDialog({
              <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground"
+                className="h-8 w-8 text-muted-foreground cursor-pointer transition-all hover:scale-110 hover:bg-primary/10 hover:text-primary"
                 onClick={handleToggleComplete}
               >
                 {editedTask.status === 'done' ? (
@@ -492,8 +520,8 @@ export function TaskDialog({
           </div>
 
           {/* Right Column: Activity & Comments */}
-          <div className="w-[380px] border-l bg-muted/10 flex flex-col shrink-0">
-            <div className="p-4 border-b bg-background/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+          <div className="w-[380px] border-l bg-muted/10 flex flex-col shrink-0 overflow-hidden">
+            <div className="p-4 border-b bg-background/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between shrink-0">
               <h3 className="font-semibold flex items-center gap-2">
                 <Activity className="h-4 w-4 text-muted-foreground" />
                 Activity
@@ -501,7 +529,7 @@ export function TaskDialog({
               <Badge variant="secondary" className="font-normal text-xs">{timelineItems.length}</Badge>
             </div>
 
-            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollAreaRef}>
               <div className="space-y-6">
                 {timelineItems.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
@@ -513,10 +541,15 @@ export function TaskDialog({
                             <div className="mt-0.5 shrink-0">
                                 {item.type === 'comment' ? (
                                     <Avatar className="h-8 w-8 border">
+                                        {item.data.author_type === 'agent' && agent?.avatarUrl ? (
+                                            <AvatarImage src={agent.avatarUrl} alt={agent.name} />
+                                        ) : null}
                                         <AvatarFallback className={cn("text-xs", 
                                             item.data.author_type === 'agent' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
                                         )}>
-                                            {item.data.author_type === 'agent' ? "AI" : "U"}
+                                            {item.data.author_type === 'agent' 
+                                                ? (agent?.name ? agent.name.charAt(0).toUpperCase() : "AI")
+                                                : "U"}
                                         </AvatarFallback>
                                     </Avatar>
                                 ) : (
@@ -529,7 +562,7 @@ export function TaskDialog({
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <span className="font-medium text-foreground">
                                         {item.type === 'comment' 
-                                            ? (item.data.author_type === 'user' ? 'You' : 'AI Agent') 
+                                            ? (item.data.author_type === 'user' ? 'You' : (agent?.name || 'AI Agent')) 
                                             : (item.data.source || 'System')}
                                     </span>
                                     <span>•</span>
@@ -558,7 +591,7 @@ export function TaskDialog({
             </ScrollArea>
 
             {/* Comment Input */}
-            <div className="p-4 bg-background border-t mt-auto">
+            <div className="p-4 bg-background border-t shrink-0">
                <div className="relative">
                   <Input
                     value={newComment}

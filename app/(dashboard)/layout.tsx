@@ -38,7 +38,7 @@ export default async function DashboardLayout({
         />
         <SidebarInset>
           <DashboardHeader agentId={agent?.id || null} />
-          <main className="flex-1 overflow-hidden">{children}</main>
+          <main className="flex-1 overflow-y-auto">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </CommandPaletteProvider>

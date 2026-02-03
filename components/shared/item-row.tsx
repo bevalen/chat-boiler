@@ -114,7 +114,7 @@ export function ItemRow({
           checked={isCompleted}
           onCheckedChange={() => onCheckboxChange?.()}
           onClick={(e) => e.stopPropagation()}
-          className="h-5 w-5 shrink-0"
+          className="h-5 w-5 shrink-0 cursor-pointer transition-all hover:scale-110 hover:ring-2 hover:ring-primary/50 rounded"
         />
       )}
 
@@ -125,7 +125,7 @@ export function ItemRow({
       )}
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-1.5">
           <span
             className={cn(
               "font-medium truncate",
@@ -135,7 +135,11 @@ export function ItemRow({
             {title}
           </span>
           {projectName && (
-            <Badge variant="outline" className="text-xs shrink-0 max-w-[120px] truncate">
+            <Badge 
+              variant="outline" 
+              className="text-xs w-fit"
+              title={projectName}
+            >
               {projectName}
             </Badge>
           )}

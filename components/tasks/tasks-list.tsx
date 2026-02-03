@@ -335,6 +335,7 @@ export function TasksList({
         task={selectedTask}
         projects={projects}
         assignees={assignees}
+        agentId={agentId}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onUpdate={handleTaskUpdate}

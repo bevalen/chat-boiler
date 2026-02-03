@@ -339,7 +339,7 @@ export function ProjectDetail({
   const doneCount = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-5xl mx-auto space-y-8">
@@ -611,6 +611,7 @@ export function ProjectDetail({
         task={selectedTask}
         projects={allProjects}
         assignees={assignees}
+        agentId={agentId}
         open={isTaskDialogOpen}
         onOpenChange={setIsTaskDialogOpen}
         onUpdate={handleTaskUpdate}
