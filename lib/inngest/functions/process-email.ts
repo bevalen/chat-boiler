@@ -107,15 +107,20 @@ function buildEmailContextPromptAddition(context: EmailContext, recipientType?: 
 
   sections.push(`## Email Processing Instructions`);
   sections.push(`1. **Understand:** Read the email and thread history carefully`);
-  sections.push(`2. **Link:** Use \`linkEmailToProject\` or \`linkEmailToTask\` if this relates to existing work`);
-  sections.push(`3. **Act:**`);
+  sections.push(`2. **Check for Task Completion:** Before creating new tasks, check if this email resolves any existing open tasks:`);
+  sections.push(`   - Look at the related tasks shown above`);
+  sections.push(`   - If this email provides the information or confirmation you were waiting for, use \`updateTaskFromEmail\` to mark the task as "done"`);
+  sections.push(`   - Examples: reply confirming a meeting, answering a question you asked, providing requested information`);
+  sections.push(`3. **Link:** Use \`linkEmailToProject\` or \`linkEmailToTask\` if this relates to existing work`);
+  sections.push(`4. **Act:**`);
   sections.push(`   - Use \`replyToEmail\` for responses (maintains threading)`);
-  sections.push(`   - Use \`createTask\` or \`createTaskFromEmail\` for action items`);
+  sections.push(`   - Use \`createTaskFromEmail\` for NEW action items (tool automatically checks for duplicates)`);
   sections.push(`   - Use \`createProject\` for new initiatives mentioned in email`);
   sections.push(`   - Use \`markEmailAsRead\` for spam/automated emails`);
-  sections.push(`4. **Remember:** Save important info to memory if the user shares preferences or context`);
+  sections.push(`5. **Remember:** Save important info to memory if the user shares preferences or context`);
   sections.push(``);
   sections.push(`**Be contextually aware:** Use the related projects/tasks above to maintain continuity across long-running work.`);
+  sections.push(`**Important:** If you sent an email asking for information and this is the reply, mark that task as complete!`);
 
   return sections.join("\n");
 }
@@ -241,7 +246,7 @@ function createEmailAgentTools(
     }),
 
     createTaskFromEmail: tool({
-      description: "Create a new task from this email. Use when the email requires action or follow-up.",
+      description: "Create a new task from this email. Use when the email requires action or follow-up. IMPORTANT: This tool checks for existing similar tasks first to prevent duplicates.",
       inputSchema: z.object({
         title: z.string().describe("Task title"),
         description: z.string().optional().describe("Task description"),
@@ -252,11 +257,57 @@ function createEmailAgentTools(
       execute: async ({ title, description, priority, dueDate, projectId }) => {
         const { generateEmbedding } = await import("@/lib/embeddings");
 
-        // Generate embedding
+        // Generate embedding for similarity search
         const textToEmbed = description ? `${title}\n\n${description}` : title;
         const embedding = await generateEmbedding(textToEmbed);
 
-        // Create the task
+        // Check for existing similar tasks to prevent duplicates
+        const { data: similarTasks } = await supabase.rpc("semantic_search_all", {
+          query_embedding: embedding,
+          p_agent_id: agentId,
+          match_count: 5,
+          match_threshold: 0.75, // High threshold for duplicates
+        });
+
+        // Filter for tasks only and check if any are open
+        const existingSimilarTasks = similarTasks?.filter((item: any) => 
+          item.source_type === "task" && 
+          item.similarity > 0.75 &&
+          (item.metadata?.status === "todo" || item.metadata?.status === "in_progress")
+        ) || [];
+
+        if (existingSimilarTasks.length > 0) {
+          const existingTask = existingSimilarTasks[0];
+          const similarityPercent = Math.round(existingTask.similarity * 100);
+          
+          // Get email details for the comment
+          const { data: email } = await supabase
+            .from("emails")
+            .select("from_address, from_name, subject, text_body")
+            .eq("id", emailId)
+            .single();
+
+          // Add comment to existing task instead
+          if (email) {
+            await supabase.from("comments").insert({
+              task_id: existingTask.metadata.id,
+              author_type: "agent",
+              author_id: agentId,
+              content: `📧 Related email from ${email.from_name || email.from_address}\n**Subject:** ${email.subject}\n\n${email.text_body?.substring(0, 300)}${email.text_body && email.text_body.length > 300 ? "..." : ""}`,
+              comment_type: "note",
+            });
+          }
+
+          return {
+            success: true,
+            taskId: existingTask.metadata.id,
+            title: existingTask.title,
+            message: `Found existing similar task "${existingTask.title}" (${similarityPercent}% match). Added email as comment instead of creating duplicate.`,
+            isDuplicate: true,
+          };
+        }
+
+        // No similar task found, create a new one
         const { data: task, error } = await supabase
           .from("tasks")
           .insert({
@@ -319,6 +370,7 @@ function createEmailAgentTools(
           taskId: task.id,
           title: task.title,
           message: `Created task: ${title}`,
+          isDuplicate: false,
         };
       },
     }),

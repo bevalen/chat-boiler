@@ -106,6 +106,11 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     let finalHtmlBody = htmlBody || "";
     let finalTextBody = textBody || "";
 
+    // Convert relative URLs to absolute URLs before sending
+    if (finalHtmlBody) {
+      finalHtmlBody = convertRelativeUrlsToAbsolute(finalHtmlBody);
+    }
+
     if (includeSignature) {
       if (finalHtmlBody) {
         finalHtmlBody = appendSignatureToHtml(finalHtmlBody, htmlSignature);
@@ -279,6 +284,30 @@ export async function replyToEmail(params: ReplyToEmailParams): Promise<SendEmai
     references: references.length > 0 ? references : undefined,
     threadId: originalEmail.thread_id || undefined,
   });
+}
+
+/**
+ * Convert relative URLs in HTML to absolute URLs
+ * This ensures all links in emails work properly
+ */
+function convertRelativeUrlsToAbsolute(html: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://madewell-maia.vercel.app";
+  
+  return html
+    // Convert relative hrefs to absolute
+    .replace(/href=["'](\/)([^"']*)["']/gi, `href="${baseUrl}$1$2"`)
+    // Convert relative src to absolute (for images)
+    .replace(/src=["'](\/)([^"']*)["']/gi, `src="${baseUrl}$1$2"`)
+    // Handle href without leading slash but clearly internal (e.g., href="tasks/123")
+    .replace(/href=["'](?!https?:\/\/|mailto:|tel:|#)([^"']*)["']/gi, (match, path) => {
+      // If it starts with these patterns, it's likely internal
+      if (path.startsWith('tasks') || path.startsWith('projects') || 
+          path.startsWith('dashboard') || path.startsWith('settings') ||
+          path.startsWith('activity') || path.startsWith('feedback')) {
+        return `href="${baseUrl}/${path}"`;
+      }
+      return match;
+    });
 }
 
 /**

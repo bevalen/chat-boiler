@@ -112,7 +112,8 @@ export function createReplyToEmailTool(
 ) {
   return tool({
     description:
-      "Reply to an existing email thread. This maintains proper email threading so the reply appears in the same conversation. " +
+      "Reply to an existing email thread. This automatically includes all original recipients (Reply All by default). " +
+      "The reply maintains proper email threading so it appears in the same conversation. " +
       "Use this instead of sendEmail when responding to an email you received. " +
       "IMPORTANT: Write the reply body in HTML format. Your signature will be automatically appended.",
     inputSchema: z.object({
@@ -123,8 +124,9 @@ export function createReplyToEmailTool(
         "Do NOT include a sign-off - your signature is automatically appended."
       ),
       subject: z.string().optional().describe("Override the subject line (optional - defaults to 'Re: [original subject]')"),
+      replyOnlyToSender: z.boolean().optional().describe("Set to true to reply only to the sender (not all recipients). Default: false (reply all)"),
     }),
-    execute: async ({ emailId, body, subject }) => {
+    execute: async ({ emailId, body, subject, replyOnlyToSender }) => {
       if (!isResendConfigured()) {
         return {
           success: false,
@@ -147,9 +149,38 @@ export function createReplyToEmailTool(
       // Reply to the sender of the original email
       const replyTo = originalEmail.from_address;
 
+      // By default, include all CC recipients (Reply All)
+      let ccRecipients: string[] | undefined = undefined;
+      
+      if (!replyOnlyToSender && originalEmail.cc_addresses && originalEmail.cc_addresses.length > 0) {
+        // Filter out our own agent email from CC list
+        const agentEmail = getAgentEmailAddress(agentId);
+        ccRecipients = originalEmail.cc_addresses.filter(cc => 
+          cc.toLowerCase() !== agentEmail.toLowerCase()
+        );
+        
+        // Also check TO addresses - if there were multiple TO recipients, add them to CC
+        // (excluding ourselves and the original sender)
+        if (originalEmail.to_addresses && originalEmail.to_addresses.length > 1) {
+          const additionalRecipients = originalEmail.to_addresses.filter(to => 
+            to.toLowerCase() !== agentEmail.toLowerCase() &&
+            to.toLowerCase() !== replyTo.toLowerCase()
+          );
+          ccRecipients = [...(ccRecipients || []), ...additionalRecipients];
+        }
+        
+        // Remove duplicates
+        ccRecipients = [...new Set(ccRecipients)];
+        
+        if (ccRecipients.length === 0) {
+          ccRecipients = undefined;
+        }
+      }
+
       const result = await replyToEmail({
         originalEmailId: emailId,
         to: replyTo,
+        cc: ccRecipients,
         subject: subject || `Re: ${originalEmail.subject}`,
         htmlBody: body,
         agentId,
@@ -169,12 +200,17 @@ export function createReplyToEmailTool(
         };
       }
 
+      const recipientSummary = ccRecipients && ccRecipients.length > 0
+        ? `${replyTo} (+ ${ccRecipients.length} CC'd)`
+        : replyTo;
+
       return {
         success: true,
-        message: `Reply sent successfully to ${replyTo}`,
+        message: `Reply sent successfully to ${recipientSummary}`,
         emailId: result.storedEmailId,
         details: {
           to: replyTo,
+          cc: ccRecipients,
           subject: subject || `Re: ${originalEmail.subject}`,
           inReplyTo: originalEmail.message_id,
         },
