@@ -3,7 +3,7 @@
  * Clean, focused, and maintainable implementation
  */
 
-import { streamText, convertToModelMessages, UIMessage, gateway, stepCountIs } from "ai";
+import { streamText, convertToModelMessages, UIMessage, gateway, stepCountIs, consumeStream } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser, buildSystemPrompt } from "@/lib/db/agents";
 import { getOrCreateDefaultConversation, addMessage } from "@/lib/db/conversations";
@@ -198,6 +198,9 @@ export async function POST(request: Request) {
       console.log(`[chat/route] 📝 Conversation history count: ${messagesWithHistory.length}`);
     }
 
+    // Track abort state to prevent saving partial messages
+    let wasAborted = false;
+
     // 10. STREAM RESPONSE WITH TOOLS
     const result = streamText({
       model: selectedModel,
@@ -206,6 +209,7 @@ export async function POST(request: Request) {
       tools,
       toolChoice: "auto",
       stopWhen: stepCountIs(maxSteps),
+      abortSignal: request.signal,
       onStepFinish: async ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
           const activitySource: ActivitySource =
@@ -302,6 +306,12 @@ export async function POST(request: Request) {
         }
       },
       onFinish: async ({ text, steps }) => {
+        // Don't save if the stream was aborted
+        if (wasAborted) {
+          console.log(`[chat/route] ⚠️ Skipping message save due to abort`);
+          return;
+        }
+
         const toolCallCount =
           steps?.reduce((acc, step) => acc + (step.toolCalls?.length || 0), 0) || 0;
         if (toolCallCount > 0) {
@@ -325,12 +335,19 @@ export async function POST(request: Request) {
           );
         }
       },
+      onAbort: async ({ steps }) => {
+        wasAborted = true;
+        console.log(`[chat/route] ⚠️ Stream aborted by client after ${steps.length} step(s)`);
+        // Do not persist partial results when aborted
+      },
     });
 
     console.log("[chat/route] Streaming response");
 
     // 11. RETURN RESPONSE WITH HEADERS
-    const response = result.toUIMessageStreamResponse();
+    const response = result.toUIMessageStreamResponse({
+      consumeSseStream: consumeStream,
+    });
     const headers = new Headers(response.headers);
     headers.set("X-Conversation-Id", conversation.id);
     headers.set("X-Needs-Title", needsTitle ? "true" : "false");

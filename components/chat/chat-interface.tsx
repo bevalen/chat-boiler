@@ -85,6 +85,7 @@ export function ChatInterface({
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [input, setInput] = useState("");
+  const [wasAborted, setWasAborted] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const conversationIdRef = useRef<string | null>(null);
@@ -109,6 +110,12 @@ export function ChatInterface({
   );
 
   const { messages, sendMessage, status, setMessages, stop } = useChat({ transport });
+
+  // Handle stop button - mark response as aborted
+  const handleStop = () => {
+    setWasAborted(true);
+    stop();
+  };
 
   // Custom hooks for conversation management
   const {
@@ -177,10 +184,14 @@ export function ChatInterface({
     }
   }, [status, pendingTitleGeneration, conversationId, messages, generateTitle]);
 
-  // Re-focus input when response is complete
+  // Re-focus input when response is complete and clear abort state on new message
   useEffect(() => {
     if (status === "ready" && textareaRef.current) {
       textareaRef.current.focus();
+    }
+    // Clear abort state when starting a new interaction
+    if (status === "submitted") {
+      setWasAborted(false);
     }
   }, [status]);
 
@@ -480,6 +491,18 @@ export function ChatInterface({
                 )}
                 {/* Live tool indicator during streaming */}
                 <LiveToolIndicator messages={messages} status={status} agent={agent} agentName={agentName} />
+                {/* Abort indicator when response was stopped */}
+                {wasAborted && status === "ready" && messages.length > 0 && messages[messages.length - 1]?.role === "assistant" && (
+                  <div className="flex gap-4 -mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="w-8 h-8 shrink-0" /> {/* Spacer to align with avatar */}
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-600 dark:text-yellow-400">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span className="font-medium">Response stopped</span>
+                    </div>
+                  </div>
+                )}
                 {/* Loading indicator for agent response */}
                 {(status === "submitted" || isCreatingConversation) && (
                   <div className="flex gap-4">
@@ -511,7 +534,7 @@ export function ChatInterface({
           input={input}
           onInputChange={setInput}
           onSubmit={handleSubmit}
-          onStop={stop}
+          onStop={handleStop}
           isLoading={isLoading}
           isCreating={isCreatingConversation}
           status={status}
