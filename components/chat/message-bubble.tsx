@@ -9,6 +9,7 @@ import { Bot, User, Pencil, Copy, CheckCheck, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { markdownComponents } from "./markdown-components";
+import { ToolCallIndicator } from "./tool-call-indicator";
 
 interface MessageBubbleProps {
   message: UIMessage;
@@ -39,6 +40,11 @@ export function MessageBubble({
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)
     .join("\n");
+
+  // Extract tool calls from message metadata (only for assistant messages)
+  const toolCalls = !isUser && (message as any).metadata?.tool_calls
+    ? (message as any).metadata.tool_calls
+    : [];
 
   const startEditing = () => {
     setEditValue(textContent);
@@ -142,6 +148,13 @@ export function MessageBubble({
               </div>
             )}
           </>
+        )}
+
+        {/* Tool calls indicator for assistant messages */}
+        {!isUser && toolCalls.length > 0 && (
+          <div className="px-1">
+            <ToolCallIndicator toolCalls={toolCalls} />
+          </div>
         )}
 
         {/* Timestamp, Edit, and Copy button row */}

@@ -200,6 +200,8 @@ export async function POST(request: Request) {
 
     // Track abort state to prevent saving partial messages
     let wasAborted = false;
+    // Track tool calls for this response
+    const allToolCalls: Array<{ name: string; timestamp: Date }> = [];
 
     // 10. STREAM RESPONSE WITH TOOLS
     const result = streamText({
@@ -223,6 +225,9 @@ export async function POST(request: Request) {
             const tc = toolCalls[i];
             if (!tc) continue;
             console.log(`[chat/route] 🔧 Tool "${tc.toolName}" called`);
+            
+            // Track this tool call
+            allToolCalls.push({ name: tc.toolName, timestamp: new Date() });
             const toolResult = toolResults?.[i];
             const toolInput = (tc as { input?: unknown }).input as
               | Record<string, unknown>
@@ -320,12 +325,12 @@ export async function POST(request: Request) {
 
         // Persist the assistant's response
         if (text) {
-          const assistantMetadata: MessageMetadata | undefined =
-            channelSource && channelSource !== "app"
-              ? {
-                  channel_source: channelSource as ChannelType,
-                }
-              : undefined;
+          const assistantMetadata: MessageMetadata = {
+            ...(channelSource && channelSource !== "app"
+              ? { channel_source: channelSource as ChannelType }
+              : {}),
+            tool_calls: allToolCalls.length > 0 ? allToolCalls : undefined,
+          };
           await addMessage(
             supabase,
             conversation.id,

@@ -89,12 +89,19 @@ export function useConversation({ storageKey, setMessages }: UseConversationProp
         if (data.messages) {
           // Convert database messages to UIMessage format
           const uiMessages: UIMessage[] = data.messages.map(
-            (msg: { id: string; role: "user" | "assistant"; content: string; createdAt: string }) => ({
+            (msg: { 
+              id: string; 
+              role: "user" | "assistant"; 
+              content: string; 
+              createdAt: string;
+              metadata?: Record<string, unknown>;
+            }) => ({
               id: msg.id,
               role: msg.role,
               parts: [{ type: "text" as const, text: msg.content }],
               createdAt: new Date(msg.createdAt || Date.now()),
-            })
+              metadata: msg.metadata,
+            } as UIMessage & { metadata?: Record<string, unknown> })
           );
           setMessages(uiMessages);
         }
