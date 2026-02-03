@@ -108,6 +108,8 @@ export function ChatInterface({
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageValue, setEditingMessageValue] = useState("");
 
   // Use a ref to always have the latest conversationId in the transport
   const conversationIdRef = useRef<string | null>(null);
@@ -738,6 +740,55 @@ export function ChatInterface({
     }
   };
 
+  const startEditingMessage = (message: UIMessage) => {
+    const textContent = message.parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("\n");
+    setEditingMessageId(message.id);
+    setEditingMessageValue(textContent);
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMessageId(null);
+    setEditingMessageValue("");
+  };
+
+  const saveEditedMessage = async () => {
+    if (!editingMessageId || !editingMessageValue.trim() || status !== "ready") return;
+    
+    // Find the index of the message being edited
+    const messageIndex = messages.findIndex((m) => m.id === editingMessageId);
+    if (messageIndex === -1) return;
+    
+    // Truncate messages to include only up to (and including) the edited message
+    const truncatedMessages = messages.slice(0, messageIndex);
+    
+    // Clear editing state
+    const newMessageText = editingMessageValue.trim();
+    setEditingMessageId(null);
+    setEditingMessageValue("");
+    
+    // Update the messages array with truncated version
+    setMessages(truncatedMessages);
+    
+    // If we have a conversation, delete the messages after this point from the database
+    if (conversationId) {
+      try {
+        await fetch(`/api/conversations/${conversationId}/messages`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fromMessageId: editingMessageId }),
+        });
+      } catch (error) {
+        console.error("Failed to delete messages after edited message:", error);
+      }
+    }
+    
+    // Send the edited message
+    sendMessage({ text: newMessageText });
+  };
+
   const agentName = agent?.name || "Maia";
   const agentTitle = agent?.title || "AI Assistant";
 
@@ -981,20 +1032,59 @@ export function ChatInterface({
                     )}
 
                     <div className="flex flex-col gap-1 max-w-[80%] group relative">
-                      <div
-                        className={`px-5 py-3 rounded-2xl text-sm leading-relaxed ${
-                          message.role === "user"
-                            ? "bg-primary text-primary-foreground rounded-tr-sm"
-                            : "bg-secondary/50 border border-white/5 rounded-tl-sm"
-                        }`}
-                      >
-                        {message.parts.map((part, index) => {
-                          if (part.type === "text") {
-                            return message.role === "user" ? (
-                              <p key={index} className="whitespace-pre-wrap">
-                                {part.text}
-                              </p>
-                            ) : (
+                      {editingMessageId === message.id && message.role === "user" ? (
+                        // Editing mode for user messages
+                        <div className="space-y-2 w-full">
+                          <Textarea
+                            value={editingMessageValue}
+                            onChange={(e) => setEditingMessageValue(e.target.value)}
+                            className="min-h-[100px] bg-secondary/50 border border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                saveEditedMessage();
+                              }
+                              if (e.key === "Escape") {
+                                cancelEditingMessage();
+                              }
+                            }}
+                          />
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelEditingMessage}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Cancel
+                            </Button>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={saveEditedMessage}
+                              disabled={!editingMessageValue.trim() || status !== "ready"}
+                            >
+                              <Check className="h-4 w-4 mr-1" />
+                              Save & Regenerate
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className={`px-5 py-3 rounded-2xl text-sm leading-relaxed ${
+                            message.role === "user"
+                              ? "bg-primary text-primary-foreground rounded-tr-sm"
+                              : "bg-secondary/50 border border-white/5 rounded-tl-sm"
+                          }`}
+                        >
+                          {message.parts.map((part, index) => {
+                            if (part.type === "text") {
+                              return message.role === "user" ? (
+                                <p key={index} className="whitespace-pre-wrap">
+                                  {part.text}
+                                </p>
+                              ) : (
                               <div
                                 key={index}
                                 className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:my-3 prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10 prose-strong:text-primary-foreground prose-strong:font-semibold"
@@ -1036,34 +1126,46 @@ export function ChatInterface({
                               />
                             );
                           }
-                          return null;
-                        })}
-                      </div>
-                      {/* Timestamp and Copy button row */}
-                      <div className={`flex items-center gap-2 px-1 ${
-                        message.role === "user" ? "justify-end" : "justify-start"
-                      }`}>
-                        {message.role === "user" && (
-                          <button
-                            onClick={() => {
-                              const textContent = message.parts
-                                .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                                .map((p) => p.text)
-                                .join("\n");
-                              navigator.clipboard.writeText(textContent);
-                              setCopiedMessageId(message.id);
-                              setTimeout(() => setCopiedMessageId(null), 2000);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
-                            title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
-                          >
-                            {copiedMessageId === message.id ? (
-                              <CheckCheck className="w-3 h-3" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        )}
+                            return null;
+                          })}
+                        </div>
+                      )}
+                      {/* Timestamp, Edit, and Copy button row */}
+                      {editingMessageId !== message.id && (
+                        <div className={`flex items-center gap-2 px-1 ${
+                          message.role === "user" ? "justify-end" : "justify-start"
+                        }`}>
+                          {message.role === "user" && (
+                            <>
+                              <button
+                                onClick={() => startEditingMessage(message)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
+                                title="Edit message"
+                                disabled={status !== "ready"}
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const textContent = message.parts
+                                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                                    .map((p) => p.text)
+                                    .join("\n");
+                                  navigator.clipboard.writeText(textContent);
+                                  setCopiedMessageId(message.id);
+                                  setTimeout(() => setCopiedMessageId(null), 2000);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground cursor-pointer"
+                                title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
+                              >
+                                {copiedMessageId === message.id ? (
+                                  <CheckCheck className="w-3 h-3" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         {(message as any).createdAt && (
                           <span className="text-[10px] text-muted-foreground/50">
                             {new Date((message as any).createdAt).toLocaleTimeString([], { 
@@ -1091,10 +1193,11 @@ export function ChatInterface({
                               <CheckCheck className="w-3 h-3" />
                             ) : (
                               <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        )}
-                      </div>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {message.role === "user" && (
