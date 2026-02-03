@@ -1071,64 +1071,36 @@ export function ChatInterface({
                           </div>
                         </div>
                       ) : (
-                        <div
-                          className={`px-5 py-3 rounded-2xl text-sm leading-relaxed ${
-                            message.role === "user"
-                              ? "bg-primary text-primary-foreground rounded-tr-sm"
-                              : "bg-secondary/50 border border-white/5 rounded-tl-sm"
-                          }`}
-                        >
-                          {message.parts.map((part, index) => {
-                            if (part.type === "text") {
-                              return message.role === "user" ? (
-                                <p key={index} className="whitespace-pre-wrap">
-                                  {part.text}
-                                </p>
-                              ) : (
-                              <div
-                                key={index}
-                                className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:my-3 prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10 prose-strong:text-primary-foreground prose-strong:font-semibold"
-                              >
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
-                              </div>
-                            );
-                          }
-                          if (part.type === "tool-invocation" || part.type.startsWith("tool-")) {
-                            const toolName = part.type === "tool-invocation" 
-                              ? (part as any).toolInvocation.toolName 
-                              : part.type.replace("tool-", "");
-                              
-                            const rawState = part.type === "tool-invocation"
-                              ? (part as any).toolInvocation.state
-                              : (part as any).state;
-                              
-                            // Map new SDK states to our component states
-                            let state: "partial-call" | "call" | "result" = "call";
-                            if (rawState === "partial-call" || rawState === "input-streaming") state = "partial-call";
-                            else if (rawState === "call" || rawState === "input-available") state = "call";
-                            else if (rawState === "result" || rawState === "output-available" || rawState === "output-error") state = "result";
-                            
-                            const args = part.type === "tool-invocation" 
-                              ? (part as any).toolInvocation.args 
-                              : (part as any).input;
-                              
-                            const result = part.type === "tool-invocation" 
-                              ? (part as any).toolInvocation.result 
-                              : (part as any).output;
-
-                            return (
-                              <ToolInvocationDisplay 
-                                key={index} 
-                                toolName={toolName}
-                                state={state}
-                                args={args}
-                                result={result}
-                              />
-                            );
-                          }
-                            return null;
-                          })}
-                        </div>
+                        <>
+                          {/* Message bubble - text content only */}
+                          {message.parts.some((part) => part.type === "text") && (
+                            <div
+                              className={`text-sm leading-relaxed ${
+                                message.role === "user"
+                                  ? "px-5 py-3 rounded-2xl bg-secondary/50 border border-white/5 rounded-tr-sm"
+                                  : ""
+                              }`}
+                            >
+                              {message.parts.map((part, index) => {
+                                if (part.type === "text") {
+                                  return message.role === "user" ? (
+                                    <p key={index} className="whitespace-pre-wrap">
+                                      {part.text}
+                                    </p>
+                                  ) : (
+                                    <div
+                                      key={index}
+                                      className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:my-3 prose-table:border prose-table:border-white/10 prose-th:bg-black/30 prose-th:p-2 prose-td:p-2 prose-td:border-t prose-td:border-white/10 prose-strong:text-primary-foreground prose-strong:font-semibold"
+                                    >
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </div>
+                          )}
+                        </>
                       )}
                       {/* Timestamp, Edit, and Copy button row */}
                       {editingMessageId !== message.id && (
@@ -1226,7 +1198,14 @@ export function ChatInterface({
                     </div>
                   </div>
                 )}
-                {/* Loading indicator for agent response */}
+                {/* Live tool indicator during streaming */}
+                <LiveToolIndicator 
+                  messages={messages} 
+                  status={status} 
+                  agent={agent}
+                  agentName={agentName}
+                />
+                {/* Loading indicator for agent response (before streaming starts) */}
                 {(status === "submitted" || isCreatingConversation) && (
                   <div className="flex gap-4">
                     <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
@@ -1448,6 +1427,11 @@ const TOOL_DISPLAY_INFO: Record<string, { label: string; icon: React.ReactNode; 
     icon: <Save className="w-3.5 h-3.5" />,
     description: "Storing this information for later...",
   },
+  research: {
+    label: "Researching",
+    icon: <Brain className="w-3.5 h-3.5" />,
+    description: "Searching the web for information...",
+  },
   createProject: {
     label: "Creating Project",
     icon: <FolderPlus className="w-3.5 h-3.5" />,
@@ -1475,53 +1459,101 @@ const TOOL_DISPLAY_INFO: Record<string, { label: string; icon: React.ReactNode; 
   },
 };
 
-interface ToolDisplayProps {
-  toolName: string;
-  state: "partial-call" | "call" | "result";
-  args: Record<string, unknown>;
-  result?: unknown;
+// Live tool indicator component - shows ephemeral tool progress during streaming
+interface LiveToolIndicatorProps {
+  messages: UIMessage[];
+  status: string;
+  agent?: AgentInfo;
+  agentName: string;
 }
 
-function ToolInvocationDisplay({ toolName, state, args, result }: ToolDisplayProps) {
-  const toolInfo = TOOL_DISPLAY_INFO[toolName] || {
-    label: toolName,
-    icon: <Brain className="w-3.5 h-3.5" />,
-    description: "Processing...",
-  };
-
-  const isLoading = state === "call" || state === "partial-call";
-  const isComplete = state === "result";
-
-  // For search results, show count
-  const resultSummary = isComplete && result && typeof result === "object" && "resultCount" in (result as Record<string, unknown>)
-    ? `Found ${(result as { resultCount: number }).resultCount} result(s)`
-    : isComplete
-    ? "Done"
-    : null;
-
+function LiveToolIndicator({ messages, status, agent, agentName }: LiveToolIndicatorProps) {
+  // Only show during streaming
+  if (status !== "streaming") return null;
+  
+  // Get the last assistant message (the one being streamed)
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage || lastMessage.role !== "assistant") return null;
+  
+  // Extract tool invocations from the message
+  const toolParts = lastMessage.parts.filter(
+    (part) => part.type === "tool-invocation" || part.type.startsWith("tool-")
+  );
+  
+  if (toolParts.length === 0) return null;
+  
+  // Get tool info for each tool
+  const toolsInfo = toolParts.map((part) => {
+    const toolName = part.type === "tool-invocation" 
+      ? (part as any).toolInvocation?.toolName 
+      : part.type.replace("tool-", "");
+      
+    const rawState = part.type === "tool-invocation"
+      ? (part as any).toolInvocation?.state
+      : (part as any).state;
+      
+    const args = part.type === "tool-invocation" 
+      ? (part as any).toolInvocation?.args 
+      : (part as any).input;
+      
+    const isComplete = rawState === "result" || rawState === "output-available" || rawState === "output-error";
+    
+    // Convert camelCase to Title Case for fallback (e.g., "sendEmail" -> "Send Email")
+    const formatToolName = (name: string) => {
+      return name
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, str => str.toUpperCase())
+        .trim();
+    };
+    
+    const info = TOOL_DISPLAY_INFO[toolName] || {
+      label: formatToolName(toolName),
+      icon: <Brain className="w-3.5 h-3.5" />,
+      description: "Processing...",
+    };
+    
+    return { toolName, isComplete, info, args };
+  });
+  
+  // Find the currently running tool (last incomplete one) or show the last completed one
+  const currentTool = toolsInfo.find(t => !t.isComplete) || toolsInfo[toolsInfo.length - 1];
+  const completedCount = toolsInfo.filter(t => t.isComplete).length;
+  const hasTextContent = lastMessage.parts.some((part) => part.type === "text" && (part as any).text?.trim());
+  
+  // Don't show if we already have text content streaming (tools are done, response is coming)
+  if (hasTextContent && completedCount === toolsInfo.length) return null;
+  
+  // Get query for research tool
+  const currentQuery = currentTool?.args?.query as string | undefined;
+  
   return (
-    <div className="my-2 flex items-start gap-2">
-      <div
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-          isLoading
-            ? "bg-primary/10 text-primary border border-primary/20"
-            : "bg-green-500/10 text-green-400 border border-green-500/20"
-        }`}
-      >
-        <span className={isLoading ? "animate-pulse" : ""}>{toolInfo.icon}</span>
-        <span>{toolInfo.label}</span>
-        {isLoading && (
-          <Loader2 className="w-3 h-3 animate-spin" />
+    <div className="flex gap-4 -mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="w-8 h-8 shrink-0" /> {/* Spacer to align with avatar above */}
+      <div className="flex flex-col gap-0.5">
+        {/* Current/recent tool indicator - no background */}
+        <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
+          <span>{currentTool?.info.label}</span>
+          {!currentTool?.isComplete && (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+          )}
+          {currentTool?.isComplete && (
+            <Check className="w-3.5 h-3.5 text-green-400" />
+          )}
+        </div>
+        {/* Show query for research/search tools */}
+        {currentQuery && !currentTool?.isComplete && (
+          <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
+            &quot;{currentQuery}&quot;
+          </span>
         )}
-        {resultSummary && (
-          <span className="text-[10px] opacity-70">• {resultSummary}</span>
+        {/* Tool count if more than one */}
+        {toolsInfo.length > 1 && (
+          <span className="text-[11px] text-muted-foreground/50">
+            {completedCount}/{toolsInfo.length} tools completed
+          </span>
         )}
       </div>
-      {isLoading && args && "query" in args && (
-        <span className="text-xs text-muted-foreground italic">
-          &quot;{String(args.query).substring(0, 50)}{String(args.query).length > 50 ? "..." : ""}&quot;
-        </span>
-      )}
     </div>
   );
 }
