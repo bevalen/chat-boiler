@@ -116,6 +116,48 @@ export function LiveToolIndicator({ messages, status, agent, agentName }: LiveTo
   // Get query for research tool
   const currentQuery = currentTool?.args?.query as string | undefined;
 
+  // If there's no text content yet, show avatar inline (first tool call)
+  if (!hasTextContent) {
+    return (
+      <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        {/* Agent avatar */}
+        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
+          {agent?.avatarUrl ? (
+            <Image
+              src={agent.avatarUrl}
+              alt={agentName}
+              width={32}
+              height={32}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Bot className="w-5 h-5 text-primary" />
+          )}
+        </div>
+        {/* Tool indicator centered with avatar */}
+        <div className="flex flex-col gap-0.5 py-2">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="animate-pulse text-primary">{currentTool?.info.icon}</span>
+            <span>{currentTool?.info.label}</span>
+            {!currentTool?.isComplete && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
+            {currentTool?.isComplete && <Check className="w-3.5 h-3.5 text-green-400" />}
+          </div>
+          {currentQuery && !currentTool?.isComplete && (
+            <span className="text-xs text-muted-foreground/60 italic max-w-[300px] truncate">
+              &quot;{currentQuery}&quot;
+            </span>
+          )}
+          {toolsInfo.length > 1 && (
+            <span className="text-[11px] text-muted-foreground/50">
+              {completedCount}/{toolsInfo.length} tools completed
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // If there's text content, use negative margin to pull up below the chat bubble
   return (
     <div className="flex gap-4 -mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="w-8 h-8 shrink-0" /> {/* Spacer to align with avatar above */}
