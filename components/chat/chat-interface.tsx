@@ -490,7 +490,7 @@ export function ChatInterface({
                   </div>
                 )}
                 {/* Live tool indicator during streaming */}
-                <LiveToolIndicator messages={messages} status={status} agent={agent} agentName={agentName} />
+                <LiveToolIndicator messages={messages} status={status} />
                 {/* Abort indicator when response was stopped */}
                 {wasAborted && status === "ready" && messages.length > 0 && messages[messages.length - 1]?.role === "assistant" && (
                   <div className="flex gap-4 -mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">

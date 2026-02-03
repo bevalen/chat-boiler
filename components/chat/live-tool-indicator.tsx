@@ -1,20 +1,11 @@
 "use client";
 
 import { UIMessage } from "@ai-sdk/react";
-import Image from "next/image";
-import { Bot, Brain, Search, Save, FolderPlus, ListTodo, Check, Loader2 } from "lucide-react";
-
-interface AgentInfo {
-  name: string;
-  title: string | null;
-  avatarUrl: string | null;
-}
+import { Brain, Search, Save, FolderPlus, ListTodo, Check, Loader2 } from "lucide-react";
 
 interface LiveToolIndicatorProps {
   messages: UIMessage[];
   status: string;
-  agent?: AgentInfo;
-  agentName: string;
 }
 
 // Tool names mapped to display info
@@ -69,7 +60,7 @@ const formatToolName = (name: string) => {
     .trim();
 };
 
-export function LiveToolIndicator({ messages, status, agent, agentName }: LiveToolIndicatorProps) {
+export function LiveToolIndicator({ messages, status }: LiveToolIndicatorProps) {
   // Only show during streaming
   if (status !== "streaming") return null;
 
@@ -120,25 +111,12 @@ export function LiveToolIndicator({ messages, status, agent, agentName }: LiveTo
   // Get query for research tool
   const currentQuery = currentTool?.args?.query as string | undefined;
 
-  // If there's no text content yet, show avatar inline (first tool call)
+  // If there's no text content yet, show tool indicator inline (no separate avatar)
   if (!hasTextContent) {
     return (
       <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        {/* Agent avatar */}
-        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
-          {agent?.avatarUrl ? (
-            <Image
-              src={agent.avatarUrl}
-              alt={agentName}
-              width={32}
-              height={32}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <Bot className="w-5 h-5 text-primary" />
-          )}
-        </div>
-        {/* Tool indicator or thinking state centered with avatar */}
+        <div className="w-8 h-8 shrink-0" /> {/* Spacer to align with avatar above */}
+        {/* Tool indicator or thinking state */}
         <div className="flex flex-col gap-0.5 py-2">
           {isThinking ? (
             // Show "Thinking..." when all tools are complete but no text yet
