@@ -38,12 +38,6 @@ export async function POST(request: Request) {
         email_from?: string;
         email_subject?: string;
         email_message_id?: string;
-        linkedin_conversation_id?: string;
-        linkedin_profile_url?: string;
-        linkedin_message_id?: string;
-        linkedin_sender_name?: string;
-        linkedin_sender_title?: string;
-        linkedin_sender_company?: string;
       };
       userId?: string;
       agentId?: string;

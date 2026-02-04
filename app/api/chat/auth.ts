@@ -70,49 +70,7 @@ export async function authenticateRequest(options: AuthOptions): Promise<AuthRes
     return { user, supabase, isExtensionAuth };
   }
 
-  // 3. LinkedIn extension token authentication
-  if (authHeader?.startsWith("Bearer ") && channelSource === "linkedin") {
-    const token = authHeader.substring(7);
-    console.log("[auth] LinkedIn extension auth attempt");
-
-    const adminClient = getAdminClient();
-    supabase = adminClient;
-
-    const { data: credentials } = await adminClient
-      .from("user_channel_credentials")
-      .select("user_id, credentials, is_active")
-      .eq("channel_type", "linkedin")
-      .eq("is_active", true);
-
-    if (credentials) {
-      const matchingCred = credentials.find((cred) => {
-        const linkedInCreds = cred.credentials as { extension_token?: string; token_expires_at?: string };
-        if (linkedInCreds.extension_token === token) {
-          if (linkedInCreds.token_expires_at) {
-            const expiresAt = new Date(linkedInCreds.token_expires_at);
-            if (expiresAt < new Date()) {
-              console.log("[auth] LinkedIn extension token expired");
-              return false;
-            }
-          }
-          return true;
-        }
-        return false;
-      });
-
-      if (matchingCred) {
-        console.log("[auth] LinkedIn extension auth successful for user:", matchingCred.user_id);
-        user = { id: matchingCred.user_id };
-        isExtensionAuth = true;
-        return { user, supabase, isExtensionAuth };
-      }
-    }
-
-    console.log("[auth] LinkedIn extension auth failed - invalid token");
-    return { user: null, supabase, isExtensionAuth: false };
-  }
-
-  // 4. Regular browser-based authentication
+  // 3. Regular browser-based authentication
   supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   user = data.user;
