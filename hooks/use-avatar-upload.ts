@@ -37,7 +37,7 @@ export function useAvatarUpload(
 
         if (existingFiles && existingFiles.length > 0) {
           const filesToDelete = existingFiles.map(
-            (file) => `${folderPath}/${file.name}`
+            (file: { name: string }) => `${folderPath}/${file.name}`
           );
           await supabase.storage.from("avatars").remove(filesToDelete);
         }
@@ -93,7 +93,7 @@ export function useAvatarUpload(
         .list(folderPath);
 
       if (existingFiles && existingFiles.length > 0) {
-        const filesToDelete = existingFiles.map((file) => `${folderPath}/${file.name}`);
+        const filesToDelete = existingFiles.map((file: { name: string }) => `${folderPath}/${file.name}`);
         await supabase.storage.from("avatars").remove(filesToDelete);
       }
     } catch (error) {

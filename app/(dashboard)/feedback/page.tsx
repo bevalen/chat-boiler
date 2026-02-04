@@ -2,6 +2,8 @@ import { ChatInterface } from "@/components/chat/chat-interface";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser } from "@/lib/db/agents";
 
+export const dynamic = 'force-dynamic';
+
 export default async function FeedbackPage() {
   const supabase = await createClient();
   

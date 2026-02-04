@@ -23,7 +23,7 @@ export default async function DashboardLayout({
               email: "demo@example.com",
               name: "Demo User",
             }}
-            agentId={null}
+            agentId={undefined}
           />
           <SidebarInset className="!h-svh !max-h-svh !min-h-0 overflow-hidden">
             <DashboardHeader agentId={null} />

@@ -80,7 +80,7 @@ export function useRealtimeUpdates({
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           const newMessage = payload.new as {
             id: string;
             role: "user" | "assistant" | "system";
