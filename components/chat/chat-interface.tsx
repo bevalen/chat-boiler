@@ -65,7 +65,7 @@ interface ChatInterfaceProps {
   };
 }
 
-const DEFAULT_STORAGE_KEY = "maia_active_conversation_id";
+const DEFAULT_STORAGE_KEY = "chat_active_conversation_id";
 
 export function ChatInterface({
   agent,
@@ -147,7 +147,7 @@ export function ChatInterface({
   });
 
   const isLoading = status === "submitted" || status === "streaming";
-  const agentName = agent?.name || "Maia";
+  const agentName = agent?.name || "AI Assistant";
   const agentTitle = agent?.title || "AI Assistant";
 
   // Start a new conversation (just clear state, create in DB on first message)

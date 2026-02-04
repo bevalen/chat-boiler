@@ -63,8 +63,7 @@ export default function SignupPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Click the link in the email to confirm your account and get started
-              with MAIA.
+              Click the link in the email to confirm your account and get started.
             </p>
           </CardContent>
           <CardFooter>
@@ -83,7 +82,7 @@ export default function SignupPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
-            Get started with your AI executive assistant
+            Get started with your AI assistant
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSignup}>

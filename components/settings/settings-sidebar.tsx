@@ -4,7 +4,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, User, Bot, Shield, MessageSquare, Sparkles, Radio, Linkedin, Bell } from "lucide-react";
+import { X, User, Bot, Shield, MessageSquare, Sparkles } from "lucide-react";
 
 export type SettingsSection =
   | "profile"
@@ -12,9 +12,6 @@ export type SettingsSection =
   | "personality"
   | "preferences"
   | "custom-instructions"
-  | "notifications"
-  | "channels"
-  | "linkedin"
   | "security";
 
 interface SettingsSidebarProps {
@@ -54,24 +51,6 @@ const settingsSections = [
     label: "Custom Instructions",
     icon: <Sparkles className="h-4 w-4" />,
     description: "About you",
-  },
-  {
-    id: "notifications" as SettingsSection,
-    label: "Notifications",
-    icon: <Bell className="h-4 w-4" />,
-    description: "Push notifications",
-  },
-  {
-    id: "channels" as SettingsSection,
-    label: "Channels",
-    icon: <Radio className="h-4 w-4" />,
-    description: "Communication channels",
-  },
-  {
-    id: "linkedin" as SettingsSection,
-    label: "LinkedIn SDR",
-    icon: <Linkedin className="h-4 w-4" />,
-    description: "AI sales assistant",
   },
   {
     id: "security" as SettingsSection,

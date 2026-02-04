@@ -12,15 +12,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const APP_NAME = "MAIA";
-const APP_DEFAULT_TITLE = "MAIA - AI Executive Assistant";
-const APP_DESCRIPTION = "Your personal AI executive assistant";
+const APP_NAME = "AI Chat";
+const APP_DEFAULT_TITLE = "AI Chat Assistant";
+const APP_DESCRIPTION = "Your AI-powered chat assistant";
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,
   title: {
     default: APP_DEFAULT_TITLE,
-    template: "%s | MAIA",
+    template: "%s | AI Chat",
   },
   description: APP_DESCRIPTION,
   manifest: "/manifest.json",

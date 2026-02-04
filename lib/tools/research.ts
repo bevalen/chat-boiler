@@ -1,5 +1,5 @@
 /**
- * Research tool using AI Gateway with Perplexity Sonar
+ * Research tool using Vercel AI SDK Gateway with Perplexity Sonar Pro
  * Provides web search and real-time information capabilities
  */
 
@@ -23,10 +23,10 @@ export function createResearchTool(agentId: string) {
     execute: async ({ query, focusArea }: { query: string; focusArea?: string }) => {
       try {
         // Check if AI Gateway is configured
-        if (!process.env.AI_GATEWAY_API_KEY) {
+        if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
           return {
             success: false,
-            message: "Research capability is not configured. Please contact the administrator.",
+            message: "Research capability is not configured. Please set AI_GATEWAY_API_KEY or deploy on Vercel.",
           };
         }
 
@@ -35,7 +35,7 @@ export function createResearchTool(agentId: string) {
 
         console.log(`[research] Searching for: ${enhancedQuery}`);
 
-        // Use AI Gateway with Perplexity Sonar Pro
+        // Use Vercel AI SDK Gateway with Perplexity Sonar Pro
         const response = await generateText({
           model: gateway("perplexity/sonar-pro"),
           system:

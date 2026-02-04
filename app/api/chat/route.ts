@@ -9,7 +9,6 @@ import { getAgentForUser, buildSystemPrompt } from "@/lib/db/agents";
 import { getOrCreateDefaultConversation, addMessage } from "@/lib/db/conversations";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { ChannelType, MessageMetadata } from "@/lib/types/database";
-import { logActivity, ActivityType, ActivitySource } from "@/lib/db/activity-log";
 import { createAutomaticBugReport } from "@/lib/db/feedback";
 
 // Import refactored modules
@@ -169,34 +168,11 @@ export async function POST(request: Request) {
       userId: user.id,
       supabase: adminSupabase,
       conversationId: conversation.id,
-      agentName: agent.name,
-      userName: profile?.name || "User",
-      userEmail: profile?.email,
-      userTitle: agent.identityContext?.owner?.role,
-      userCompany: agent.identityContext?.owner?.company,
-      userTimezone: profile?.timezone,
-      preferredNotificationChannel: profile?.preferred_notification_channel,
     });
 
     // 9. SELECT MODEL AND DETERMINE STEP LIMIT
-    const selectedModel =
-      channelSource === "linkedin"
-        ? gateway("anthropic/claude-sonnet-4-5-20250514")
-        : gateway("anthropic/claude-sonnet-4.5");
-
-    const isBackgroundChannel = channelSource === "cron" || channelSource === "email";
-    const maxSteps = isBackgroundChannel ? 30 : 20;
-
-    if (isBackgroundChannel) {
-      console.log(
-        `[chat/route] 🤖 Background mode: ${maxSteps} steps allowed (channel: ${channelSource})`
-      );
-    }
-
-    if (channelSource === "linkedin") {
-      console.log(`[chat/route] 🔗 LinkedIn SDR Mode - Using Claude Sonnet 4.5`);
-      console.log(`[chat/route] 📝 Conversation history count: ${messagesWithHistory.length}`);
-    }
+    const selectedModel = gateway("anthropic/claude-sonnet-4.5");
+    const maxSteps = 20;
 
     // Track abort state to prevent saving partial messages
     let wasAborted = false;
@@ -214,13 +190,6 @@ export async function POST(request: Request) {
       abortSignal: request.signal,
       onStepFinish: async ({ toolCalls, toolResults }) => {
         if (toolCalls && toolCalls.length > 0) {
-          const activitySource: ActivitySource =
-            channelSource === "email"
-              ? "email"
-              : channelSource === "cron"
-                ? "cron"
-                : "chat";
-
           for (let i = 0; i < toolCalls.length; i++) {
             const tc = toolCalls[i];
             if (!tc) continue;
@@ -238,54 +207,6 @@ export async function POST(request: Request) {
                 | Record<string, unknown>
                 | undefined;
               const isError = output && output.success === false && output.error;
-
-              // Map tool names to activity types
-              const getActivityType = (toolName: string): ActivityType => {
-                if (
-                  toolName === "sendEmail" ||
-                  toolName === "replyToEmail" ||
-                  toolName === "forwardEmailToUser"
-                )
-                  return "email_sent";
-                if (toolName === "checkEmail") return "email_received";
-                if (toolName === "research") return "research";
-                if (toolName === "saveToMemory") return "memory_saved";
-                if (toolName === "createTask" || toolName === "createSubtask") return "task_created";
-                if (toolName === "updateTask" || toolName === "completeTask") return "task_updated";
-                if (toolName === "createProject") return "project_created";
-                if (toolName === "updateProject") return "project_updated";
-                if (toolName === "scheduleReminder") return "reminder_created";
-                if (toolName === "scheduleAgentTask" || toolName === "scheduleTaskFollowUp")
-                  return "job_scheduled";
-                if (isError) return "error";
-                return "tool_call";
-              };
-
-              // Log to activity log
-              console.log(
-                `[chat/route] 📝 Logging activity for tool "${tc.toolName}" (source: ${activitySource})`
-              );
-              logActivity(adminSupabase, {
-                agentId: agent.id,
-                activityType: getActivityType(tc.toolName),
-                source: activitySource,
-                title: `Tool: ${tc.toolName}`,
-                description: isError
-                  ? String(output?.error)
-                  : (output?.message as string) || "Completed",
-                metadata: {
-                  tool: tc.toolName,
-                  params: toolInput,
-                  result: output,
-                  success: !isError,
-                },
-                conversationId: conversation.id,
-                status: isError ? "failed" : "completed",
-              })
-                .then(() => {
-                  console.log(`[chat/route] ✅ Activity logged for tool "${tc.toolName}"`);
-                })
-                .catch((err) => console.error("[chat/route] Failed to log activity:", err));
 
               // Auto-create bug report for tool errors
               if (isError) {

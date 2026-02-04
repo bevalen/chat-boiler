@@ -57,7 +57,7 @@ function LoginForm() {
         <div className="space-y-1">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
           <CardDescription>
-            Sign in to access your AI Executive Assistant
+            Sign in to access your AI Assistant
           </CardDescription>
         </div>
       </CardHeader>

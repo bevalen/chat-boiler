@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Menu, Bell } from "lucide-react";
+import { Menu } from "lucide-react";
 import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 import { SettingsSidebar, settingsSections, type SettingsSection } from "./settings-sidebar";
 import { SettingsProfileSection } from "./settings-profile-section";
@@ -12,7 +12,6 @@ import { SettingsPersonalitySection } from "./settings-personality-section";
 import { SettingsPreferencesSection } from "./settings-preferences-section";
 import { SettingsCustomInstructionsSection } from "./settings-custom-instructions-section";
 import { SettingsSecuritySection } from "./settings-security-section";
-import { PushNotificationSettings } from "./push-notification-settings";
 import { useSettingsSave } from "@/hooks/use-settings-save";
 
 interface SettingsFormProps {
@@ -33,11 +32,9 @@ interface SettingsFormProps {
     userPreferences: UserPreferences | null;
     customInstructions: string | null;
   } | null;
-  channelsComponent?: React.ReactNode;
-  linkedInComponent?: React.ReactNode;
 }
 
-export function SettingsForm({ user, agent, channelsComponent, linkedInComponent }: SettingsFormProps) {
+export function SettingsForm({ user, agent }: SettingsFormProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [showSidebar, setShowSidebar] = useState(false);
 
@@ -239,36 +236,6 @@ export function SettingsForm({ user, agent, channelsComponent, linkedInComponent
               isSaving={isSaving}
               agentId={agent.id}
             />
-          )}
-
-          {/* Notifications Section */}
-          {activeSection === "notifications" && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Notifications</CardTitle>
-                </div>
-                <CardDescription>Configure how you receive notifications from MAIA</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <PushNotificationSettings />
-                <p className="text-xs text-muted-foreground">
-                  On iOS, you need to add this app to your Home Screen first, then enable
-                  notifications.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Channels Section */}
-          {activeSection === "channels" && channelsComponent && (
-            <div className="space-y-6">{channelsComponent}</div>
-          )}
-
-          {/* LinkedIn SDR Section */}
-          {activeSection === "linkedin" && linkedInComponent && (
-            <div className="space-y-6">{linkedInComponent}</div>
           )}
 
           {/* Security Section */}

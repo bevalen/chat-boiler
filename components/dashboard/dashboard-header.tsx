@@ -11,7 +11,7 @@ interface DashboardHeaderProps {
   agentId: string | null;
 }
 
-const STORAGE_KEY = "maia_active_conversation_id";
+const STORAGE_KEY = "chat_active_conversation_id";
 
 export function DashboardHeader({ agentId }: DashboardHeaderProps) {
   const router = useRouter();

@@ -1,7 +1,7 @@
 {
-  "name": "MAIA - AI Executive Assistant",
-  "short_name": "MAIA",
-  "description": "Your personal AI executive assistant",
+  "name": "AI Chat Assistant",
+  "short_name": "AI Chat",
+  "description": "Your AI-powered chat assistant",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090b",

@@ -5,10 +5,6 @@ const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
-  // Custom service worker for push notifications
-  customWorkerSrc: "service-worker",
-  customWorkerDest: "public",
-  customWorkerPrefix: "/",
   workboxOptions: {
     skipWaiting: true,
     clientsClaim: true,
@@ -28,5 +24,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Wrap with PWA support
 export default withPWA(nextConfig);
