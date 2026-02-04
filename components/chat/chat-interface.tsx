@@ -443,7 +443,7 @@ export function ChatInterface({
 
         {/* Messages area */}
         <div
-          className="flex-1 overflow-y-auto px-4 z-10 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent"
+          className="flex-1 overflow-y-auto px-4 z-10 custom-scrollbar"
           ref={scrollRef}
           onScroll={handleScroll}
         >

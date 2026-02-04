@@ -139,7 +139,7 @@ export function SettingsForm({ user, agent }: SettingsFormProps) {
       />
 
       {/* Main Settings Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         <div className="p-6 max-w-2xl">
           {/* Section Header */}
           <div className="mb-6">
