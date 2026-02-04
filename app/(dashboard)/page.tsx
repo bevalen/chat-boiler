@@ -4,6 +4,20 @@ import { getAgentForUser } from "@/lib/db/agents";
 
 export default async function ChatPage() {
   const supabase = await createClient();
+  
+  // Skip auth if Supabase is not configured (boilerplate mode)
+  if (!supabase) {
+    return (
+      <div className="h-[calc(100vh-57px)]">
+        <ChatInterface
+          agent={undefined}
+          agentId={undefined}
+          user={undefined}
+        />
+      </div>
+    );
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

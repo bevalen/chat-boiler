@@ -12,6 +12,28 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+  
+  // Skip auth if Supabase is not configured (boilerplate mode)
+  if (!supabase) {
+    return (
+      <CommandPaletteProvider>
+        <SidebarProvider className="!h-svh !max-h-svh overflow-hidden">
+          <AppSidebarClient
+            user={{
+              email: "demo@example.com",
+              name: "Demo User",
+            }}
+            agentId={null}
+          />
+          <SidebarInset className="!h-svh !max-h-svh !min-h-0 overflow-hidden">
+            <DashboardHeader agentId={null} />
+            <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
+          </SidebarInset>
+        </SidebarProvider>
+      </CommandPaletteProvider>
+    );
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

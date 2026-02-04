@@ -4,6 +4,25 @@ import { AgentPersonality, UserPreferences } from "@/lib/types/database";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
+  
+  // Skip auth if Supabase is not configured (boilerplate mode)
+  if (!supabase) {
+    return (
+      <div className="h-full">
+        <SettingsForm
+          user={{
+            id: "demo-user-id",
+            email: "demo@example.com",
+            name: "Demo User",
+            timezone: "America/New_York",
+            avatarUrl: null,
+          }}
+          agent={null}
+        />
+      </div>
+    );
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

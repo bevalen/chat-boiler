@@ -19,10 +19,10 @@ This boilerplate provides a complete foundation for building AI chat application
 
 ## Tech Stack
 
-- **Framework:** Next.js 15 (App Router)
+- **Framework:** Next.js 16 (App Router with proxy.ts for middleware)
 - **UI:** React 19, Tailwind CSS, shadcn/ui
 - **Database:** Supabase (PostgreSQL + Vector)
-- **Auth:** Supabase Auth
+- **Auth:** Supabase Auth (with preview mode fallback)
 - **AI:** Vercel AI SDK with AI Gateway (routes through Vercel's gateway)
 - **Models:** Claude Sonnet 4.5 (chat), Perplexity Sonar Pro (research)
 - **Deployment:** Vercel
@@ -46,7 +46,29 @@ cd my-ai-app
 npm install
 ```
 
-### Step 2: Environment Variables
+### Step 2: Preview Mode (Optional - No Setup Required)
+
+**You can run the app immediately without any configuration!** The boilerplate runs in "preview mode" when Supabase credentials are not configured:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) - you'll land directly on the dashboard and can explore the UI. However, **full functionality requires Supabase setup** (see Step 3 below).
+
+**What works in preview mode:**
+- ✅ All UI components and layouts
+- ✅ Navigation and routing
+- ✅ Component styling and interactions
+
+**What requires Supabase setup:**
+- ❌ User authentication (signup/login)
+- ❌ Chat functionality (saving conversations, messages)
+- ❌ Feedback system (submitting bugs/features)
+- ❌ Settings and user preferences
+- ❌ Real-time updates
+
+### Step 3: Environment Variables
 
 ```bash
 cp .env.example .env.local
@@ -62,7 +84,7 @@ The AI Gateway routes all AI requests (chat, research tool) through Vercel's gat
 Required environment variables:
 
 ```env
-# Supabase
+# Supabase (required for full functionality)
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
@@ -72,7 +94,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 AI_GATEWAY_API_KEY=your_vercel_ai_gateway_api_key
 ```
 
-### Step 3: Supabase Setup
+### Step 4: Supabase Setup (Required for Full Functionality)
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 2. Copy your project URL and keys to `.env.local`
@@ -86,21 +108,28 @@ AI_GATEWAY_API_KEY=your_vercel_ai_gateway_api_key
    - Development: `http://localhost:3000/auth/callback`
    - Production: `https://your-domain.com/auth/callback`
 
-### Step 4: Customize System Prompt
+**Once Supabase is configured:**
+- The app will automatically switch from preview mode to full functionality
+- Users will be redirected to login/signup pages
+- All features (chat, feedback, settings) will be fully functional
+
+### Step 5: Customize System Prompt
 
 Edit `lib/db/agents.ts` → `buildSystemPrompt()` function to define your AI assistant's role, personality, and capabilities.
 
 Replace the placeholder text with your specific application requirements.
 
-### Step 5: Run Locally
+### Step 6: Run Locally
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and create an account.
+Open [http://localhost:3000](http://localhost:3000):
+- **Without Supabase:** You'll see the dashboard in preview mode (no auth required)
+- **With Supabase:** You'll be redirected to login/signup to create an account
 
-### Step 6: Deploy
+### Step 7: Deploy
 
 1. Push to GitHub
 2. Import project in [Vercel](https://vercel.com)
@@ -263,6 +292,18 @@ The feedback system allows users to submit bugs and feature requests via chat, a
 npm run dev
 ```
 
+**Note:** After cloning the repository, restart the dev server (`Ctrl+C` then `npm run dev`) to ensure Turbopack recognizes all files, including `proxy.ts` and the notification components.
+
+### Understanding Preview Mode
+
+The boilerplate includes a "preview mode" that allows the app to run without Supabase configuration:
+
+- **`proxy.ts`** - Handles routing and authentication. When Supabase credentials are missing, it bypasses auth checks and allows direct access to the dashboard.
+- **Supabase clients** - Return `null` when credentials are missing, enabling graceful degradation.
+- **Dashboard pages** - Render with demo/placeholder data when Supabase is unavailable.
+
+This allows developers to explore the UI immediately after cloning, then configure Supabase when ready for full functionality.
+
 ### Type Checking
 
 ```bash
@@ -327,6 +368,13 @@ Same as local, plus:
 - Check Supabase dashboard → Realtime settings
 - Ensure WebSocket connections aren't blocked
 
+### App shows 404 or build errors after cloning
+
+- **Restart the dev server** after cloning: Stop (`Ctrl+C`) and run `npm run dev` again
+- This clears Turbopack cache and ensures all files are recognized
+- The `proxy.ts` file handles routing - don't create a `middleware.ts` file (Next.js 16 uses `proxy.ts` instead)
+- If you see "Both middleware file and proxy file are detected", delete any `middleware.ts` file - only `proxy.ts` should exist
+
 ## Architecture Overview
 
 ```
@@ -345,9 +393,15 @@ chat-boiler/
 │   ├── db/              # Database utilities
 │   ├── supabase/        # Supabase clients
 │   └── types/           # TypeScript types
+├── proxy.ts             # Next.js proxy (handles auth & preview mode)
 └── supabase/
     └── migrations/      # Database migrations
 ```
+
+### Key Files
+
+- **`proxy.ts`** - Next.js proxy file that handles authentication and enables preview mode. When Supabase credentials are missing, it allows access to the dashboard without auth. Once Supabase is configured, it enforces authentication and redirects unauthenticated users to login.
+- **`lib/supabase/server.ts`** & **`lib/supabase/client.ts`** - Supabase client factories that return `null` when credentials are missing, enabling graceful degradation to preview mode.
 
 ## License
 

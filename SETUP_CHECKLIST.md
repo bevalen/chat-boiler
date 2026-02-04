@@ -33,7 +33,9 @@ Use this checklist when starting a new AI chat app from this boilerplate.
 - [ ] Identify any custom tables/features needed beyond the boilerplate
 - [ ] Plan your database schema modifications
 
-## 4. Supabase Setup
+## 4. Supabase Setup (Required for Full Functionality)
+
+**Note:** You can skip this step initially and preview the UI. The app runs in "preview mode" without Supabase credentials, but full functionality (auth, chat, feedback) requires Supabase setup.
 
 - [ ] Create new Supabase project at https://supabase.com
 - [ ] Copy project URL and anon key
@@ -46,6 +48,8 @@ Use this checklist when starting a new AI chat app from this boilerplate.
 - [ ] Configure Auth redirect URLs in Supabase dashboard:
   - Development: `http://localhost:3000/auth/callback`
   - Production: `https://your-domain.com/auth/callback`
+
+**After Supabase setup:** The app automatically switches from preview mode to full functionality. Users will be redirected to login/signup, and all features will work.
 
 ## 5. Environment Variables
 
@@ -79,8 +83,11 @@ Use this checklist when starting a new AI chat app from this boilerplate.
 
 - [ ] Run `npm install` to install dependencies
 - [ ] Run `npm run dev` to start development server
+- [ ] **Important:** After cloning, restart the dev server (`Ctrl+C` then `npm run dev`) to clear Turbopack cache
 - [ ] Open http://localhost:3000
-- [ ] Create a test account via signup page
+- [ ] **Preview mode:** If Supabase is not configured, you'll see the dashboard in preview mode (no auth required) - this lets you explore the UI before setting up Supabase
+- [ ] **Full functionality:** Once Supabase is configured (Step 4), create a test account via signup page
+- [ ] **Note:** The app uses `proxy.ts` (not `middleware.ts`) for Next.js 16 - don't create a `middleware.ts` file
 - [ ] Test chat functionality:
   - [ ] Send a message
   - [ ] Verify streaming response works

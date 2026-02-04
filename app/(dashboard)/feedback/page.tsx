@@ -4,6 +4,27 @@ import { getAgentForUser } from "@/lib/db/agents";
 
 export default async function FeedbackPage() {
   const supabase = await createClient();
+  
+  // Skip auth if Supabase is not configured (boilerplate mode)
+  if (!supabase) {
+    return (
+      <div className="h-[calc(100vh-57px)]">
+        <ChatInterface
+          agent={undefined}
+          agentId={undefined}
+          user={undefined}
+          apiEndpoint="/api/feedback/chat"
+          hideSidebar={true}
+          storageKey={null}
+          welcomeMessage={{
+            title: "Submit Feedback",
+            subtitle: "Tell me about a feature you'd like to see or a bug you've encountered, and I'll gather the details to create a proper report.",
+          }}
+        />
+      </div>
+    );
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
