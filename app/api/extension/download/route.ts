@@ -62,7 +62,7 @@ export async function GET() {
       archive.pipe(passthrough);
 
       // Add the extension files to the archive
-      archive.directory(extensionDir, "maia-linkedin-sdr");
+      archive.directory(extensionDir, "linkedin-sdr-extension");
 
       // Finalize the archive
       archive.finalize();
@@ -76,7 +76,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": "attachment; filename=maia-linkedin-sdr.zip",
+        "Content-Disposition": "attachment; filename=linkedin-sdr-extension.zip",
         "Content-Length": zipBuffer.length.toString(),
       },
     });

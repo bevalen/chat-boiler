@@ -12,7 +12,7 @@ import { FeedbackType, FeedbackPriority, FeedbackStatus } from "@/lib/types/data
 export function createFeedbackAgent(supabase: SupabaseClient, agentId: string, conversationId?: string) {
   return new ToolLoopAgent({
     model: gateway("anthropic/claude-sonnet-4.5"),
-    instructions: `You are a Product Manager for MAIA, an AI executive assistant application.
+    instructions: `You are a Product Manager for an AI assistant application.
 
 Your job is to help users manage feedback - this includes creating new feedback items, searching existing ones, updating them, and deleting them when needed.
 

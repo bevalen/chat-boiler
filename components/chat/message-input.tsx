@@ -75,7 +75,7 @@ export function MessageInput({
           )}
         </form>
         <p className="text-[10px] text-muted-foreground/40 text-center mt-3 uppercase tracking-wider font-medium">
-          MAIA Internal System • Confidential
+          AI Assistant System • Confidential
         </p>
       </div>
     </div>

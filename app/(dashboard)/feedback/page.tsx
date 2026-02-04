@@ -19,6 +19,16 @@ export default async function FeedbackPage() {
           welcomeMessage={{
             title: "Submit Feedback",
             subtitle: "Tell me about a feature you'd like to see or a bug you've encountered, and I'll gather the details to create a proper report.",
+            suggestedPrompts: [
+              {
+                title: "Report a Bug",
+                prompt: "I found a bug where...",
+              },
+              {
+                title: "Request a Feature",
+                prompt: "I'd like a feature that...",
+              },
+            ],
           }}
         />
       </div>

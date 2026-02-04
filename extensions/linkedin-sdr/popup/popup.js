@@ -1,5 +1,5 @@
 /**
- * MAIA LinkedIn SDR - Popup Script
+ * LinkedIn SDR Extension - Popup Script
  */
 
 class PopupController {
@@ -81,7 +81,7 @@ class PopupController {
     // Open settings link
     this.elements.openSettingsLink.addEventListener('click', (e) => {
       e.preventDefault();
-      const apiUrl = this.elements.apiUrl.value.trim() || 'https://madewell-maia.vercel.app';
+      const apiUrl = this.elements.apiUrl.value.trim() || 'https://your-domain.com';
       chrome.tabs.create({ url: `${apiUrl}/settings?section=linkedin` });
     });
 
@@ -117,7 +117,7 @@ class PopupController {
     // Help link
     this.elements.helpLink.addEventListener('click', (e) => {
       e.preventDefault();
-      chrome.tabs.create({ url: 'https://docs.maia.ai/linkedin-sdr' });
+      chrome.tabs.create({ url: 'https://your-domain.com/docs/linkedin-sdr' });
     });
   }
 
@@ -126,12 +126,12 @@ class PopupController {
     const token = this.elements.authToken.value.trim();
     
     if (!apiUrl) {
-      alert('Please enter your MAIA server URL');
+      alert('Please enter your server URL');
       return;
     }
 
     if (!token) {
-      alert('Please enter your connection token from MAIA settings');
+      alert('Please enter your connection token from settings');
       return;
     }
 
@@ -181,18 +181,18 @@ class PopupController {
       await this.loadSettings();
 
       // Show success message
-      alert('Successfully connected to MAIA!');
+      alert('Successfully connected!');
     } catch (error) {
       console.error('Auth error:', error);
       alert(`Failed to connect: ${error.message}`);
     } finally {
       this.elements.connectBtn.disabled = false;
-      this.elements.connectBtn.textContent = 'Connect to MAIA';
+      this.elements.connectBtn.textContent = 'Connect';
     }
   }
 
   async handleDisconnect() {
-    const confirmed = confirm('Are you sure you want to disconnect from MAIA?');
+    const confirmed = confirm('Are you sure you want to disconnect?');
     
     if (confirmed) {
       await this.sendMessage({ type: 'CLEAR_AUTH' });

@@ -1,5 +1,5 @@
 /**
- * MAIA LinkedIn SDR - Content Script
+ * LinkedIn SDR Extension - Content Script
  * 
  * This script runs on LinkedIn messaging pages and:
  * 1. Monitors for new incoming messages
@@ -30,18 +30,18 @@ const SELECTORS = {
 const DEBUG = true;
 
 function log(...args) {
-  if (DEBUG) console.log('[MAIA SDR]', ...args);
+  if (DEBUG) console.log('[LinkedIn SDR]', ...args);
 }
 
 function logError(...args) {
-  console.error('[MAIA SDR ERROR]', ...args);
+  console.error('[LinkedIn SDR ERROR]', ...args);
 }
 
 function logWarn(...args) {
-  console.warn('[MAIA SDR WARN]', ...args);
+  console.warn('[LinkedIn SDR WARN]', ...args);
 }
 
-class MAIALinkedInSDR {
+class LinkedInSDRExtension {
   constructor() {
     this.lastProcessedMessageHash = null;
     this.lastProcessedThreadId = null;
@@ -89,7 +89,7 @@ class MAIALinkedInSDR {
       this.settings = response.settings || {};
       this.enabled = this.settings.enabled !== false;
     } catch (error) {
-      console.warn('[MAIA SDR] Could not load settings:', error);
+      console.warn('[LinkedIn SDR] Could not load settings:', error);
     }
   }
 
@@ -110,7 +110,7 @@ class MAIALinkedInSDR {
   startMonitoring() {
     const messageList = document.querySelector(SELECTORS.messageList);
     if (!messageList) {
-      console.error('[MAIA SDR] Message list not found');
+      console.error('[LinkedIn SDR] Message list not found');
       return;
     }
 
@@ -137,7 +137,7 @@ class MAIALinkedInSDR {
       }
     }, 2000);
 
-    console.log('[MAIA SDR] Message monitoring started');
+    console.log('[LinkedIn SDR] Message monitoring started');
   }
 
   /**
@@ -489,12 +489,12 @@ class MAIALinkedInSDR {
   clickSendButton() {
     const sendButton = document.querySelector(SELECTORS.sendButton);
     if (!sendButton || sendButton.disabled) {
-      console.error('[MAIA SDR] Send button not found or disabled');
+      console.error('[LinkedIn SDR] Send button not found or disabled');
       return false;
     }
 
     sendButton.click();
-    console.log('[MAIA SDR] Send button clicked');
+    console.log('[LinkedIn SDR] Send button clicked');
     return true;
   }
 
@@ -523,14 +523,14 @@ class MAIALinkedInSDR {
 
   addStatusIndicator() {
     // Remove existing indicator if any
-    const existing = document.querySelector('.maia-sdr-status');
+    const existing = document.querySelector('.linkedin-sdr-status');
     if (existing) existing.remove();
 
     const indicator = document.createElement('div');
-    indicator.className = 'maia-sdr-status';
+    indicator.className = 'linkedin-sdr-status';
     indicator.innerHTML = `
-      <div class="maia-sdr-status-dot"></div>
-      <span class="maia-sdr-status-text">MAIA SDR Active</span>
+      <div class="linkedin-sdr-status-dot"></div>
+      <span class="linkedin-sdr-status-text">LinkedIn SDR Active</span>
     `;
 
     document.body.appendChild(indicator);
@@ -540,8 +540,8 @@ class MAIALinkedInSDR {
   updateStatusIndicator(status, message) {
     if (!this.statusIndicator) return;
 
-    this.statusIndicator.className = `maia-sdr-status ${status}`;
-    const textEl = this.statusIndicator.querySelector('.maia-sdr-status-text');
+    this.statusIndicator.className = `linkedin-sdr-status ${status}`;
+    const textEl = this.statusIndicator.querySelector('.linkedin-sdr-status-text');
     
     switch (status) {
       case 'processing':
@@ -554,10 +554,10 @@ class MAIALinkedInSDR {
         textEl.textContent = message || 'Error';
         break;
       case 'disabled':
-        textEl.textContent = 'MAIA SDR Paused';
+        textEl.textContent = 'LinkedIn SDR Paused';
         break;
       default:
-        textEl.textContent = 'MAIA SDR Active';
+        textEl.textContent = 'LinkedIn SDR Active';
     }
   }
 
@@ -604,7 +604,7 @@ class MAIALinkedInSDR {
       }
     });
     
-    console.log(`[MAIA SDR] Found ${conversations.length} unread conversations`);
+    console.log(`[LinkedIn SDR] Found ${conversations.length} unread conversations`);
     return conversations;
   }
 
@@ -723,36 +723,36 @@ class MAIALinkedInSDR {
    */
   addControlPanel() {
     // Remove existing panel if any
-    const existing = document.querySelector('.maia-control-panel');
+    const existing = document.querySelector('.linkedin-control-panel');
     if (existing) existing.remove();
 
     const panel = document.createElement('div');
-    panel.className = 'maia-control-panel';
+    panel.className = 'linkedin-control-panel';
     panel.innerHTML = `
-      <div class="maia-control-header">
-        <span class="maia-control-title">MAIA SDR</span>
-        <button class="maia-control-close" title="Minimize">−</button>
+      <div class="linkedin-control-header">
+        <span class="linkedin-control-title">LinkedIn SDR</span>
+        <button class="linkedin-control-close" title="Minimize">−</button>
       </div>
-      <div class="maia-control-body">
-        <button class="maia-ctrl-btn maia-btn-unread" title="Process all unread conversations">
+      <div class="linkedin-control-body">
+        <button class="linkedin-ctrl-btn linkedin-btn-unread" title="Process all unread conversations">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
           </svg>
           Process Unread
         </button>
-        <button class="maia-ctrl-btn maia-btn-current" title="Generate reply for current conversation">
+        <button class="linkedin-ctrl-btn linkedin-btn-current" title="Generate reply for current conversation">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
           This Chat
         </button>
-        <button class="maia-ctrl-btn maia-btn-stop" title="Stop all processing" style="display: none;">
+        <button class="linkedin-ctrl-btn linkedin-btn-stop" title="Stop all processing" style="display: none;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           </svg>
           STOP
         </button>
-        <button class="maia-ctrl-btn maia-btn-clear" title="Clear processed message cache">
+        <button class="linkedin-ctrl-btn linkedin-btn-clear" title="Clear processed message cache">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
@@ -765,11 +765,11 @@ class MAIALinkedInSDR {
     this.controlPanel = panel;
     
     // Set up event listeners
-    panel.querySelector('.maia-control-close').addEventListener('click', () => {
+    panel.querySelector('.linkedin-control-close').addEventListener('click', () => {
       panel.classList.toggle('minimized');
     });
     
-    panel.querySelector('.maia-btn-unread').addEventListener('click', () => {
+    panel.querySelector('.linkedin-btn-unread').addEventListener('click', () => {
       if (!this.isProcessingUnread && !this.isProcessing) {
         this.stopRequested = false;
         this.showStopButton(true);
@@ -777,14 +777,14 @@ class MAIALinkedInSDR {
       }
     });
     
-    panel.querySelector('.maia-btn-current').addEventListener('click', () => {
+    panel.querySelector('.linkedin-btn-current').addEventListener('click', () => {
       if (!this.isProcessing) {
         this.stopRequested = false;
         this.processCurrentConversation();
       }
     });
     
-    panel.querySelector('.maia-btn-stop').addEventListener('click', () => {
+    panel.querySelector('.linkedin-btn-stop').addEventListener('click', () => {
       log('STOP button clicked');
       this.stopRequested = true;
       this.isProcessing = false;
@@ -793,7 +793,7 @@ class MAIALinkedInSDR {
       this.updateStatusIndicator('idle', 'Stopped');
     });
     
-    panel.querySelector('.maia-btn-clear').addEventListener('click', () => {
+    panel.querySelector('.linkedin-btn-clear').addEventListener('click', () => {
       this.processedMessages.clear();
       this.processedConversations.clear();
       log('Cleared processed message cache');
@@ -803,7 +803,7 @@ class MAIALinkedInSDR {
   }
   
   showStopButton(show) {
-    const stopBtn = this.controlPanel?.querySelector('.maia-btn-stop');
+    const stopBtn = this.controlPanel?.querySelector('.linkedin-btn-stop');
     if (stopBtn) {
       stopBtn.style.display = show ? 'flex' : 'none';
     }
@@ -841,7 +841,7 @@ class MAIALinkedInSDR {
   }
 
   destroy() {
-    log('Destroying MAIA SDR instance');
+    log('Destroying LinkedIn SDR instance');
     this.stopRequested = true;
     
     if (this.observer) {
@@ -858,7 +858,7 @@ class MAIALinkedInSDR {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => new MAIALinkedInSDR());
+  document.addEventListener('DOMContentLoaded', () => new LinkedInSDRExtension());
 } else {
-  new MAIALinkedInSDR();
+  new LinkedInSDRExtension();
 }

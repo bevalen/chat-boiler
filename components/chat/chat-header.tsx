@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Bot, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -12,7 +12,11 @@ interface ChatHeaderProps {
   onToggleSidebar?: () => void;
 }
 
+const DEFAULT_AGENT_AVATAR = "/logos/profile-icon.png";
+
 export function ChatHeader({ agentName, agentTitle, agentAvatarUrl, hideSidebar, onToggleSidebar }: ChatHeaderProps) {
+  const avatarUrl = agentAvatarUrl || DEFAULT_AGENT_AVATAR;
+  
   return (
     <div className="h-14 border-b border-white/5 bg-background/80 backdrop-blur-md px-4 flex items-center gap-3 z-20 shrink-0">
       {!hideSidebar && onToggleSidebar && (
@@ -21,11 +25,7 @@ export function ChatHeader({ agentName, agentTitle, agentAvatarUrl, hideSidebar,
         </Button>
       )}
       <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
-        {agentAvatarUrl ? (
-          <Image src={agentAvatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
-        ) : (
-          <Bot className="w-5 h-5 text-primary" />
-        )}
+        <Image src={avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
       </div>
       <div className="min-w-0">
         <h2 className="font-semibold text-sm truncate">{agentName}</h2>

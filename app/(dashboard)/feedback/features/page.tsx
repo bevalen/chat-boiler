@@ -109,7 +109,7 @@ export default async function FeatureRequestsPage() {
             </div>
             <h2 className="text-xl font-semibold mb-2">No feature requests yet</h2>
             <p className="text-muted-foreground max-w-md mb-4">
-              Have an idea for improving MAIA? Submit a feature request and we&apos;ll track it here.
+              Have an idea for improving the AI assistant? Submit a feature request and we&apos;ll track it here.
             </p>
             <Button asChild>
               <Link href="/feedback">Submit a Feature Request</Link>

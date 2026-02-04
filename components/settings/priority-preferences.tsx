@@ -169,7 +169,7 @@ export function PriorityPreferences({ agentId }: { agentId: string }) {
         </div>
         <CardDescription>
           Structured preferences that are always included in every conversation.
-          Use this for specific facts about you that MAIA should always know.
+          Use this for specific facts about you that your AI assistant should always know.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -191,7 +191,7 @@ export function PriorityPreferences({ agentId }: { agentId: string }) {
                 id="blockContent"
                 value={formContent}
                 onChange={(e) => setFormContent(e.target.value)}
-                placeholder="What should MAIA always know about this?"
+                placeholder="What should your AI assistant always know about this?"
                 rows={3}
               />
             </div>
@@ -231,7 +231,7 @@ export function PriorityPreferences({ agentId }: { agentId: string }) {
         {blocks.length === 0 && !isAdding ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>No priority preferences yet.</p>
-            <p className="text-sm mt-1">Add preferences that MAIA should always remember.</p>
+            <p className="text-sm mt-1">Add preferences that your AI assistant should always remember.</p>
           </div>
         ) : (
           <div className="space-y-4">

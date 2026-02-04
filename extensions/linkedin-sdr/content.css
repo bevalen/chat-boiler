@@ -1,7 +1,7 @@
-/* MAIA LinkedIn SDR Extension Styles */
+/* LinkedIn SDR Extension Styles */
 
 /* Status indicator that appears in the messaging UI */
-.maia-sdr-status {
+.linkedin-sdr-status {
   position: fixed;
   bottom: 20px;
   right: 20px;
@@ -61,7 +61,7 @@
 }
 
 /* AI Processing overlay on message input */
-.maia-sdr-input-overlay {
+.linkedin-sdr-input-overlay {
   position: absolute;
   top: 0;
   left: 0;
@@ -75,7 +75,7 @@
   border-radius: 8px;
 }
 
-.maia-sdr-loading-spinner {
+.linkedin-sdr-loading-spinner {
   width: 20px;
   height: 20px;
   border: 2px solid #e5e5e5;
@@ -103,13 +103,13 @@
 }
 
 /* Action buttons for draft mode */
-.maia-sdr-actions {
+.linkedin-sdr-actions {
   display: flex;
   gap: 8px;
   margin-top: 8px;
 }
 
-.maia-sdr-btn {
+.linkedin-sdr-btn {
   padding: 6px 12px;
   border-radius: 16px;
   font-size: 12px;
@@ -119,37 +119,37 @@
   transition: all 0.2s ease;
 }
 
-.maia-sdr-btn-primary {
+.linkedin-sdr-btn-primary {
   background: #0077b5;
   color: white;
 }
 
-.maia-sdr-btn-primary:hover {
+.linkedin-sdr-btn-primary:hover {
   background: #005885;
 }
 
-.maia-sdr-btn-secondary {
+.linkedin-sdr-btn-secondary {
   background: #f0f0f0;
   color: #333;
 }
 
-.maia-sdr-btn-secondary:hover {
+.linkedin-sdr-btn-secondary:hover {
   background: #e0e0e0;
 }
 
-.maia-sdr-btn-danger {
+.linkedin-sdr-btn-danger {
   background: #fff5f5;
   color: #dc3545;
   border: 1px solid #dc3545;
 }
 
-.maia-sdr-btn-danger:hover {
+.linkedin-sdr-btn-danger:hover {
   background: #dc3545;
   color: white;
 }
 
 /* Control Panel */
-.maia-control-panel {
+.linkedin-control-panel {
   position: fixed;
   bottom: 70px;
   right: 20px;
@@ -163,15 +163,15 @@
   overflow: hidden;
 }
 
-.maia-control-panel.minimized .maia-control-body {
+.linkedin-control-panel.minimized .linkedin-control-body {
   display: none;
 }
 
-.maia-control-panel.minimized {
+.linkedin-control-panel.minimized {
   min-width: auto;
 }
 
-.maia-control-header {
+.linkedin-control-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -180,13 +180,13 @@
   color: white;
 }
 
-.maia-control-title {
+.linkedin-control-title {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
 
-.maia-control-close {
+.linkedin-control-close {
   background: none;
   border: none;
   color: white;
@@ -197,18 +197,18 @@
   opacity: 0.8;
 }
 
-.maia-control-close:hover {
+.linkedin-control-close:hover {
   opacity: 1;
 }
 
-.maia-control-body {
+.linkedin-control-body {
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.maia-ctrl-btn {
+.linkedin-ctrl-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -223,49 +223,49 @@
   color: #333;
 }
 
-.maia-ctrl-btn:hover {
+.linkedin-ctrl-btn:hover {
   background: #e8e8e8;
 }
 
-.maia-ctrl-btn svg {
+.linkedin-ctrl-btn svg {
   flex-shrink: 0;
 }
 
-.maia-btn-unread {
+.linkedin-btn-unread {
   background: #e8f4fc;
   color: #0077b5;
 }
 
-.maia-btn-unread:hover {
+.linkedin-btn-unread:hover {
   background: #d0e8f7;
 }
 
-.maia-btn-current {
+.linkedin-btn-current {
   background: #e8f5e9;
   color: #2e7d32;
 }
 
-.maia-btn-current:hover {
+.linkedin-btn-current:hover {
   background: #c8e6c9;
 }
 
-.maia-btn-stop {
+.linkedin-btn-stop {
   background: #ffebee;
   color: #c62828;
   font-weight: 600;
 }
 
-.maia-btn-stop:hover {
+.linkedin-btn-stop:hover {
   background: #ffcdd2;
 }
 
-.maia-btn-clear {
+.linkedin-btn-clear {
   background: #fff3e0;
   color: #e65100;
   font-size: 11px;
   padding: 6px 10px;
 }
 
-.maia-btn-clear:hover {
+.linkedin-btn-clear:hover {
   background: #ffe0b2;
 }

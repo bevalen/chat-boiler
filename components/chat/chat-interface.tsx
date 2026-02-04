@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Bot, User } from "lucide-react";
+import { User } from "lucide-react";
 import Image from "next/image";
 import { ConversationSidebar } from "./conversation-sidebar";
 import { ChatHeader } from "./chat-header";
@@ -62,10 +62,15 @@ interface ChatInterfaceProps {
   welcomeMessage?: {
     title: string;
     subtitle: string;
+    suggestedPrompts?: Array<{
+      title: string;
+      prompt: string;
+    }>;
   };
 }
 
 const DEFAULT_STORAGE_KEY = "chat_active_conversation_id";
+const DEFAULT_AGENT_AVATAR = "/logos/profile-icon.png";
 
 export function ChatInterface({
   agent,
@@ -149,6 +154,7 @@ export function ChatInterface({
   const isLoading = status === "submitted" || status === "streaming";
   const agentName = agent?.name || "AI Assistant";
   const agentTitle = agent?.title || "AI Assistant";
+  const agentAvatarUrl = agent?.avatarUrl || DEFAULT_AGENT_AVATAR;
 
   // Start a new conversation (just clear state, create in DB on first message)
   const startNewConversation = useCallback(() => {
@@ -427,7 +433,7 @@ export function ChatInterface({
         <ChatHeader
           agentName={agentName}
           agentTitle={agentTitle}
-          agentAvatarUrl={agent?.avatarUrl}
+          agentAvatarUrl={agentAvatarUrl}
           hideSidebar={hideSidebar}
           onToggleSidebar={() => setShowSidebar(!showSidebar)}
         />
@@ -448,8 +454,9 @@ export function ChatInterface({
               <WelcomeScreen
                 agentName={agentName}
                 agentTitle={agentTitle}
-                agentAvatarUrl={agent?.avatarUrl}
+                agentAvatarUrl={agentAvatarUrl}
                 welcomeMessage={welcomeMessage}
+                suggestedPrompts={welcomeMessage?.suggestedPrompts}
                 onSuggestedPrompt={setInput}
                 textareaRef={textareaRef}
               />
@@ -461,7 +468,7 @@ export function ChatInterface({
                     message={message}
                     isUser={message.role === "user"}
                     agentName={agentName}
-                    agentAvatarUrl={agent?.avatarUrl}
+                    agentAvatarUrl={agentAvatarUrl}
                     userAvatarUrl={userInfo?.avatarUrl}
                     userName={userInfo?.name}
                     status={status}
@@ -508,17 +515,13 @@ export function ChatInterface({
                 {(status === "submitted" || isCreatingConversation) && (
                   <div className="flex gap-4">
                     <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
-                      {agent?.avatarUrl ? (
-                        <Image
-                          src={agent.avatarUrl}
-                          alt={agentName}
-                          width={32}
-                          height={32}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Bot className="w-5 h-5 text-primary" />
-                      )}
+                      <Image
+                        src={agentAvatarUrl}
+                        alt={agentName}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="py-2">
                       <TypingDots />

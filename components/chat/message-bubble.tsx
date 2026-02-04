@@ -5,11 +5,13 @@ import { UIMessage } from "@ai-sdk/react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, User, Pencil, Copy, CheckCheck, Check, X, Brain, Loader2, Search, Save, FolderPlus, ListTodo } from "lucide-react";
+import { User, Pencil, Copy, CheckCheck, Check, X, Brain, Loader2, Search, Save, FolderPlus, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { markdownComponents } from "./markdown-components";
 import { ToolCallIndicator } from "./tool-call-indicator";
+
+const DEFAULT_AGENT_AVATAR = "/logos/profile-icon.png";
 
 interface MessageBubbleProps {
   message: UIMessage;
@@ -122,15 +124,13 @@ export function MessageBubble({
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
+  const avatarUrl = agentAvatarUrl || DEFAULT_AGENT_AVATAR;
+
   return (
     <div className={`flex gap-4 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
         <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1 overflow-hidden">
-          {agentAvatarUrl ? (
-            <Image src={agentAvatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
-          ) : (
-            <Bot className="w-5 h-5 text-primary" />
-          )}
+          <Image src={avatarUrl} alt={agentName} width={32} height={32} className="w-full h-full object-cover" />
         </div>
       )}
 

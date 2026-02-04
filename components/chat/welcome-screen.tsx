@@ -2,7 +2,13 @@
 
 import { RefObject } from "react";
 import Image from "next/image";
-import { Bot } from "lucide-react";
+
+const DEFAULT_AGENT_AVATAR = "/logos/profile-icon.png";
+
+interface SuggestedPrompt {
+  title: string;
+  prompt: string;
+}
 
 interface WelcomeScreenProps {
   agentName: string;
@@ -12,37 +18,38 @@ interface WelcomeScreenProps {
     title: string;
     subtitle: string;
   };
+  suggestedPrompts?: SuggestedPrompt[];
   onSuggestedPrompt: (prompt: string) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
 }
+
+const DEFAULT_SUGGESTED_PROMPTS: SuggestedPrompt[] = [
+  {
+    title: "Check Schedule",
+    prompt: "What's on my schedule today?",
+  },
+  {
+    title: "New Project",
+    prompt: "Create a new project for Q1 Marketing",
+  },
+];
 
 export function WelcomeScreen({
   agentName,
   agentTitle,
   agentAvatarUrl,
   welcomeMessage,
+  suggestedPrompts = DEFAULT_SUGGESTED_PROMPTS,
   onSuggestedPrompt,
   textareaRef,
 }: WelcomeScreenProps) {
-  const suggestedPrompts = [
-    {
-      title: "Check Schedule",
-      prompt: "What's on my schedule today?",
-    },
-    {
-      title: "New Project",
-      prompt: "Create a new project for Q1 Marketing",
-    },
-  ];
+
+  const avatarUrl = agentAvatarUrl || DEFAULT_AGENT_AVATAR;
 
   return (
     <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-6 opacity-0 animate-fade-in-up [animation-delay:200ms] fill-mode-forwards">
       <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10 overflow-hidden">
-        {agentAvatarUrl ? (
-          <Image src={agentAvatarUrl} alt={agentName} width={80} height={80} className="w-full h-full object-cover" />
-        ) : (
-          <Bot className="w-10 h-10 text-primary" />
-        )}
+        <Image src={avatarUrl} alt={agentName} width={80} height={80} className="w-full h-full object-cover" />
       </div>
       <div className="space-y-2">
         <h2 className="text-2xl font-bold tracking-tight">

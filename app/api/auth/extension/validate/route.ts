@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       const expiresAt = new Date(linkedInCreds.token_expires_at);
       if (expiresAt < new Date()) {
         return NextResponse.json(
-          { error: "Token has expired. Please generate a new token in MAIA settings." },
+          { error: "Token has expired. Please generate a new token in your settings." },
           { status: 401 }
         );
       }

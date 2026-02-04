@@ -34,7 +34,7 @@ export function SettingsCustomInstructionsSection({
             <CardTitle>Custom Instructions</CardTitle>
           </div>
           <CardDescription>
-            Tell MAIA about yourself, your preferences, and how you work. This information is
+            Tell your AI assistant about yourself, your preferences, and how you work. This information is
             included in every conversation.
           </CardDescription>
         </CardHeader>
@@ -50,7 +50,7 @@ export function SettingsCustomInstructionsSection({
               className="font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              This is like giving MAIA a &quot;user manual&quot; about you. Be specific!
+              This is like giving your AI assistant a &quot;user manual&quot; about you. Be specific!
             </p>
           </div>
 

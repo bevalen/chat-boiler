@@ -1,8 +1,8 @@
 /**
- * MAIA LinkedIn SDR - Background Service Worker
+ * LinkedIn SDR Extension - Background Service Worker
  * 
  * Handles:
- * 1. Communication between content script and MAIA API
+ * 1. Communication between content script and API
  * 2. Authentication token management
  * 3. Settings management
  * 4. Message processing and streaming response handling
@@ -19,7 +19,7 @@ const STORAGE_KEYS = {
 };
 
 // Default API URL
-const DEFAULT_API_URL = 'https://madewell-maia.vercel.app';
+const DEFAULT_API_URL = 'https://your-domain.com';
 
 /**
  * Get settings from storage
@@ -99,9 +99,9 @@ async function isWithinActiveHours() {
 }
 
 /**
- * Send message to MAIA chat API
+ * Send message to chat API
  */
-async function sendToMAIA(messageData) {
+async function sendToChatAPI(messageData) {
   const auth = await getAuthData();
   
   if (!auth.token) {
@@ -146,9 +146,9 @@ async function sendToMAIA(messageData) {
   };
 
   try {
-    console.log('[MAIA BG] Sending to API:', auth.apiUrl);
-    console.log('[MAIA BG] Token (first 20 chars):', auth.token?.substring(0, 20) + '...');
-    console.log('[MAIA BG] Request body:', JSON.stringify(requestBody).substring(0, 500));
+    console.log('[LinkedIn SDR BG] Sending to API:', auth.apiUrl);
+    console.log('[LinkedIn SDR BG] Token (first 20 chars):', auth.token?.substring(0, 20) + '...');
+    console.log('[LinkedIn SDR BG] Request body:', JSON.stringify(requestBody).substring(0, 500));
     
     const response = await fetch(`${auth.apiUrl}/api/chat`, {
       method: 'POST',
@@ -159,11 +159,11 @@ async function sendToMAIA(messageData) {
       body: JSON.stringify(requestBody),
     });
 
-    console.log('[MAIA BG] Response status:', response.status, response.statusText);
+    console.log('[LinkedIn SDR BG] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[MAIA BG] ❌ API error:', response.status, errorText);
+      console.error('[LinkedIn SDR BG] ❌ API error:', response.status, errorText);
       // Return the actual error message so content script can display it
       return { 
         success: false, 
@@ -179,18 +179,18 @@ async function sendToMAIA(messageData) {
     let fullResponse = '';
     let rawChunks = [];
 
-    console.log('[MAIA BG] Starting to read stream...');
+    console.log('[LinkedIn SDR BG] Starting to read stream...');
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        console.log('[MAIA BG] Stream complete');
+        console.log('[LinkedIn SDR BG] Stream complete');
         break;
       }
 
       const chunk = decoder.decode(value);
       rawChunks.push(chunk);
-      console.log('[MAIA BG] Raw chunk:', chunk.substring(0, 200));
+      console.log('[LinkedIn SDR BG] Raw chunk:', chunk.substring(0, 200));
       
       const lines = chunk.split('\n');
 
@@ -203,7 +203,7 @@ async function sendToMAIA(messageData) {
             const jsonStr = line.slice(6);
             if (jsonStr.trim() && jsonStr !== '[DONE]') {
               const data = JSON.parse(jsonStr);
-              console.log('[MAIA BG] Parsed data:', data.type || 'no type');
+              console.log('[LinkedIn SDR BG] Parsed data:', data.type || 'no type');
               
               // Handle text-delta format
               if (data.type === 'text-delta' && data.textDelta) {
@@ -221,7 +221,7 @@ async function sendToMAIA(messageData) {
               }
             }
           } catch (e) {
-            console.log('[MAIA BG] Parse error for line:', line.substring(0, 100));
+            console.log('[LinkedIn SDR BG] Parse error for line:', line.substring(0, 100));
           }
         }
         // Handle format with prefixed numbers (0:, 1:, 2:, etc.)
@@ -255,11 +255,11 @@ async function sendToMAIA(messageData) {
       }
     }
 
-    console.log('[MAIA BG] Full response length:', fullResponse.length);
-    console.log('[MAIA BG] Response preview:', fullResponse.substring(0, 200) + '...');
+    console.log('[LinkedIn SDR BG] Full response length:', fullResponse.length);
+    console.log('[LinkedIn SDR BG] Response preview:', fullResponse.substring(0, 200) + '...');
     
     if (!fullResponse && rawChunks.length > 0) {
-      console.log('[MAIA BG] ⚠️ WARNING: Got chunks but no parsed response. Raw data:', rawChunks.join('').substring(0, 500));
+      console.log('[LinkedIn SDR BG] ⚠️ WARNING: Got chunks but no parsed response. Raw data:', rawChunks.join('').substring(0, 500));
       // Try to extract any text from raw chunks
       const rawText = rawChunks.join('');
       // Check if there's an error in the raw response
@@ -269,7 +269,7 @@ async function sendToMAIA(messageData) {
     }
     
     if (!fullResponse || fullResponse.trim() === '') {
-      console.log('[MAIA BG] ❌ No response generated - check Service Worker console for API errors');
+      console.log('[LinkedIn SDR BG] ❌ No response generated - check Service Worker console for API errors');
       return { 
         success: false, 
         error: 'No response generated. Check if extension is connected properly.',
@@ -280,13 +280,13 @@ async function sendToMAIA(messageData) {
       };
     }
     
-    console.log('[MAIA BG] ✅ Successfully generated response');
+    console.log('[LinkedIn SDR BG] ✅ Successfully generated response');
     return {
       success: true,
       response: fullResponse,
     };
   } catch (error) {
-    console.error('[MAIA BG] Fetch error:', error);
+    console.error('[LinkedIn SDR BG] Fetch error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -295,7 +295,7 @@ async function sendToMAIA(messageData) {
  * Handle messages from content script and popup
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[MAIA BG] Received message:', message.type);
+  console.log('[LinkedIn SDR BG] Received message:', message.type);
   
   switch (message.type) {
     case 'NEW_MESSAGE':
@@ -357,24 +357,24 @@ async function handleNewMessage(data) {
   // Check if we're authenticated
   const authenticated = await isAuthenticated();
   if (!authenticated) {
-    return { success: false, error: 'Not authenticated. Please connect MAIA in the extension popup.' };
+    return { success: false, error: 'Not authenticated. Please connect in the extension popup.' };
   }
   
   // Check if enabled
   const settings = await getSettings();
   if (!settings.enabled) {
-    return { success: false, error: 'MAIA SDR is currently disabled' };
+    return { success: false, error: 'LinkedIn SDR is currently disabled' };
   }
   
   // Check active hours
   const withinHours = await isWithinActiveHours();
   if (!withinHours) {
-    console.log('[MAIA BG] Outside active hours, skipping');
+    console.log('[LinkedIn SDR BG] Outside active hours, skipping');
     return { success: false, error: 'Outside active hours' };
   }
   
-  // Send to MAIA API
-  return await sendToMAIA(data);
+  // Send to chat API
+  return await sendToChatAPI(data);
 }
 
 /**
@@ -382,7 +382,7 @@ async function handleNewMessage(data) {
  */
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('[MAIA BG] Extension installed');
+    console.log('[LinkedIn SDR BG] Extension installed');
     // Set default settings
     chrome.storage.sync.set({
       [STORAGE_KEYS.SETTINGS]: {
@@ -394,7 +394,7 @@ chrome.runtime.onInstalled.addListener((details) => {
       [STORAGE_KEYS.API_URL]: DEFAULT_API_URL,
     });
   } else if (details.reason === 'update') {
-    console.log('[MAIA BG] Extension updated to version', chrome.runtime.getManifest().version);
+    console.log('[LinkedIn SDR BG] Extension updated to version', chrome.runtime.getManifest().version);
   }
 });
 
@@ -403,7 +403,7 @@ chrome.runtime.onInstalled.addListener((details) => {
  */
 chrome.action.onClicked.addListener((tab) => {
   // This won't fire because we have a popup defined
-  console.log('[MAIA BG] Extension icon clicked');
+  console.log('[LinkedIn SDR BG] Extension icon clicked');
 });
 
-console.log('[MAIA BG] Background service worker started');
+console.log('[LinkedIn SDR BG] Background service worker started');

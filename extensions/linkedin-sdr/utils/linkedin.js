@@ -127,7 +127,7 @@ export function getConversationContext() {
 export function setMessageInputText(text) {
   const input = getMessageInput();
   if (!input) {
-    console.error('[MAIA] Message input not found');
+    console.error('[LinkedIn SDR] Message input not found');
     return false;
   }
   
@@ -156,13 +156,13 @@ export function setMessageInputText(text) {
 export function clickSendButton() {
   const sendButton = getSendButton();
   if (!sendButton) {
-    console.error('[MAIA] Send button not found');
+    console.error('[LinkedIn SDR] Send button not found');
     return false;
   }
   
   // Check if button is disabled
   if (sendButton.disabled) {
-    console.warn('[MAIA] Send button is disabled');
+    console.warn('[LinkedIn SDR] Send button is disabled');
     return false;
   }
   

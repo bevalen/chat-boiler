@@ -1,12 +1,12 @@
 /**
- * Authentication utilities for the MAIA LinkedIn SDR extension
+ * Authentication utilities for the LinkedIn SDR extension
  */
 
 import { saveAuthData, getAuthData, clearAuthData, getApiUrl } from './storage.js';
 
 /**
- * Generate extension token by calling the MAIA API
- * User must already be logged into the MAIA web app
+ * Generate extension token by calling the API
+ * User must already be logged into the web app
  */
 export async function generateExtensionToken(settings = {}) {
   const apiUrl = await getApiUrl();
@@ -44,7 +44,7 @@ export async function generateExtensionToken(settings = {}) {
       ...data,
     };
   } catch (error) {
-    console.error('[MAIA] Auth error:', error);
+    console.error('[LinkedIn SDR] Auth error:', error);
     return {
       success: false,
       error: error.message,
@@ -92,7 +92,7 @@ export async function validateToken() {
       ...data,
     };
   } catch (error) {
-    console.error('[MAIA] Token validation error:', error);
+    console.error('[LinkedIn SDR] Token validation error:', error);
     // If we can't reach the server, assume token is valid if not expired
     return { valid: true, reason: 'offline_assumed_valid' };
   }
@@ -114,7 +114,7 @@ export async function revokeToken() {
         },
       });
     } catch (error) {
-      console.error('[MAIA] Error revoking token:', error);
+      console.error('[LinkedIn SDR] Error revoking token:', error);
     }
   }
   
@@ -146,7 +146,7 @@ export async function refreshTokenIfNeeded() {
 }
 
 /**
- * Open MAIA login page for authentication
+ * Open login page for authentication
  */
 export function openLoginPage() {
   return new Promise(async (resolve) => {

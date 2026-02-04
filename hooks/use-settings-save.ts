@@ -50,7 +50,7 @@ export function useSettingsSave() {
     const { error } = await supabase
       .from("agents")
       .update({
-        name: "Maia", // Standardized name
+        name: "AI Assistant", // Standardized name
         avatar_url: "/logos/profile-icon.png", // Standardized avatar
         title: data.title,
         personality: data.personality,

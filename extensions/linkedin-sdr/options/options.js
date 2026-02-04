@@ -1,5 +1,5 @@
 /**
- * MAIA LinkedIn SDR - Options Page Script
+ * LinkedIn SDR Extension - Options Page Script
  */
 
 class OptionsController {
@@ -152,7 +152,7 @@ class OptionsController {
     const apiUrl = this.elements.apiUrl.value.trim();
     
     if (!apiUrl) {
-      alert('Please enter your MAIA server URL');
+      alert('Please enter your server URL');
       return;
     }
 
@@ -163,7 +163,7 @@ class OptionsController {
 
   async handleReset() {
     const confirmed = confirm(
-      'This will disconnect from MAIA and reset all settings to defaults. Are you sure?'
+      'This will disconnect and reset all settings to defaults. Are you sure?'
     );
     
     if (!confirmed) return;

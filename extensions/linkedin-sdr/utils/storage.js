@@ -1,5 +1,5 @@
 /**
- * Storage utilities for the MAIA LinkedIn SDR extension
+ * Storage utilities for the LinkedIn SDR extension
  */
 
 const STORAGE_KEYS = {
@@ -86,7 +86,7 @@ export async function saveApiUrl(url) {
  */
 export async function getApiUrl() {
   const data = await chrome.storage.sync.get(STORAGE_KEYS.API_URL);
-  return data[STORAGE_KEYS.API_URL] || 'https://your-maia-domain.com';
+  return data[STORAGE_KEYS.API_URL] || 'https://your-domain.com';
 }
 
 /**

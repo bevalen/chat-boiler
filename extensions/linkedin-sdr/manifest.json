@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "MAIA LinkedIn SDR",
+  "name": "LinkedIn SDR Extension",
   "description": "AI-powered LinkedIn SDR assistant for qualifying leads and booking meetings",
   "version": "1.0.0",
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "MAIA LinkedIn SDR"
+    "default_title": "LinkedIn SDR Extension"
   },
   "background": {
     "service_worker": "background.js",

@@ -1,15 +1,15 @@
-# MAIA LinkedIn SDR Chrome Extension
+# LinkedIn SDR Chrome Extension
 
 AI-powered LinkedIn SDR assistant for qualifying leads and booking meetings.
 
 ## Overview
 
-This Chrome extension integrates with your MAIA AI assistant to automatically respond to LinkedIn direct messages. It monitors your LinkedIn messaging page, detects incoming messages, sends them to your MAIA agent for AI processing, and injects the responses back into LinkedIn.
+This Chrome extension integrates with your AI assistant to automatically respond to LinkedIn direct messages. It monitors your LinkedIn messaging page, detects incoming messages, sends them to your AI agent for processing, and injects the responses back into LinkedIn.
 
 ## Features
 
 - **Automatic Message Detection**: Monitors LinkedIn messaging for new incoming DMs
-- **AI-Powered Responses**: Uses your MAIA agent with SDR-specific prompts
+- **AI-Powered Responses**: Uses your AI agent with SDR-specific prompts
 - **Lead Qualification**: Applies ICP criteria to qualify leads
 - **Meeting Booking**: Integrates with calendar tools to suggest and book meetings
 - **Draft Mode**: Review AI responses before sending (recommended)
@@ -33,15 +33,15 @@ This Chrome extension integrates with your MAIA AI assistant to automatically re
 
 ## Setup
 
-1. Click the MAIA SDR icon in your Chrome toolbar
-2. Enter your MAIA server URL (e.g., `https://your-maia-domain.com`)
-3. Click "Connect to MAIA"
-4. Log in to your MAIA account when prompted
+1. Click the LinkedIn SDR icon in your Chrome toolbar
+2. Enter your server URL (e.g., `https://your-domain.com`)
+3. Click "Connect"
+4. Log in to your account when prompted
 5. The extension will automatically authenticate and start working
 
 ## Configuration
 
-Click the MAIA SDR icon or go to extension settings to configure:
+Click the LinkedIn SDR icon or go to extension settings to configure:
 
 ### Response Behavior
 - **SDR Active**: Enable/disable AI responses
@@ -58,9 +58,9 @@ Click the MAIA SDR icon or go to extension settings to configure:
 
 ## SDR Agent Configuration
 
-For the best results, configure your MAIA agent with SDR-specific settings:
+For the best results, configure your AI agent with SDR-specific settings:
 
-1. Go to MAIA Settings > Agent
+1. Go to Settings > Agent
 2. Add SDR configuration to your agent's identity context:
 
 ```json
@@ -111,9 +111,9 @@ For the best results, configure your MAIA agent with SDR-specific settings:
 4. Check the browser console for errors
 
 ### AI not responding
-1. Verify you're connected to MAIA (check popup)
+1. Verify you're connected (check popup)
 2. Ensure your token hasn't expired
-3. Check MAIA server is accessible
+3. Check server is accessible
 4. Review browser console for API errors
 
 ### Responses not appearing
@@ -123,10 +123,9 @@ For the best results, configure your MAIA agent with SDR-specific settings:
 
 ## Support
 
-- Documentation: https://docs.maia.ai/linkedin-sdr
-- Email: support@maia.ai
-- GitHub Issues: Create an issue in the MAIA repository
+- Documentation: Check your main application documentation
+- GitHub Issues: Create an issue in the main repository
 
 ## License
 
-This extension is part of the MAIA project. See the main repository for license details.
+This extension is part of the chat-boiler project. See the main repository for license details.
